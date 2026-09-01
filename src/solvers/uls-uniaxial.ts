@@ -5,7 +5,17 @@ import { integrateRectangle } from '../integration/fiber-rectangle';
 export interface UniaxialResult {
   /** Profondeur de l'axe neutre depuis la fibre superieure (mm). */
   neutralAxisDepth: number;
-  /** Moment resistant a l'effort normal impose (kN·m). */
+  /**
+   * Moment resistant a l'effort normal impose (kN·m).
+   *
+   * Directionnel : le pivot beton est toujours cale en xi=0 (fibre
+   * superieure), donc M_Rd est la capacite pour une compression en fibre
+   * superieure (flexion "positive" au sens de cette convention). Pour la
+   * capacite en flexion inverse (compression en fibre inferieure), il faut
+   * appeler verifyUniaxial sur une section miroir, avec les depthFromTop des
+   * armatures inverses par rapport a la hauteur — ce n'est pas fait
+   * automatiquement.
+   */
   M_Rd: number;
   /** Effort normal resultant au point de convergence (kN), doit egaler action.N. */
   N_Rd: number;
@@ -18,6 +28,12 @@ export interface UniaxialResult {
  * telle que N_R(x) = N_Ed, avec le champ de deformation cale sur le pivot
  * beton (fibre superieure a epsCu2) — voir limitation documentee en tete du
  * plan de session 1 concernant le pivot acier.
+ *
+ * Le pivot est toujours en depthFromTop=0 : le M_Rd retourne ne couvre donc
+ * que le sens de flexion "compression en fibre superieure" pour la `section`
+ * fournie. Pour le sens oppose sur une section a ferraillage asymetrique,
+ * l'appelant doit fournir une section miroir (armatures symetrisees en
+ * depthFromTop) — voir la doc de UniaxialResult.M_Rd.
  */
 export function verifyUniaxial(section: Section, action: Action, norm: NormProfile): UniaxialResult {
   const { epsCu2 } = section.concrete;
