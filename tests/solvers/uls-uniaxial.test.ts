@@ -41,4 +41,19 @@ describe('verifyUniaxial', () => {
 
     expect(result.converged).toBe(false);
   });
+
+  it("signale la non-convergence quand l'effort de compression demande depasse la capacite de la section", () => {
+    const section = rectangularSection({
+      width: 300,
+      height: 500,
+      concrete,
+      rebars: [{ area: As, depthFromTop: 450, steel }],
+    });
+
+    // Capacite max en compression ~ fcd*b*h + fyd*As ~ 2500 + 546 ~ 3046 kN ;
+    // on demande bien au-dela.
+    const result = verifyUniaxial(section, { N: 5000, M: 0 }, profile);
+
+    expect(result.converged).toBe(false);
+  });
 });

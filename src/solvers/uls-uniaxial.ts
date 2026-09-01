@@ -25,6 +25,12 @@ export function verifyUniaxial(section: Section, action: Action, norm: NormProfi
 
   const strainField = (x: number) => (xi: number) => epsCu2 * (1 - xi / x);
 
+  // La bissection suppose N_R(x) strictement croissante en x. C'est vrai pour
+  // les combinaisons de materiaux EC2 usuelles : Es domine la raideur tangente
+  // initiale du beton, et le champ de deformation construit ici ne fait jamais
+  // depasser epsCu2 a aucune fibre, donc la branche "ecrasee" non monotone de
+  // concreteStress reste inatteignable. A revoir si une loi beton plus raide
+  // ou une branche descendante pour l'acier est introduite.
   const netForceAt = (x: number): number => integrateRectangle(section, strainField(x), norm.nBands).N;
 
   const xLow = 1e-3;
