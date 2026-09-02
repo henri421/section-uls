@@ -58,4 +58,20 @@ describe('circularRebarCage', () => {
     const expectedArea = Math.PI * (20 / 2) ** 2;
     expect(cage[0].area).toBeCloseTo(expectedArea, 6);
   });
+
+  it('applique rotationOffset a toute la cage (premiere barre decalee de l angle donne)', () => {
+    const steel = createSteel(500, 200000, ec2Recommended());
+    const cage = circularRebarCage({
+      diameter: 600,
+      cover: 50,
+      barDiameter: 20,
+      count: 4,
+      steel,
+      rotationOffset: Math.PI / 4,
+    });
+
+    const cageRadius = 600 / 2 - 50 - 20 / 2; // 240
+    expect(cage[0].y).toBeCloseTo(cageRadius * Math.cos(Math.PI / 4), 6);
+    expect(cage[0].z).toBeCloseTo(cageRadius * Math.sin(Math.PI / 4), 6);
+  });
 });
