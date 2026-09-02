@@ -11,7 +11,7 @@ export { steelStress } from './constitutive/steel-law';
 
 export type { RectangularGeometry } from './geometry/rectangle';
 export type { Section, RebarLayer, Action } from './model/section';
-export { rectangularSection } from './model/section';
+export { rectangularSection } from './geometry/rectangle';
 
 export type { StressResultant } from './integration/fiber-rectangle';
 export { integrateRectangle } from './integration/fiber-rectangle';
