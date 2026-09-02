@@ -13,7 +13,21 @@ export interface PolygonGeometry {
   vertices: Vertex[];
 }
 
-/** Aire signee (formule du lacet). Positive ou negative selon le sens de parcours. */
+/**
+ * Aire signee (formule du lacet). Positive ou negative selon le sens de parcours
+ * (horaire/antihoraire).
+ *
+ * `polygonArea` et `polygonCentroid` sont toutes deux correctes quel que soit le
+ * sens de parcours des sommets : le signe de l'aire signee s'annule dans le
+ * rapport utilise par le centroide (division par `6*A`, avec la meme aire signee
+ * au numerateur via `cross`), et `polygonArea` prend la valeur absolue. Aucune
+ * normalisation du sens de parcours n'est donc necessaire en amont.
+ *
+ * Limite connue et acceptee : un contour auto-intersectant (non simple) n'est
+ * pas detecte — la formule du lacet suppose un polygone simple a un seul contour
+ * (cf. `PolygonGeometry.vertices`) et produira un resultat mathematiquement
+ * denue de sens, sans lever d'erreur, si cette hypothese est violee.
+ */
 function signedArea(vertices: Vertex[]): number {
   let sum = 0;
   const n = vertices.length;
@@ -49,7 +63,7 @@ export function polygonSection(params: {
   vertices: Vertex[];
   concrete: ConcreteMaterial;
   rebars: Array<{ y: number; z: number; area: number; steel: SteelMaterial }>;
-}): Section {
+}): Section & { geometry: PolygonGeometry } {
   const centroid = polygonCentroid(params.vertices);
 
   const vertices = params.vertices.map((v) => ({ y: v.y - centroid.y, z: v.z - centroid.z }));

@@ -32,6 +32,24 @@ describe('polygonArea / polygonCentroid (formule du lacet)', () => {
     expect(centroid.y).toBeCloseTo(100, 6);
     expect(centroid.z).toBeCloseTo(133.3333, 3);
   });
+
+  it('aire et centroide sont independants du sens de parcours (triangle scalene asymetrique)', () => {
+    const verticesCcw = [
+      { y: 0, z: 0 },
+      { y: 400, z: 0 },
+      { y: 100, z: 300 },
+    ];
+    const verticesCw = [...verticesCcw].reverse();
+
+    const areaForward = polygonArea(verticesCcw);
+    const areaReversed = polygonArea(verticesCw);
+    expect(areaReversed).toBeCloseTo(areaForward, 6);
+
+    const centroidForward = polygonCentroid(verticesCcw);
+    const centroidReversed = polygonCentroid(verticesCw);
+    expect(centroidReversed.y).toBeCloseTo(centroidForward.y, 6);
+    expect(centroidReversed.z).toBeCloseTo(centroidForward.z, 6);
+  });
 });
 
 describe('polygonSection', () => {
@@ -50,7 +68,6 @@ describe('polygonSection', () => {
       rebars: [{ y: 150, z: 450, area: 1000, steel: null as never }],
     });
 
-    if (section.geometry.kind !== 'polygon') throw new Error('expected polygon geometry');
     // Coin (0,0) brut, centroide (150,250) -> translate en (-150,-250).
     expect(section.geometry.vertices[0].y).toBeCloseTo(-150, 6);
     expect(section.geometry.vertices[0].z).toBeCloseTo(-250, 6);
