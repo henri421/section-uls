@@ -1,5 +1,6 @@
 import type { Section, Action } from '../model/section';
 import type { NormProfile } from '../model/norm-profile';
+import type { RectangularGeometry } from '../geometry/rectangle';
 import { integrateRectangle } from '../integration/fiber-rectangle';
 
 export interface UniaxialResult {
@@ -35,7 +36,11 @@ export interface UniaxialResult {
  * l'appelant doit fournir une section miroir (armatures symetrisees en
  * depthFromTop) — voir la doc de UniaxialResult.M_Rd.
  */
-export function verifyUniaxial(section: Section, action: Action, norm: NormProfile): UniaxialResult {
+export function verifyUniaxial(
+  section: Section & { geometry: RectangularGeometry },
+  action: Action,
+  norm: NormProfile
+): UniaxialResult {
   const { epsCu2 } = section.concrete;
   const height = section.geometry.height;
   const zTop = -height / 2;

@@ -1,4 +1,5 @@
 import type { Section } from '../model/section';
+import type { RectangularGeometry } from '../geometry/rectangle';
 import { concreteStress } from '../constitutive/concrete-law';
 import { steelStress } from '../constitutive/steel-law';
 
@@ -15,7 +16,7 @@ export interface StressResultant {
  * (mm depuis le centroide, positif vers le bas).
  */
 export function integrateRectangle(
-  section: Section,
+  section: Section & { geometry: RectangularGeometry },
   strainAt: (z: number) => number,
   nBands: number
 ): StressResultant {

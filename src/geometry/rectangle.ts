@@ -23,7 +23,7 @@ export function rectangularSection(params: {
   height: number;
   concrete: ConcreteMaterial;
   rebars: Array<{ depthFromTop: number; area: number; steel: SteelMaterial }>;
-}): Section {
+}): Section & { geometry: RectangularGeometry } {
   return {
     geometry: { kind: 'rectangle', width: params.width, height: params.height },
     concrete: params.concrete,

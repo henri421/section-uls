@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { integrateRectangle } from '../../src/integration/fiber-rectangle';
 import type { Section } from '../../src/model/section';
+import type { RectangularGeometry } from '../../src/geometry/rectangle';
 import { createConcrete } from '../../src/model/concrete';
 import { createSteel } from '../../src/model/steel';
 import { ec2Recommended } from '../../src/norms/ec2-recommended';
@@ -23,7 +24,7 @@ describe('integrateRectangle - isometrie (y,z) de RebarLayer testee independamme
     // Section/RebarLayer construite a la main (PAS via rectangularSection) :
     // nappe de 1000 mm2 a z=150 (150 mm sous le centroide, cote fibre
     // inferieure puisque z est positif vers le bas).
-    const section: Section = {
+    const section: Section & { geometry: RectangularGeometry } = {
       geometry: { kind: 'rectangle', width: 300, height: 500 },
       concrete,
       rebars: [{ y: 0, z: 150, area: 1000, steel }],

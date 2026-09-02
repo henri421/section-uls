@@ -1,6 +1,7 @@
 import type { ConcreteMaterial } from './concrete';
 import type { SteelMaterial } from './steel';
 import type { RectangularGeometry } from '../geometry/rectangle';
+import type { PolygonGeometry } from '../geometry/polygon';
 
 /**
  * Convention geometrique (fixee) : repere barycentrique centre sur le
@@ -18,7 +19,7 @@ export interface RebarLayer {
 }
 
 export interface Section {
-  geometry: RectangularGeometry;
+  geometry: RectangularGeometry | PolygonGeometry;
   concrete: ConcreteMaterial;
   rebars: RebarLayer[];
 }
