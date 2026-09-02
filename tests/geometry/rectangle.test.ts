@@ -22,6 +22,7 @@ describe('rectangularSection', () => {
     expect(section.geometry.width).toBe(300);
     expect(section.geometry.height).toBe(500);
     expect(section.rebars).toHaveLength(1);
-    expect(section.rebars[0].depthFromTop).toBe(450);
+    expect(section.rebars[0].z).toBe(200); // 450 - height/2 = 450 - 250
+    expect(section.rebars[0].y).toBe(0);
   });
 });

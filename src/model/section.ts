@@ -3,16 +3,17 @@ import type { SteelMaterial } from './steel';
 import type { RectangularGeometry } from '../geometry/rectangle';
 
 /**
- * Convention geometrique (fixee, ne change plus une fois la session 1 entamee) :
- * - reperage barycentrique de la section brute de beton ;
- * - profondeur mesuree depuis la fibre superieure (comprimee), croissante vers le bas ;
- * - N positif en compression, deformations positives en compression.
+ * Convention geometrique (fixee) : repere barycentrique centre sur le
+ * centroide reel de la section, z positif vers le bas, y horizontal
+ * (inutilise en flexion droite). N positif en compression.
  */
 export interface RebarLayer {
+  /** Position horizontale depuis le centroide (mm). Inutilise en flexion droite. */
+  y: number;
+  /** Position verticale depuis le centroide, positif vers le bas (mm). */
+  z: number;
   /** Aire de l'armature (mm²). */
   area: number;
-  /** Profondeur depuis la fibre superieure (mm). */
-  depthFromTop: number;
   steel: SteelMaterial;
 }
 
@@ -33,11 +34,16 @@ export function rectangularSection(params: {
   width: number;
   height: number;
   concrete: ConcreteMaterial;
-  rebars: RebarLayer[];
+  rebars: Array<{ depthFromTop: number; area: number; steel: SteelMaterial }>;
 }): Section {
   return {
     geometry: { kind: 'rectangle', width: params.width, height: params.height },
     concrete: params.concrete,
-    rebars: params.rebars,
+    rebars: params.rebars.map((r) => ({
+      y: 0,
+      z: r.depthFromTop - params.height / 2,
+      area: r.area,
+      steel: r.steel,
+    })),
   };
 }

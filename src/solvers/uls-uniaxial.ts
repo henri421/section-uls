@@ -38,8 +38,7 @@ export interface UniaxialResult {
 export function verifyUniaxial(section: Section, action: Action, norm: NormProfile): UniaxialResult {
   const { epsCu2 } = section.concrete;
   const height = section.geometry.height;
-
-  const strainField = (x: number) => (xi: number) => epsCu2 * (1 - xi / x);
+  const zTop = -height / 2;
 
   // La bissection suppose N_R(x) strictement croissante en x. C'est vrai pour
   // les combinaisons de materiaux EC2 usuelles : Es domine la raideur tangente
@@ -47,6 +46,12 @@ export function verifyUniaxial(section: Section, action: Action, norm: NormProfi
   // depasser epsCu2 a aucune fibre, donc la branche "ecrasee" non monotone de
   // concreteStress reste inatteignable. A revoir si une loi beton plus raide
   // ou une branche descendante pour l'acier est introduite.
+  //
+  // strainField(x) : x = profondeur de l'axe neutre depuis la fibre
+  // superieure. Pour z (centroide-relatif, positif vers le bas), la
+  // profondeur depuis le sommet est (z - zTop).
+  const strainField = (x: number) => (z: number) => epsCu2 * (1 - (z - zTop) / x);
+
   const netForceAt = (x: number): number => integrateRectangle(section, strainField(x), norm.nBands).N;
 
   const xLow = 1e-3;
