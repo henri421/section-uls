@@ -52,8 +52,23 @@ export function verifyUniaxial(section: Section, action: Action, norm: NormProfi
   const { zTop, zBottom } = zRange(section);
   const totalDepth = zBottom - zTop;
 
-  // La bissection suppose N_R(x) strictement croissante en x — voir la note
-  // de la session 1 sur la raideur tangente du beton vs. l'acier.
+  // La bissection suppose N_R(x) strictement croissante en x. Cela tient
+  // d'abord pour les materiaux EC2 usuels parce que la raideur tangente
+  // initiale de l'acier (Es) domine celle du beton, et parce que le champ de
+  // deformation construit ci-dessous ne laisse jamais une fibre depasser
+  // epsCu2 : la branche non monotone "beton ecrase" de `concreteStress`
+  // reste donc hors d'atteinte (raisonnement herite de la session 1 pour le
+  // rectangle). Ce qui est nouveau ici : cet argument est independant de la
+  // forme de la geometrie (convexe ou non, p.ex. le saut de largeur
+  // aile/ame d'une section en T), car la monotonie se demontre bande par
+  // bande en z — pour un z fixe, la deformation de la fibre (donc sa
+  // contrainte) est monotone non decroissante en x, et la largeur a ce z
+  // (quelle qu'elle soit, toujours >= 0) ne fait que mettre a l'echelle la
+  // contribution de cette bande sans affecter le SIGNE de sa variation avec
+  // x. Un profil de largeur discontinu ou non convexe ne peut donc pas
+  // introduire de non-monotonie dans le N(x) somme. A revoir si une loi de
+  // beton plus raide ou une branche descendante de l'acier est introduite
+  // (meme reserve que la note originale de la session 1).
   const strainField = (x: number) => (z: number) => epsCu2 * (1 - (z - zTop) / x);
 
   const netForceAt = (x: number): number => integrate(section, strainField(x), norm.nBands).N;

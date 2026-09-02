@@ -129,4 +129,33 @@ describe('verifyUniaxial', () => {
     expect(result.converged).toBe(true);
     expect(result.M_Rd).toBeGreaterThan(0);
   });
+
+  it('converge avec N non nul sur une section en T, axe neutre au-dela de la transition aile/ame (z=150)', () => {
+    const vertices = [
+      { y: 0, z: 0 },
+      { y: 600, z: 0 },
+      { y: 600, z: 150 },
+      { y: 425, z: 150 },
+      { y: 425, z: 500 },
+      { y: 175, z: 500 },
+      { y: 175, z: 150 },
+      { y: 0, z: 150 },
+    ];
+
+    const section = polygonSection({
+      vertices,
+      concrete,
+      rebars: [{ y: 300, z: 450, area: As, steel }],
+    });
+
+    // N=800 kN choisi empiriquement (sondage 500..4000 kN) pour pousser
+    // l'axe neutre au-dela de z=150, dans l'ame (largeur 250mm) apres la
+    // discontinuite de largeur avec l'aile (largeur 600mm) — exactement le
+    // cas ou l'hypothese de monotonie bande par bande est la plus sollicitee.
+    const result = verifyUniaxial(section, { N: 800, M: 0 }, profile);
+
+    expect(result.converged).toBe(true);
+    expect(result.neutralAxisDepth).toBeGreaterThan(150);
+    expect(result.M_Rd).toBeGreaterThan(0);
+  });
 });
