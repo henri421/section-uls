@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { verifyUniaxial } from '../../src/solvers/uls-uniaxial';
 import { rectangularSection } from '../../src/geometry/rectangle';
+import { polygonSection } from '../../src/geometry/polygon';
 import { createConcrete } from '../../src/model/concrete';
 import { createSteel } from '../../src/model/steel';
 import { ec2Recommended } from '../../src/norms/ec2-recommended';
@@ -55,5 +56,77 @@ describe('verifyUniaxial', () => {
     const result = verifyUniaxial(section, { N: 5000, M: 0 }, profile);
 
     expect(result.converged).toBe(false);
+  });
+
+  it('donne le meme M_Rd qu avant generalisation pour une section rectangulaire (non-regression)', () => {
+    const section = rectangularSection({
+      width: 300,
+      height: 500,
+      concrete,
+      rebars: [{ area: As, depthFromTop: 450, steel }],
+    });
+
+    const result = verifyUniaxial(section, { N: 0, M: 0 }, profile);
+
+    expect(result.converged).toBe(true);
+    // Valeurs de reference, verifiees en session 1 (Task 9) et confirmees par
+    // le calcul manuel independant (Task 11, ecart < 0.001%).
+    expect(result.M_Rd).toBeCloseTo(215.184, 1);
+    expect(result.neutralAxisDepth).toBeCloseTo(134.976, 1);
+  });
+
+  it('donne un M_Rd equivalent pour le meme rectangle modelise en polygone', () => {
+    const width = 300;
+    const height = 500;
+    const depthFromTop = 450;
+
+    const rectSection = rectangularSection({
+      width,
+      height,
+      concrete,
+      rebars: [{ area: As, depthFromTop, steel }],
+    });
+
+    const polySection = polygonSection({
+      vertices: [
+        { y: 0, z: 0 },
+        { y: width, z: 0 },
+        { y: width, z: height },
+        { y: 0, z: height },
+      ],
+      concrete,
+      rebars: [{ y: width / 2, z: depthFromTop, area: As, steel }],
+    });
+
+    const rectResult = verifyUniaxial(rectSection, { N: 0, M: 0 }, profile);
+    const polyResult = verifyUniaxial(polySection, { N: 0, M: 0 }, profile);
+
+    expect(polyResult.converged).toBe(true);
+    const relError = Math.abs(polyResult.M_Rd - rectResult.M_Rd) / rectResult.M_Rd;
+    expect(relError).toBeLessThan(1e-6);
+  });
+
+  it('converge sur une section en T (sanity check, sans valeur de reference precise)', () => {
+    const vertices = [
+      { y: 0, z: 0 },
+      { y: 600, z: 0 },
+      { y: 600, z: 150 },
+      { y: 425, z: 150 },
+      { y: 425, z: 500 },
+      { y: 175, z: 500 },
+      { y: 175, z: 150 },
+      { y: 0, z: 150 },
+    ];
+
+    const section = polygonSection({
+      vertices,
+      concrete,
+      rebars: [{ y: 300, z: 450, area: As, steel }],
+    });
+
+    const result = verifyUniaxial(section, { N: 0, M: 0 }, profile);
+
+    expect(result.converged).toBe(true);
+    expect(result.M_Rd).toBeGreaterThan(0);
   });
 });
