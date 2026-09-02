@@ -10,7 +10,13 @@ export interface Span {
  * centre sur le centroide). Fonctionne pour un contour simple, convexe ou
  * non, sans trou. Convention demi-ouverte [zMin, zMax) par arete pour ne
  * jamais compter un sommet deux fois (les aretes horizontales ne
- * contribuent jamais, ce qui est le comportement correct).
+ * contribuent jamais, ce qui est le comportement correct). Consequence de
+ * cette convention : au zMin ou au zMax global exact de la geometrie, si ce
+ * niveau correspond a une face plate (et pas seulement a un sommet
+ * ponctuel), la largeur rapportee peut etre sous-estimee (jusqu'a 0) ; les
+ * appelants doivent echantillonner strictement a l'interieur de l'enveloppe
+ * z de la geometrie (ce que fera naturellement l'integration par fibres de
+ * la tache suivante, qui echantillonne au centre des bandes).
  */
 export function polygonSpansAtZ(vertices: Vertex[], z: number): Span[] {
   const crossings: number[] = [];
