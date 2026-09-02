@@ -30,6 +30,14 @@ export interface Action {
   M: number;
 }
 
+/**
+ * Constructeur rectangle : son parametre public `rebars` prend `depthFromTop`
+ * (mesure depuis la fibre superieure/comprimee), l'usage naturel pour coter
+ * un enrobage de poutre, puis le convertit en `z` centre-centroide (stockage
+ * uniforme de `RebarLayer`). D'autres constructeurs de geometrie (polygone,
+ * cercle — sessions suivantes) pourront exposer une convention d'entree
+ * differente, propre a leur geometrie, sans changer ce stockage.
+ */
 export function rectangularSection(params: {
   width: number;
   height: number;
