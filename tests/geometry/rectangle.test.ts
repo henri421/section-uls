@@ -4,6 +4,7 @@ import { polygonArea, polygonCentroid } from '../../src/geometry/polygon';
 import { createConcrete } from '../../src/model/concrete';
 import { createSteel } from '../../src/model/steel';
 import { ec2Recommended } from '../../src/norms/ec2-recommended';
+import { rectangularRebarLayout } from '../../src/geometry/rebar-layout';
 
 describe('rectangularSection', () => {
   it('assemble une section rectangulaire avec ses armatures', () => {
@@ -44,5 +45,44 @@ describe('rectangleToPolygon', () => {
     const zs = poly.vertices.map((v) => v.z);
     expect(Math.min(...zs)).toBeCloseTo(-250, 9);
     expect(Math.max(...zs)).toBeCloseTo(250, 9);
+  });
+});
+
+describe('rectangularSection — armatures deja positionnees', () => {
+  it('accepte des RebarLayer et conserve leurs coordonnees telles quelles', () => {
+    const profile = ec2Recommended();
+    const concrete = createConcrete(25, profile);
+    const steel = createSteel(500, 200000, profile);
+
+    const layout = rectangularRebarLayout({
+      width: 400,
+      height: 600,
+      cover: 30,
+      stirrupDiameter: 8,
+      steel,
+      rows: [{ face: 'bottom', bars: { count: 3, diameter: 20 } }],
+    });
+
+    const section = rectangularSection({ width: 400, height: 600, concrete, rebars: layout.bars });
+
+    expect(section.rebars).toHaveLength(3);
+    expect(section.rebars.map((r) => r.y)).toEqual([-152, 0, 152]);
+    expect(section.rebars.every((r) => r.z === 252)).toBe(true);
+  });
+
+  it('la forme historique depthFromTop reste inchangee', () => {
+    const profile = ec2Recommended();
+    const concrete = createConcrete(25, profile);
+    const steel = createSteel(500, 200000, profile);
+
+    const section = rectangularSection({
+      width: 300,
+      height: 500,
+      concrete,
+      rebars: [{ depthFromTop: 450, area: 1000, steel }],
+    });
+
+    expect(section.rebars[0].y).toBe(0);
+    expect(section.rebars[0].z).toBe(200);
   });
 });

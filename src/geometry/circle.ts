@@ -47,8 +47,11 @@ export function circularRebarCage(params: {
    * parametre (premiere barre en (y=cageRadius, z=0)).
    */
   rotationOffset?: number;
+  /** Diametre de la spirale ou des cerces (mm). Defaut 0 : comportement session 2. */
+  stirrupDiameter?: number;
 }): Array<{ y: number; z: number; area: number; steel: SteelMaterial }> {
-  const cageRadius = params.diameter / 2 - params.cover - params.barDiameter / 2;
+  const cageRadius =
+    params.diameter / 2 - params.cover - (params.stirrupDiameter ?? 0) - params.barDiameter / 2;
   const area = Math.PI * (params.barDiameter / 2) ** 2;
 
   const bars: Array<{ y: number; z: number; area: number; steel: SteelMaterial }> = [];

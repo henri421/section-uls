@@ -75,3 +75,23 @@ describe('circularRebarCage', () => {
     expect(cage[0].z).toBeCloseTo(cageRadius * Math.sin(Math.PI / 4), 6);
   });
 });
+
+describe('circularRebarCage — diametre d etrier', () => {
+  it('la spirale reduit le rayon de la cage', () => {
+    const steel = createSteel(500, 200000, ec2Recommended());
+
+    const sans = circularRebarCage({ diameter: 600, cover: 50, barDiameter: 20, count: 6, steel });
+    const avec = circularRebarCage({
+      diameter: 600,
+      cover: 50,
+      barDiameter: 20,
+      count: 6,
+      steel,
+      stirrupDiameter: 12,
+    });
+
+    const rayon = (b: { y: number; z: number }) => Math.hypot(b.y, b.z);
+    expect(rayon(sans[0])).toBeCloseTo(300 - 50 - 10, 9); // 240
+    expect(rayon(avec[0])).toBeCloseTo(300 - 50 - 12 - 10, 9); // 228
+  });
+});

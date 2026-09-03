@@ -1,6 +1,6 @@
 import type { ConcreteMaterial } from '../model/concrete';
 import type { SteelMaterial } from '../model/steel';
-import type { Section } from '../model/section';
+import type { Section, RebarLayer } from '../model/section';
 import type { PolygonGeometry } from './polygon';
 
 export interface RectangularGeometry {
@@ -11,29 +11,35 @@ export interface RectangularGeometry {
   height: number;
 }
 
+type RebarParDepth = { depthFromTop: number; area: number; steel: SteelMaterial };
+
 /**
- * Constructeur rectangle : son parametre public `rebars` prend `depthFromTop`
- * (mesure depuis la fibre superieure/comprimee), l'usage naturel pour coter
- * un enrobage de poutre, puis le convertit en `z` centre-centroide (stockage
- * uniforme de `RebarLayer`). D'autres constructeurs de geometrie (polygone,
- * cercle — sessions suivantes) pourront exposer une convention d'entree
- * differente, propre a leur geometrie, sans changer ce stockage.
+ * Constructeur rectangle. Le parametre `rebars` accepte deux formes :
+ *
+ * - `depthFromTop` (forme historique, session 1) : cotation depuis la fibre
+ *   superieure, usage naturel pour un enrobage de poutre. Les barres sont
+ *   alors placees a `y = 0` — suffisant en flexion droite, ou seule la
+ *   position verticale intervient.
+ * - `RebarLayer[]` deja positionnes en `(y, z)` barycentriques, ce que
+ *   produit `rectangularRebarLayout`. Indispensable en flexion deviee, ou la
+ *   position horizontale de chaque barre change sa deformation.
  */
 export function rectangularSection(params: {
   width: number;
   height: number;
   concrete: ConcreteMaterial;
-  rebars: Array<{ depthFromTop: number; area: number; steel: SteelMaterial }>;
+  rebars: RebarParDepth[] | RebarLayer[];
 }): Section & { geometry: RectangularGeometry } {
+  const rebars: RebarLayer[] = params.rebars.map((r: RebarParDepth | RebarLayer) =>
+    'depthFromTop' in r
+      ? { y: 0, z: r.depthFromTop - params.height / 2, area: r.area, steel: r.steel }
+      : r
+  );
+
   return {
     geometry: { kind: 'rectangle', width: params.width, height: params.height },
     concrete: params.concrete,
-    rebars: params.rebars.map((r) => ({
-      y: 0,
-      z: r.depthFromTop - params.height / 2,
-      area: r.area,
-      steel: r.steel,
-    })),
+    rebars,
   };
 }
 
