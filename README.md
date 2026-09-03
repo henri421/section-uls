@@ -14,6 +14,8 @@ Le solveur recherche par bissection la profondeur d'axe neutre équilibrant l'ef
 
 Flexion composée **déviée** (N + My + Mz, axe neutre d'inclinaison quelconque) sur les mêmes géométries, avec restitution de l'axe neutre comme droite oblique traçable dans le repère de la section, du bras de levier interne et des points d'application des résultantes.
 
+**Enregistrement et chargement de modèles** : un cas de calcul complet — géométrie, matériaux, armatures, sollicitation, profil normatif — se sérialise en JSON et se recharge. Le format retient l'intention de saisie (« un pieu Ø600 », « 3 HA20 en face inférieure ») plutôt que ses conséquences, de sorte qu'un fichier rouvert reste modifiable. Le noyau ne gère aucun stockage : il produit et relit le format, l'hôte décide où le ranger.
+
 ## Base normative
 
 - Loi béton parabole-rectangle, EN 1992-1-1 §3.1.7 éq. 3.17-3.18, paramètres du tableau 3.1 (y compris la branche `fck > 50 MPa`).
@@ -73,6 +75,41 @@ const r = verifyBiaxial(poteau, { N: 500, My: 1, Mz: 1 }, profile);
 // r.leverArm      — bras de levier interne (mm)
 ```
 
+```ts
+import {
+  parseModel, serializeModel, resolveModel, verifyBiaxial, FORMAT_VERSION,
+} from './src/index';
+import type { SectionModel } from './src/index';
+
+// Poteau 400x400, decrit par son INTENTION de saisie plutot que ses
+// consequences (positions de barres, materiaux derives) : c'est ce qui se
+// serialise et se relit.
+const monModele: SectionModel = {
+  formatVersion: FORMAT_VERSION,
+  engineVersion: '0.1.0',
+  name: 'Poteau P3',
+  norm: { name: 'EC2_recommended', gammaC: 1.5, gammaS: 1.15, alphaCc: 1, nBands: 200 },
+  concrete: { fck: 25 },
+  steel: { fyk: 500, Es: 200000 },
+  geometry: { kind: 'rectangle', width: 400, height: 400 },
+  reinforcement: {
+    kind: 'rectangular-layout',
+    cover: 30,
+    stirrupDiameter: 8,
+    rows: [
+      { face: 'bottom', bars: { count: 3, diameter: 20 } },
+      { face: 'top', bars: { count: 3, diameter: 20 } },
+    ],
+  },
+  action: { N: 500, My: 1, Mz: 1 },
+};
+
+const json = serializeModel(monModele);        // a ranger ou l'on veut
+const { section, action, norm } = resolveModel(parseModel(json));
+const r = verifyBiaxial(section, action, norm);
+// r.M_Rd_magnitude — capacite colineaire a (My, Mz)
+```
+
 ## Validation
 
 La crédibilité de l'outil repose sur des vérifications indépendantes du chemin de calcul numérique, présentes dans `tests/` :
@@ -101,4 +138,6 @@ Cet outil est une aide au calcul ; la vérification finale et la responsabilité
 - pivot béton uniquement — la loi acier à branche horizontale n'impose pas de limite de déformation, donc aucun pivot acier n'intervient ;
 - contour simple sans trou (les réservations ne sont pas gérées) ;
 - une section circulaire est approximée par un polygone régulier (32 côtés par défaut, paramétrable) ;
-- pas de précontrainte, pas de vérification en service (méthode n), pas de contrôle de ductilité.
+- pas de précontrainte, pas de vérification en service (méthode n), pas de contrôle de ductilité ;
+- un modèle ne porte qu'un seul acier, appliqué à toutes les barres — le mélange d'aciers (sections existantes renforcées) n'est pas encore représentable ;
+- le format est en version 1 et aucune migration n'est prévue : toute évolution ultérieure devra s'accompagner d'une stratégie de reprise des fichiers existants.

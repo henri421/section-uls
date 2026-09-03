@@ -32,3 +32,14 @@ export { integratePolygonBiaxial } from './integration/fiber-polygon-biaxial';
 
 export type { BiaxialAction, BiaxialResult } from './solvers/uls-biaxial';
 export { verifyBiaxial } from './solvers/uls-biaxial';
+
+export type {
+  SectionModel, NormModel, ConcreteModel, SteelModel, ActionModel, PointModel,
+  GeometryModel, ReinforcementModel, BarSpecModel, RowFaceModel,
+} from './persistence/model-format';
+export { FORMAT_VERSION, ENGINE_VERSION } from './persistence/model-format';
+
+export { parseModel, serializeModel, ModelParseError } from './persistence/parse';
+
+export type { ResolvedModel } from './persistence/resolve';
+export { resolveModel } from './persistence/resolve';

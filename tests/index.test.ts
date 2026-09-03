@@ -8,6 +8,7 @@ import {
   rectangularRebarLayout,
   verifyBiaxial,
 } from '../src/index';
+import { parseModel, serializeModel, resolveModel, FORMAT_VERSION } from '../src/index';
 
 describe('API publique du noyau', () => {
   it("permet de verifier une section rectangulaire de bout en bout via l'entree publique", () => {
@@ -76,5 +77,31 @@ describe('API publique — session 2 et 3', () => {
   it('les primitives polygonales sont exportees', () => {
     expect(typeof polygonSection).toBe('function');
     expect(typeof rebarRow).toBe('function');
+  });
+});
+
+describe('API publique — persistance', () => {
+  it('un modele se serialise, se relit et se resout depuis l entree publique', () => {
+    const modele = {
+      formatVersion: FORMAT_VERSION,
+      engineVersion: '0.1.0',
+      norm: { name: 'EC2_recommended', gammaC: 1.5, gammaS: 1.15, alphaCc: 1, nBands: 200 },
+      concrete: { fck: 25 },
+      steel: { fyk: 500, Es: 200000 },
+      geometry: { kind: 'rectangle' as const, width: 400, height: 400 },
+      reinforcement: {
+        kind: 'rectangular-layout' as const,
+        cover: 30,
+        stirrupDiameter: 8,
+        rows: [{ face: 'bottom' as const, bars: { count: 3, diameter: 20 } }],
+      },
+      action: { N: 500, My: 1, Mz: 0 },
+    };
+
+    const relu = parseModel(serializeModel(modele));
+    const resolu = resolveModel(relu);
+
+    expect(resolu.section.rebars).toHaveLength(3);
+    expect(resolu.concrete.fcd).toBeCloseTo(25 / 1.5, 9);
   });
 });
