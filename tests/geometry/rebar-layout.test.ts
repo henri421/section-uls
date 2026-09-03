@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rebarRow } from '../../src/geometry/rebar-layout';
+import { rebarRow, formatRow } from '../../src/geometry/rebar-layout';
 import { createSteel } from '../../src/model/steel';
 import { ec2Recommended } from '../../src/norms/ec2-recommended';
 
@@ -109,5 +109,49 @@ describe('rebarRow', () => {
     expect(() =>
       rebarRow({ from: { y: 0, z: 0 }, to: { y: 100, z: 0 }, bars: { diameter: 12, maxSpacing: 0 }, steel })
     ).toThrow();
+  });
+
+  it('rejette un nombre de barres non entier', () => {
+    expect(() =>
+      rebarRow({ from: { y: 0, z: 0 }, to: { y: 100, z: 0 }, bars: { count: 2.5, diameter: 12 }, steel })
+    ).toThrow();
+  });
+
+  it('mode maxSpacing avec L = 0 : une barre unique en include, aucune en exclude', () => {
+    // Segment degenere (from === to) : cas limite d'un lit reduit a un point
+    // (ex. armature isolee saisie via la primitive de segment).
+    const rowInclude = rebarRow({
+      from: { y: 50, z: 50 },
+      to: { y: 50, z: 50 },
+      bars: { diameter: 12, maxSpacing: 150 },
+      steel,
+    });
+
+    expect(rowInclude.bars).toHaveLength(1);
+    expect(rowInclude.bars[0].y).toBeCloseTo(50, 9);
+    expect(rowInclude.bars[0].z).toBeCloseTo(50, 9);
+    expect(rowInclude.summary.spacing).toBe(0);
+
+    const rowExclude = rebarRow({
+      from: { y: 50, z: 50 },
+      to: { y: 50, z: 50 },
+      bars: { diameter: 12, maxSpacing: 150 },
+      steel,
+      endpoints: 'exclude',
+    });
+
+    expect(rowExclude.bars).toHaveLength(0);
+  });
+});
+
+describe('formatRow', () => {
+  it('lit a plusieurs barres : format avec espacement', () => {
+    const text = formatRow({ count: 4, diameter: 12, spacing: 133.4, totalArea: 452.4 });
+    expect(text).toBe('4 HA12 @ 133 mm = 452 mm²');
+  });
+
+  it('lit a moins de deux barres : format sans espacement', () => {
+    const text = formatRow({ count: 1, diameter: 12, spacing: 0, totalArea: 113.1 });
+    expect(text).toBe('1 HA12 = 113 mm²');
   });
 });

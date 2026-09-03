@@ -89,7 +89,8 @@ export function rebarRow(params: {
   if (count === 1 && endpoints === 'include') {
     positions.push(0.5); // barre unique : milieu du segment
   } else if (endpoints === 'include') {
-    for (let k = 0; k < count; k++) positions.push(count === 1 ? 0.5 : k / (count - 1));
+    // count !== 1 ici : le cas count === 1 est deja intercepte par le if precedent.
+    for (let k = 0; k < count; k++) positions.push(k / (count - 1));
   } else {
     for (let k = 1; k <= count; k++) positions.push(k / (count + 1));
   }
