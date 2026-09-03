@@ -126,6 +126,66 @@ describe('parseModel', () => {
     const lu = parseModel(json);
     expect(lu.name).toBeUndefined();
   });
+
+  it('refuse nBands egal a zero, en le nommant', () => {
+    // nBands=0 donnerait une integration sans aucune bande : contrairement
+    // a un compte de barres, il n'a aucun sens a zero.
+    const json = avecAlteration((m) => {
+      (m.norm as Record<string, unknown>).nBands = 0;
+    });
+    expect(() => parseModel(json)).toThrow(/norm\.nBands/);
+  });
+
+  it('accepte un compte de barres a zero : lit vide ou modele en cours de saisie', () => {
+    // Distinct de nBands : un lit vide est licite (etabli en session 3, cf.
+    // le test "un lit vide est licite et ne renvoie aucune barre" sur
+    // `rebarRow`), et une future interface doit pouvoir enregistrer un
+    // modele dont les armatures ne sont pas encore posees.
+    const json = avecAlteration((m) => {
+      m.reinforcement = { kind: 'rectangular-layout', cover: 30, rows: [
+        { face: 'bottom', bars: { count: 0, diameter: 20 } },
+      ] };
+    });
+    const lu = parseModel(json);
+    if (lu.reinforcement.kind !== 'rectangular-layout') throw new Error('type inattendu');
+    expect(lu.reinforcement.rows[0].bars).toEqual({ count: 0, diameter: 20 });
+  });
+
+  it('accepte une cage circulaire de zero barres, pour la meme raison', () => {
+    // Meme principe applique a `circular-cage.count` : une cage sans barre
+    // est le meme cas d'un modele en cours de saisie, et ne provoque aucune
+    // division par zero cote resolution (la boucle de repartition angulaire
+    // ne s'execute simplement pas quand count vaut 0).
+    const json = avecAlteration((m) => {
+      m.geometry = { kind: 'circle', diameter: 600 };
+      m.reinforcement = { kind: 'circular-cage', cover: 50, barDiameter: 20, count: 0 };
+    });
+    const lu = parseModel(json);
+    if (lu.reinforcement.kind !== 'circular-cage') throw new Error('type inattendu');
+    expect(lu.reinforcement.count).toBe(0);
+  });
+
+  it('rend Infinity lisible dans le message, plutot que le "null" de JSON.stringify', () => {
+    // 1e400 est un litteral JSON syntaxiquement valide (JSON n'impose pas de
+    // borne sur l'exposant), mais deborde la precision IEEE 754 au parsing
+    // et devient Infinity. Comme JSON.stringify(Infinity) vaut "null", un
+    // message naif dirait a tort « recu null » pour une valeur qui n'est
+    // pourtant pas nulle. Ecrit en JSON brut : passer par JSON.stringify
+    // (comme le fait avecAlteration) effacerait l'Infinity avant meme
+    // d'atteindre parseModel.
+    const json = `{
+      "formatVersion": ${FORMAT_VERSION},
+      "engineVersion": ${JSON.stringify(ENGINE_VERSION)},
+      "norm": { "name": "EC2_recommended", "gammaC": 1.5, "gammaS": 1.15, "alphaCc": 1.0, "nBands": 200 },
+      "concrete": { "fck": 1e400 },
+      "steel": { "fyk": 500, "Es": 200000 },
+      "geometry": { "kind": "rectangle", "width": 400, "height": 600 },
+      "reinforcement": { "kind": "rectangular-layout", "cover": 30, "rows": [{ "face": "bottom", "bars": { "count": 3, "diameter": 20 } }] },
+      "action": { "N": 500, "My": 1, "Mz": 1 }
+    }`;
+    expect(() => parseModel(json)).toThrow(/Infinity/);
+    expect(() => parseModel(json)).toThrow(/concrete\.fck/);
+  });
 });
 
 describe('serializeModel', () => {

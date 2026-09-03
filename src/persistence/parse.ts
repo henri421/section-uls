@@ -28,21 +28,34 @@ function echec(chemin: string, probleme: string): never {
   throw new ModelParseError(`${chemin} : ${probleme}`);
 }
 
+/**
+ * Rend une valeur lisible dans un message d'erreur. `JSON.stringify` echoue
+ * a representer certaines valeurs : Infinity, -Infinity et NaN deviennent
+ * tous "null", ce qui induirait en erreur (« recu null » pour une valeur
+ * infinie, alors qu'elle n'est pas nulle). Ce rendu retombe sur `String(v)`
+ * chaque fois que `JSON.stringify` ne produit rien d'exploitable.
+ */
+function rendre(v: unknown): string {
+  if (typeof v === 'number' && !Number.isFinite(v)) return String(v);
+  const s = JSON.stringify(v);
+  return s === undefined ? String(v) : s;
+}
+
 function objet(v: unknown, chemin: string): Record<string, unknown> {
   if (typeof v !== 'object' || v === null || Array.isArray(v)) {
-    echec(chemin, `objet attendu, recu ${JSON.stringify(v)}`);
+    echec(chemin, `objet attendu, recu ${rendre(v)}`);
   }
   return v as Record<string, unknown>;
 }
 
 function tableau(v: unknown, chemin: string): unknown[] {
-  if (!Array.isArray(v)) echec(chemin, `tableau attendu, recu ${JSON.stringify(v)}`);
+  if (!Array.isArray(v)) echec(chemin, `tableau attendu, recu ${rendre(v)}`);
   return v;
 }
 
 function nombre(v: unknown, chemin: string): number {
   if (typeof v !== 'number' || !Number.isFinite(v)) {
-    echec(chemin, `nombre attendu, recu ${JSON.stringify(v)}`);
+    echec(chemin, `nombre attendu, recu ${rendre(v)}`);
   }
   return v;
 }
@@ -61,14 +74,29 @@ function positifOuNul(v: unknown, chemin: string): number {
 
 function entierPositif(v: unknown, chemin: string): number {
   const n = nombre(v, chemin);
+  if (!Number.isInteger(n) || n <= 0) {
+    echec(chemin, `entier strictement positif attendu, recu ${n}`);
+  }
+  return n;
+}
+
+/**
+ * Entier positif OU NUL — distinct de `entierPositif` (strict). Un compte de
+ * barres peut legitimement etre 0 : un lit vide est licite (etabli en
+ * session 3), et une future interface doit pouvoir enregistrer un modele en
+ * cours de saisie, dont les armatures ne sont pas encore posees. `nBands`,
+ * a l'inverse, n'a aucun sens a 0 : ce serait une integration sans bande.
+ */
+function entierPositifOuNul(v: unknown, chemin: string): number {
+  const n = nombre(v, chemin);
   if (!Number.isInteger(n) || n < 0) {
-    echec(chemin, `entier positif attendu, recu ${n}`);
+    echec(chemin, `entier positif ou nul attendu, recu ${n}`);
   }
   return n;
 }
 
 function chaine(v: unknown, chemin: string): string {
-  if (typeof v !== 'string') echec(chemin, `chaine attendue, recu ${JSON.stringify(v)}`);
+  if (typeof v !== 'string') echec(chemin, `chaine attendue, recu ${rendre(v)}`);
   return v;
 }
 
@@ -85,7 +113,7 @@ function barSpec(v: unknown, chemin: string): BarSpecModel {
   const o = objet(v, chemin);
   const diameter = positif(o.diameter, `${chemin}.diameter`);
   if (o.count !== undefined) {
-    return { count: entierPositif(o.count, `${chemin}.count`), diameter };
+    return { count: entierPositifOuNul(o.count, `${chemin}.count`), diameter };
   }
   if (o.maxSpacing !== undefined) {
     return { diameter, maxSpacing: positif(o.maxSpacing, `${chemin}.maxSpacing`) };
@@ -179,7 +207,7 @@ function ferraillage(v: unknown, chemin: string): ReinforcementModel {
       cover: positifOuNul(o.cover, `${chemin}.cover`),
       ...(stirrupDiameter !== undefined ? { stirrupDiameter } : {}),
       barDiameter: positif(o.barDiameter, `${chemin}.barDiameter`),
-      count: entierPositif(o.count, `${chemin}.count`),
+      count: entierPositifOuNul(o.count, `${chemin}.count`),
       ...(rotationOffset !== undefined ? { rotationOffset } : {}),
     };
   }
