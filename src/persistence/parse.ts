@@ -301,3 +301,88 @@ export function parseModel(json: string): SectionModel {
     action: sollicitation(o.action, 'action'),
   };
 }
+
+/**
+ * Ecrit un modele en JSON indente, avec un ordre de cles STABLE.
+ *
+ * L'objet a ecrire est reconstruit explicitement : `JSON.stringify` suit
+ * l'ordre d'insertion des cles de l'objet recu, donc celui de l'appelant,
+ * qui n'offre aucune garantie. Sans cette reconstruction, deux modeles
+ * equivalents produiraient deux fichiers differents et tout suivi de
+ * version deviendrait illisible.
+ */
+function barsOrdonnees(b: BarSpecModel) {
+  return 'count' in b
+    ? { count: b.count, diameter: b.diameter }
+    : { diameter: b.diameter, maxSpacing: b.maxSpacing };
+}
+
+function geometrieOrdonnee(g: GeometryModel) {
+  switch (g.kind) {
+    case 'rectangle':
+      return { kind: g.kind, width: g.width, height: g.height };
+    case 'polygon':
+      return { kind: g.kind, vertices: g.vertices.map((v) => ({ y: v.y, z: v.z })) };
+    case 'circle':
+      return {
+        kind: g.kind,
+        diameter: g.diameter,
+        ...(g.segments !== undefined ? { segments: g.segments } : {}),
+      };
+  }
+}
+
+function ferraillageOrdonne(r: ReinforcementModel) {
+  switch (r.kind) {
+    case 'rectangular-layout':
+      return {
+        kind: r.kind,
+        cover: r.cover,
+        ...(r.stirrupDiameter !== undefined ? { stirrupDiameter: r.stirrupDiameter } : {}),
+        rows: r.rows.map((row) => ({ face: row.face, bars: barsOrdonnees(row.bars) })),
+      };
+    case 'circular-cage':
+      return {
+        kind: r.kind,
+        cover: r.cover,
+        ...(r.stirrupDiameter !== undefined ? { stirrupDiameter: r.stirrupDiameter } : {}),
+        barDiameter: r.barDiameter,
+        count: r.count,
+        ...(r.rotationOffset !== undefined ? { rotationOffset: r.rotationOffset } : {}),
+      };
+    case 'rows':
+      return {
+        kind: r.kind,
+        rows: r.rows.map((row) => ({
+          from: { y: row.from.y, z: row.from.z },
+          to: { y: row.to.y, z: row.to.z },
+          bars: barsOrdonnees(row.bars),
+          ...(row.endpoints !== undefined ? { endpoints: row.endpoints } : {}),
+        })),
+      };
+    case 'bars':
+      return { kind: r.kind, bars: r.bars.map((b) => ({ y: b.y, z: b.z, area: b.area })) };
+  }
+}
+
+export function serializeModel(model: SectionModel): string {
+  const ordonne = {
+    formatVersion: model.formatVersion,
+    engineVersion: model.engineVersion,
+    ...(model.name !== undefined ? { name: model.name } : {}),
+    norm: {
+      name: model.norm.name,
+      gammaC: model.norm.gammaC,
+      gammaS: model.norm.gammaS,
+      alphaCc: model.norm.alphaCc,
+      nBands: model.norm.nBands,
+    },
+    concrete: { fck: model.concrete.fck },
+    steel: { fyk: model.steel.fyk, Es: model.steel.Es },
+    geometry: geometrieOrdonnee(model.geometry),
+    reinforcement: ferraillageOrdonne(model.reinforcement),
+    action: { N: model.action.N, My: model.action.My, Mz: model.action.Mz },
+  };
+
+  return `${JSON.stringify(ordonne, null, 2)}\n`;
+}

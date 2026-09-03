@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseModel, ModelParseError } from '../../src/persistence/parse';
+import { parseModel, serializeModel, ModelParseError } from '../../src/persistence/parse';
 import { FORMAT_VERSION, ENGINE_VERSION } from '../../src/persistence/model-format';
 import type { SectionModel } from '../../src/persistence/model-format';
 
@@ -125,5 +125,98 @@ describe('parseModel', () => {
     });
     const lu = parseModel(json);
     expect(lu.name).toBeUndefined();
+  });
+});
+
+describe('serializeModel', () => {
+  it('aller-retour : ecrire puis relire redonne le meme modele', () => {
+    const m = modeleValide();
+    expect(parseModel(serializeModel(m))).toEqual(m);
+  });
+
+  it('aller-retour sur les trois geometries et les quatre ferraillages', () => {
+    const carre = [
+      { y: 0, z: 0 }, { y: 300, z: 0 }, { y: 300, z: 500 }, { y: 0, z: 500 },
+    ];
+
+    const formes: SectionModel[] = [
+      modeleValide(), // rectangle + rectangular-layout
+      {
+        ...modeleValide(),
+        geometry: { kind: 'circle', diameter: 600, segments: 48 },
+        reinforcement: {
+          kind: 'circular-cage', cover: 50, stirrupDiameter: 12,
+          barDiameter: 20, count: 8, rotationOffset: 0.2,
+        },
+      },
+      {
+        ...modeleValide(),
+        geometry: { kind: 'polygon', vertices: carre },
+        reinforcement: {
+          kind: 'rows',
+          rows: [
+            { from: { y: 50, z: 450 }, to: { y: 250, z: 450 }, bars: { count: 3, diameter: 20 } },
+            { from: { y: 50, z: 50 }, to: { y: 250, z: 50 },
+              bars: { diameter: 12, maxSpacing: 150 }, endpoints: 'exclude' },
+          ],
+        },
+      },
+      {
+        ...modeleValide(),
+        geometry: { kind: 'polygon', vertices: carre },
+        reinforcement: { kind: 'bars', bars: [{ y: 150, z: 450, area: 314 }] },
+      },
+    ];
+
+    for (const forme of formes) {
+      expect(parseModel(serializeModel(forme))).toEqual(forme);
+    }
+  });
+
+  it('deux ecritures du meme modele donnent exactement les memes octets', () => {
+    const a = serializeModel(modeleValide());
+    const b = serializeModel(modeleValide());
+    expect(a).toBe(b);
+  });
+
+  it("l ordre des cles ne depend pas de l ordre d insertion de l appelant", () => {
+    // JSON.stringify suit l'ordre d'insertion de l'objet recu : ecrire
+    // l'objet a serialiser doit donc etre un acte explicite, sinon deux
+    // modeles equivalents produiraient deux fichiers differents et tout
+    // suivi de version deviendrait illisible.
+    const normal: SectionModel = {
+      ...modeleValide(),
+      geometry: { kind: 'circle', diameter: 600, segments: 32 },
+      reinforcement: {
+        kind: 'circular-cage', cover: 50, stirrupDiameter: 12, barDiameter: 20, count: 8,
+      },
+    };
+
+    // Le desordre porte AUSSI sur les cles internes de `geometry` et de
+    // `reinforcement` : les melanger uniquement au niveau superieur laisserait
+    // passer une implementation qui recopie ces sous-objets par reference.
+    const desordre = {
+      action: normal.action,
+      steel: normal.steel,
+      geometry: { segments: 32, diameter: 600, kind: 'circle' },
+      reinforcement: {
+        count: 8, barDiameter: 20, stirrupDiameter: 12, cover: 50, kind: 'circular-cage',
+      },
+      concrete: normal.concrete,
+      norm: {
+        nBands: normal.norm.nBands, alphaCc: normal.norm.alphaCc,
+        gammaS: normal.norm.gammaS, gammaC: normal.norm.gammaC, name: normal.norm.name,
+      },
+      engineVersion: normal.engineVersion,
+      formatVersion: normal.formatVersion,
+    } as SectionModel;
+
+    expect(serializeModel(desordre)).toBe(serializeModel(normal));
+  });
+
+  it('produit un JSON indente, lisible et versionne en tete', () => {
+    const texte = serializeModel(modeleValide());
+    expect(texte).toContain('\n  "formatVersion"');
+    expect(texte.indexOf('"formatVersion"')).toBeLessThan(texte.indexOf('"geometry"'));
   });
 });
