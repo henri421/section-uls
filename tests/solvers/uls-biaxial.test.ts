@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { verifyBiaxial } from '../../src/solvers/uls-biaxial';
+import { verifyBiaxial, capacityAtAngle } from '../../src/solvers/uls-biaxial';
 import type { BiaxialResult } from '../../src/solvers/uls-biaxial';
 import { verifyUniaxial } from '../../src/solvers/uls-uniaxial';
 import { rectangularSection } from '../../src/geometry/rectangle';
@@ -194,5 +194,35 @@ describe('verifyBiaxial', () => {
       const r = verifyBiaxial(section, action, profile);
       assertColinear(r, action);
     }
+  });
+});
+
+describe('capacityAtAngle', () => {
+  it("rend la capacite a une inclinaison d'axe neutre imposee", () => {
+    const section = poteauCarre();
+    const etat = capacityAtAngle(section, 0, 800, profile);
+
+    expect(etat).not.toBeNull();
+    // A theta = 0, on doit retrouver exactement le solveur droit.
+    const droit = verifyUniaxial(section, { N: 800, M: 0 }, profile);
+    expect(etat!.M.y).toBeCloseTo(droit.M_Rd, 9);
+    expect(Math.abs(etat!.M.z)).toBeLessThan(1e-9);
+    expect(etat!.x).toBeCloseTo(droit.neutralAxisDepth, 9);
+  });
+
+  it('rend null quand l effort normal est hors plage resistante a cet angle', () => {
+    // Effort normal absurde : aucune profondeur d'axe neutre ne l'equilibre.
+    expect(capacityAtAngle(poteauCarre(), 0, 1e9, profile)).toBeNull();
+  });
+
+  it('donne le meme etat que celui retenu par verifyBiaxial', () => {
+    const section = poteauCarre();
+    const complet = verifyBiaxial(section, { N: 600, My: 1, Mz: 1 }, profile);
+    const direct = capacityAtAngle(section, complet.neutralAxis.angle, 600, profile);
+
+    expect(direct).not.toBeNull();
+    expect(direct!.M.y).toBeCloseTo(complet.M_Rd.y, 6);
+    expect(direct!.M.z).toBeCloseTo(complet.M_Rd.z, 6);
+    expect(direct!.x).toBeCloseTo(complet.neutralAxisDepth, 6);
   });
 });

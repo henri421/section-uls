@@ -45,17 +45,75 @@ export interface BiaxialResult {
   converged: boolean;
 }
 
-interface EtatAngle {
+/**
+ * Etat de la section pour une inclinaison d'axe neutre imposee, une fois
+ * l'effort normal equilibre. C'est la brique commune au solveur devie (qui
+ * cherche l'inclinaison annulant l'ecart angulaire) et au domaine
+ * d'interaction (qui balaye toutes les inclinaisons).
+ */
+export interface NeutralAxisState {
+  /** Inclinaison imposee (rad). */
   theta: number;
+  /** Moment resistant dans le repere de la section (kN·m). */
   M: { y: number; z: number };
-  ecart: number;
+  /** Profondeur d'axe neutre, perpendiculaire, depuis la fibre extreme (mm). */
   x: number;
+  /** Position de la droite d'axe neutre : -y*sin(theta) + z*cos(theta) = offset. */
   offset: number;
   compression: Resultant | null;
   tension: Resultant | null;
   leverArm: number | null;
   N_Rd: number;
 }
+
+/**
+ * Capacite de la section a une inclinaison d'axe neutre IMPOSEE, pour un
+ * effort normal donne. Rend `null` si aucune profondeur n'equilibre cet
+ * effort a cet angle (effort hors plage resistante dans cette orientation).
+ *
+ * Source unique partagee par `verifyBiaxial` et par le domaine d'interaction
+ * — ne pas recopier ce corps ailleurs.
+ */
+export function capacityAtAngle(
+  section: Section,
+  theta: number,
+  N: number,
+  norm: NormProfile
+): NeutralAxisState | null {
+  const { epsCu2 } = section.concrete;
+  const tournee = rotateSection(section, theta);
+  const droit = verifyUniaxial(tournee, { N, M: 0 }, norm);
+  if (!droit.converged) return null;
+
+  const zTop = Math.min(...tournee.geometry.vertices.map((v) => v.z));
+  const champ = concretePivotStrainField(zTop, droit.neutralAxisDepth, epsCu2);
+  const r = integratePolygonBiaxial(tournee, champ, norm.nBands);
+
+  const M = rotateMomentBack({ y: r.My, z: r.Mz }, theta);
+
+  // Le bras de levier se mesure perpendiculairement a l'axe neutre : dans le
+  // repere tourne, c'est simplement l'ecart des coordonnees z.
+  const leverArm = r.compression && r.tension ? Math.abs(r.compression.z - r.tension.z) : null;
+
+  const versSection = (p: Resultant | null): Resultant | null => {
+    if (!p) return null;
+    const q = rotatePoint({ y: p.y, z: p.z }, -theta);
+    return { force: p.force, y: q.y, z: q.z };
+  };
+
+  return {
+    theta,
+    M,
+    x: droit.neutralAxisDepth,
+    offset: zTop + droit.neutralAxisDepth,
+    compression: versSection(r.compression),
+    tension: versSection(r.tension),
+    leverArm,
+    N_Rd: r.N,
+  };
+}
+
+type EtatAngle = NeutralAxisState & { ecart: number };
 
 function wrapToPi(angle: number): number {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -96,43 +154,13 @@ export function verifyBiaxial(
   }
 
   const angleSollicitant = Math.atan2(action.Mz, action.My);
-  const { epsCu2 } = section.concrete;
   let innerSolves = 0;
 
   const evaluer = (theta: number): EtatAngle | null => {
     innerSolves += 1;
-    const tournee = rotateSection(section, theta);
-    const droit = verifyUniaxial(tournee, { N: action.N, M: 0 }, norm);
-    if (!droit.converged) return null;
-
-    const zTop = Math.min(...tournee.geometry.vertices.map((v) => v.z));
-    const champ = concretePivotStrainField(zTop, droit.neutralAxisDepth, epsCu2);
-    const r = integratePolygonBiaxial(tournee, champ, norm.nBands);
-
-    const M = rotateMomentBack({ y: r.My, z: r.Mz }, theta);
-
-    // Le bras de levier se mesure perpendiculairement a l'axe neutre : dans
-    // le repere tourne, c'est simplement l'ecart des coordonnees z.
-    const leverArm =
-      r.compression && r.tension ? Math.abs(r.compression.z - r.tension.z) : null;
-
-    const versSection = (p: Resultant | null): Resultant | null => {
-      if (!p) return null;
-      const q = rotatePoint({ y: p.y, z: p.z }, -theta);
-      return { force: p.force, y: q.y, z: q.z };
-    };
-
-    return {
-      theta,
-      M,
-      ecart: wrapToPi(Math.atan2(M.z, M.y) - angleSollicitant),
-      x: droit.neutralAxisDepth,
-      offset: zTop + droit.neutralAxisDepth,
-      compression: versSection(r.compression),
-      tension: versSection(r.tension),
-      leverArm,
-      N_Rd: r.N,
-    };
+    const etat = capacityAtAngle(section, theta, action.N, norm);
+    if (!etat) return null;
+    return { ...etat, ecart: wrapToPi(Math.atan2(etat.M.z, etat.M.y) - angleSollicitant) };
   };
 
   const echec = (): BiaxialResult => ({
