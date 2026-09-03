@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { verifyUniaxial } from '../../src/solvers/uls-uniaxial';
+import { verifyUniaxial, concretePivotStrainField } from '../../src/solvers/uls-uniaxial';
 import { rectangularSection } from '../../src/geometry/rectangle';
 import { polygonSection } from '../../src/geometry/polygon';
 import { createConcrete } from '../../src/model/concrete';
@@ -157,5 +157,15 @@ describe('verifyUniaxial', () => {
     expect(result.converged).toBe(true);
     expect(result.neutralAxisDepth).toBeGreaterThan(150);
     expect(result.M_Rd).toBeGreaterThan(0);
+  });
+});
+
+describe('concretePivotStrainField', () => {
+  it('vaut epsCu2 a la fibre extreme et zero a l axe neutre', () => {
+    const champ = concretePivotStrainField(-250, 200, 3.5e-3);
+
+    expect(champ(-250)).toBeCloseTo(3.5e-3, 12); // fibre extreme comprimee
+    expect(champ(-250 + 200)).toBeCloseTo(0, 12); // axe neutre
+    expect(champ(0)).toBeCloseTo(3.5e-3 * (1 - 250 / 200), 12); // au-dela : traction
   });
 });

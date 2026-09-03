@@ -33,6 +33,21 @@ function integrate(section: Section, strainAt: (z: number) => number, nBands: nu
 }
 
 /**
+ * Champ de deformation lineaire cale sur le pivot beton : la fibre extreme
+ * comprimee (`zTop`, ou la coordonnee perpendiculaire minimale dans le repere
+ * tourne du solveur devie) est a `epsCu2`, la deformation s'annule a la
+ * profondeur `x`. Source unique partagee par les solveurs droit et devie —
+ * ne pas recopier cette formule ailleurs.
+ */
+export function concretePivotStrainField(
+  zTop: number,
+  x: number,
+  epsCu2: number
+): (z: number) => number {
+  return (z: number) => epsCu2 * (1 - (z - zTop) / x);
+}
+
+/**
  * Verification ELU en flexion composee droite (EN 1992-1-1), pour une
  * section rectangulaire ou polygonale quelconque. Recherche par bissection
  * de la profondeur d'axe neutre x telle que N_R(x) = N_Ed, avec le champ de
@@ -69,7 +84,7 @@ export function verifyUniaxial(section: Section, action: Action, norm: NormProfi
   // introduire de non-monotonie dans le N(x) somme. A revoir si une loi de
   // beton plus raide ou une branche descendante de l'acier est introduite
   // (meme reserve que la note originale de la session 1).
-  const strainField = (x: number) => (z: number) => epsCu2 * (1 - (z - zTop) / x);
+  const strainField = (x: number) => concretePivotStrainField(zTop, x, epsCu2);
 
   const netForceAt = (x: number): number => integrate(section, strainField(x), norm.nBands).N;
 
