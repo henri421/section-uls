@@ -115,9 +115,42 @@ function tauxProportionnel(
     return { utilization: Infinity, mode, capacity: null, reason: HORS_DOMAINE };
   }
   if (gBas > 0) {
-    // Deja au-dela de la capacite au plus petit facteur teste : la section
-    // est depassee, on rend le taux au facteur unitaire.
-    return tauxAuFacteur(section, action, norm, magnitudeSollicitante, mode);
+    // Deja au-dela de la capacite au premier pas de balayage (alpha = PAS) :
+    // la racine, si elle existe, est forcement en dessous de PAS. On
+    // encadre par le bas plutot que d'abandonner : quand `alpha` tend vers
+    // zero, la sollicitation en moment (proportionnelle a alpha) tend vers
+    // zero alors que la capacite reste finie et positive, donc `g` y est
+    // negatif — sauf si la section est deja si depassee que meme ce plancher
+    // ne suffit pas.
+    const ALPHA_PLANCHER = 0.01;
+    const gPlancher = g(ALPHA_PLANCHER);
+
+    if (gPlancher !== null && gPlancher < 0) {
+      const alphaRacine = bissection(g, ALPHA_PLANCHER, alphaBas, gPlancher);
+      const capacity = verifyBiaxial(
+        section,
+        { N: alphaRacine * action.N, My: action.My, Mz: action.Mz },
+        norm
+      );
+      return {
+        utilization: 1 / alphaRacine,
+        mode,
+        capacity: capacity.converged ? capacity : null,
+      };
+    }
+
+    // Meme au plancher, la capacite est depassee (ou l'effort normal y est
+    // deja hors domaine) : la section est tres largement depassee en
+    // flexion, bien au-dela de tout usage raisonnable. Le taux est
+    // PLAFONNE plutot que rendu faux (le taux du mode « N constant » n'a
+    // aucune raison de coincider) ou infini (`Infinity` ferait croire a un
+    // depassement en effort normal, alors que c'est la flexion qui lache).
+    return {
+      utilization: 1 / ALPHA_PLANCHER,
+      mode,
+      capacity: null,
+      reason: `taux plafonne a ${(1 / ALPHA_PLANCHER).toFixed(0)} : section tres largement depassee en flexion (mode proportionnel)`,
+    };
   }
 
   for (let alpha = PAS * 2; alpha <= ALPHA_MAX; alpha += PAS) {
@@ -181,18 +214,4 @@ function bissection(
   }
 
   return (lo + hi) / 2;
-}
-
-function tauxAuFacteur(
-  section: Section,
-  action: BiaxialAction,
-  norm: NormProfile,
-  magnitudeSollicitante: number,
-  mode: LoadingMode
-): UtilizationResult {
-  const capacity = verifyBiaxial(section, action, norm);
-  if (!capacity.converged) {
-    return { utilization: Infinity, mode, capacity: null, reason: HORS_DOMAINE };
-  }
-  return { utilization: magnitudeSollicitante / capacity.M_Rd_magnitude, mode, capacity };
 }

@@ -87,4 +87,25 @@ describe('utilizationRatio', () => {
 
     expect(r.utilization).toBeCloseTo(1, 2);
   });
+
+  it('mode proportionnel : section tres largement depassee en flexion, taux plafonne mais fini', () => {
+    // Meme au plus petit facteur d'homothetie teste (0,01), la sollicitation
+    // en moment (0,01 * 20000 = 200) depasse deja la capacite a cet effort
+    // normal quasi nul (~173 kN.m) : aucune racine ne se trouve dans
+    // l'intervalle explore, la section est tres largement depassee. Le taux
+    // doit alors etre PLAFONNE (1 / 0,01 = 100), pas invente ni confondu
+    // avec le taux du mode « N constant ».
+    const section = poteauCarre();
+    const r = utilizationRatio(section, { N: 600, My: 20000, Mz: 0 }, profile, {
+      mode: 'proportional',
+    });
+
+    expect(r.utilization).toBeGreaterThan(4);
+    expect(r.utilization).toBeLessThan(Infinity);
+    expect(r.utilization).toBeCloseTo(100, 6);
+    expect(r.reason).toBeDefined();
+    // Motif distinct de celui de l'effort normal hors domaine : ici c'est la
+    // flexion qui lache, pas l'effort normal.
+    expect(r.reason).not.toMatch(/effort normal/i);
+  });
 });
