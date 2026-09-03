@@ -29,7 +29,16 @@ export interface BiaxialResult {
   leverArm: number | null;
   compression: Resultant | null;
   tension: Resultant | null;
-  /** Nombre de racines distinctes detectees au balayage. */
+  /**
+   * Nombre de racines distinctes DETECTEES A LA RESOLUTION DE BALAYAGE
+   * utilisee — pas un compte exhaustif. Le balayage ne descend au pas plus
+   * fin que si AUCUNE racine n'a ete trouvee au pas courant : deux racines
+   * reelles tombant dans le meme intervalle grossier (produit des ecarts
+   * positif, intervalle saute) pendant qu'une troisieme est detectee
+   * ailleurs ne seraient donc jamais vues, et `rootCount` resterait a 1. Ce
+   * champ est une borne inferieure, a lire comme un signal d'alerte (>1 =
+   * investiguer) plutot que comme une preuve d'unicite.
+   */
   rootCount: number;
   /** Nombre de resolutions droites consommees — diagnostic de budget. */
   innerSolves: number;
@@ -141,6 +150,15 @@ export function verifyBiaxial(
   });
 
   const TOL_ANGLE = 1e-6;
+  // Tolerance d'ACCEPTATION d'une racine, plus lache que TOL_ANGLE : illinois
+  // peut s'arreter sur le critere de largeur d'intervalle (|tHaut - tBas| <
+  // TOL_ANGLE) sans que |ecart| soit lui-meme sous TOL_ANGLE — et, epuisant
+  // ses 40 iterations sans satisfaire ni l'un ni l'autre critere, elle rend
+  // son dernier etat evalue SANS controle de residu. Une racine n'est donc
+  // retenue, quelle que soit sa provenance (echantillon ou illinois), que si
+  // son ecart residuel passe ce controle explicite ci-dessous — sinon elle
+  // est ecartee et la recherche continue normalement.
+  const TOL_ACCEPT = 1e-4;
 
   // Balayage grossier, puis replis de plus en plus fins. La racine n'est
   // jamais devinee : on exige un encadrement franc, les deux extremites
@@ -156,10 +174,19 @@ export function verifyBiaxial(
     for (let i = 0; i < n; i++) {
       const a = etats[i];
       const b = etats[(i + 1) % n];
+      // `evaluer` renvoie null quand N_Ed est hors plage resistante a cet
+      // angle (verifyUniaxial non converge). Sauter `a` ici saute aussi les
+      // DEUX intervalles qui l'ont comme extremite ([i-1, i] et [i, i+1]) :
+      // une racine logee dans l'un d'eux serait manquee a ce pas. Le cas se
+      // corrige de lui-meme aux pas plus fins pour un angle quelconque, SAUF
+      // en theta = 0, qui est un point de grille commun aux trois passes
+      // (0, pi/12, pi/36, pi/180 sont toutes des subdivisions de 2*pi
+      // incluant 0) : un `null` en theta = 0 n'est jamais reexamine a une
+      // resolution differente.
       if (!a) continue;
 
       if (Math.abs(a.ecart) < TOL_ANGLE) {
-        racines.push(a);
+        if (Math.abs(a.ecart) < TOL_ACCEPT) racines.push(a);
         continue;
       }
       if (!b) continue;
@@ -167,7 +194,12 @@ export function verifyBiaxial(
       if (a.ecart * b.ecart > 0) continue;
 
       const affine = illinois(evaluer, a, b, pas, TOL_ANGLE);
-      if (affine) racines.push(affine);
+      // Controle du residu avant acceptation : `illinois` peut epuiser ses
+      // iterations et rendre son dernier etat evalue sans que |ecart| soit
+      // effectivement sous tolerance (cf. commentaire sur TOL_ACCEPT
+      // ci-dessus). Sans ce controle, une racine non convergee serait
+      // acceptee silencieusement et remontee comme `converged: true`.
+      if (affine && Math.abs(affine.ecart) < TOL_ACCEPT) racines.push(affine);
     }
 
     // Deduplication AVANT comptage : une racine tombant exactement sur un
@@ -184,6 +216,16 @@ export function verifyBiaxial(
       if (!dejaVue) distinctes.push(r);
     }
 
+    // Escalade au pas plus fin UNIQUEMENT si `distinctes` est vide : cela ne
+    // protege que contre l'ABSENCE TOTALE de detection a ce pas, pas contre
+    // un SOUS-COMPTAGE. Si deux racines reelles se trouvent dans le meme
+    // intervalle grossier (leurs ecarts sont alors de meme signe, le produit
+    // n'est pas negatif, l'intervalle est saute sans etre encadre) pendant
+    // qu'une troisieme racine, ailleurs, est bel et bien detectee, la
+    // fonction sort ici avec `distinctes.length === 1` et ne redescend
+    // jamais aux pas plus fins qui auraient revele les deux autres. Le choix
+    // "conservatif" ci-dessous ne porte alors que sur les racines TROUVEES,
+    // pas sur la verite terrain : voir la JSDoc de `rootCount`.
     if (distinctes.length === 0) continue;
 
     // Choix conservatif si plusieurs racines DISTINCTES subsistent : la plus

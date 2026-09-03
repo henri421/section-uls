@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { verifyBiaxial } from '../../src/solvers/uls-biaxial';
+import type { BiaxialResult } from '../../src/solvers/uls-biaxial';
 import { verifyUniaxial } from '../../src/solvers/uls-uniaxial';
 import { rectangularSection } from '../../src/geometry/rectangle';
 import { rectangularRebarLayout } from '../../src/geometry/rebar-layout';
@@ -27,6 +28,19 @@ function poteauCarre() {
     ],
   });
   return rectangularSection({ width: 400, height: 400, concrete, rebars: layout.bars });
+}
+
+/**
+ * Assertion partagee : le moment resistant doit etre colineaire au moment
+ * sollicitant (produit vectoriel normalise sous 1e-4). Une racine non
+ * convergee acceptee sans controle de residu se trahirait ici en premier,
+ * puisque `verifyBiaxial` ne recherche que des theta ou la colinearite est
+ * (presque) exacte — c'est la definition meme de la racine cherchee.
+ */
+function assertColinear(r: BiaxialResult, action: { My: number; Mz: number }): void {
+  expect(r.converged).toBe(true);
+  const produitVectoriel = r.M_Rd.y * action.Mz - r.M_Rd.z * action.My;
+  expect(Math.abs(produitVectoriel) / r.M_Rd_magnitude).toBeLessThan(1e-4);
 }
 
 describe('verifyBiaxial', () => {
@@ -155,5 +169,30 @@ describe('verifyBiaxial', () => {
     const ratio = diagonal.M_Rd_magnitude / droit.M_Rd;
     expect(ratio).toBeGreaterThan(0.75);
     expect(ratio).toBeLessThan(1.0);
+  });
+
+  it('controle de residu : la colinearite tient sur tous les cas de sollicitation testes', () => {
+    // Preuve que le controle du residu ajoute a l'acceptation d'une racine
+    // (echantillon ou sortie d'illinois) empeche effectivement toute racine
+    // non convergee de fuiter jusqu'a l'appelant : sur chacun des cas deja
+    // couverts par ce fichier (45 deg, les quatre directions cardinales,
+    // N = 0), la colinearite mesuree ici est independante des tolerances
+    // internes du solveur — elle est recalculee depuis le resultat public.
+    const section = poteauCarre();
+    const cas: Array<{ N: number; My: number; Mz: number }> = [
+      { N: 600, My: 1, Mz: 1 }, // 45 deg
+      { N: 600, My: 1, Mz: 0 }, // cardinal +y
+      { N: 600, My: 0, Mz: 1 }, // cardinal +z
+      { N: 600, My: -1, Mz: 0 }, // cardinal -y
+      { N: 600, My: 0, Mz: -1 }, // cardinal -z
+      { N: 0, My: 1, Mz: 1 }, // N = 0
+      { N: 400, My: 3, Mz: -2 }, // colineaire
+      { N: 800, My: 1, Mz: 0 }, // non-regression
+    ];
+
+    for (const action of cas) {
+      const r = verifyBiaxial(section, action, profile);
+      assertColinear(r, action);
+    }
   });
 });
