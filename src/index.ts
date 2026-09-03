@@ -18,3 +18,17 @@ export { integrateRectangle } from './integration/fiber-rectangle';
 
 export type { UniaxialResult } from './solvers/uls-uniaxial';
 export { verifyUniaxial } from './solvers/uls-uniaxial';
+
+export type { PolygonGeometry, Vertex } from './geometry/polygon';
+export { polygonSection, polygonArea, polygonCentroid } from './geometry/polygon';
+export { rectangleToPolygon } from './geometry/rectangle';
+export { circularSection, circularRebarCage } from './geometry/circle';
+
+export type { BarSpec, BarCount, BarSpacing, RowSummary, RebarRow, RowFace } from './geometry/rebar-layout';
+export { rebarRow, rectangularRebarLayout, formatRow } from './geometry/rebar-layout';
+
+export type { Resultant, BiaxialResultant } from './integration/fiber-polygon-biaxial';
+export { integratePolygonBiaxial } from './integration/fiber-polygon-biaxial';
+
+export type { BiaxialAction, BiaxialResult } from './solvers/uls-biaxial';
+export { verifyBiaxial } from './solvers/uls-biaxial';

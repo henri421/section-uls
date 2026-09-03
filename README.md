@@ -12,6 +12,8 @@ Flexion composée droite (N + M autour d'un axe), pour :
 
 Le solveur recherche par bissection la profondeur d'axe neutre équilibrant l'effort normal imposé, avec le champ de déformation calé sur le pivot béton (fibre comprimée à `εcu2`), puis en déduit le moment résistant `M_Rd`.
 
+Flexion composée **déviée** (N + My + Mz, axe neutre d'inclinaison quelconque) sur les mêmes géométries, avec restitution de l'axe neutre comme droite oblique traçable dans le repère de la section, du bras de levier interne et des points d'application des résultantes.
+
 ## Base normative
 
 - Loi béton parabole-rectangle, EN 1992-1-1 §3.1.7 éq. 3.17-3.18, paramètres du tableau 3.1 (y compris la branche `fck > 50 MPa`).
@@ -43,6 +45,34 @@ const resultat = verifyUniaxial(pieu, { N: 0, M: 0 }, profile);
 // resultat.M_Rd ≈ 239 kN·m, resultat.neutralAxisDepth ≈ 132 mm
 ```
 
+```ts
+import {
+  ec2Recommended, createConcrete, createSteel,
+  rectangularSection, rectangularRebarLayout, verifyBiaxial,
+} from './src/index';
+
+const profile = ec2Recommended();
+const concrete = createConcrete(25, profile);
+const steel = createSteel(500, 200000, profile);
+
+// Poteau 400x400, enrobage 30, étriers HA8, 3 HA20 en haut et en bas
+const layout = rectangularRebarLayout({
+  width: 400, height: 400, cover: 30, stirrupDiameter: 8, steel,
+  rows: [
+    { face: 'bottom', bars: { count: 3, diameter: 20 } },
+    { face: 'top', bars: { count: 3, diameter: 20 } },
+  ],
+});
+
+const poteau = rectangularSection({ width: 400, height: 400, concrete, rebars: layout.bars });
+
+// Seule la DIRECTION de (My, Mz) est utilisée : ici, flexion à 45°
+const r = verifyBiaxial(poteau, { N: 500, My: 1, Mz: 1 }, profile);
+// r.M_Rd.y, r.M_Rd.z — capacité colinéaire à la sollicitation
+// r.neutralAxis   — droite { -y·sin(angle) + z·cos(angle) = offset }
+// r.leverArm      — bras de levier interne (mm)
+```
+
 ## Validation
 
 La crédibilité de l'outil repose sur des vérifications indépendantes du chemin de calcul numérique, présentes dans `tests/` :
@@ -52,6 +82,8 @@ La crédibilité de l'outil repose sur des vérifications indépendantes du chem
 - **Non-régression** : un rectangle modélisé comme polygone donne un résultat identique au chemin rectangulaire dédié.
 - **Décomposition composite** : aire et centroïde d'une section en T vérifiés par décomposition rectangle-par-rectangle, indépendamment de la formule du lacet.
 - **Approximation du cercle** : l'aire du polygone régulier converge vers `πr²` (0,16 % d'écart à 64 segments).
+- **Flexion déviée** (`tests/handcalc/biaxial-triangle-parabolic.test.ts`) : `N`, `My` et `Mz` d'un triangle intégralement sur la branche parabolique confrontés à trois intégrales fermées calculées à la main.
+- **Invariance par isométrie** : tourner la section et la sollicitation du même angle laisse la capacité inchangée.
 
 ## Développement
 
@@ -65,7 +97,7 @@ npm run typecheck # tsc --noEmit
 
 Cet outil est une aide au calcul ; la vérification finale et la responsabilité des résultats incombent à l'ingénieur du projet. Limites connues de la version actuelle, documentées dans le code :
 
-- flexion **droite** uniquement — la flexion déviée (axe neutre incliné) n'est pas encore implémentée ;
+- `verifyBiaxial` rend une **capacité** dans la direction de `(My, Mz)`, pas un verdict sollicitation/capacité — le domaine d'interaction complet reste à faire ;
 - pivot béton uniquement — la loi acier à branche horizontale n'impose pas de limite de déformation, donc aucun pivot acier n'intervient ;
 - contour simple sans trou (les réservations ne sont pas gérées) ;
 - une section circulaire est approximée par un polygone régulier (32 côtés par défaut, paramétrable) ;
