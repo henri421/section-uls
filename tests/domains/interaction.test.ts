@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { interactionCurveAtN } from '../../src/domains/interaction';
+import { interactionCurveAtN, interactionCurveNM } from '../../src/domains/interaction';
 import { verifyBiaxial } from '../../src/solvers/uls-biaxial';
+import { verifyUniaxial } from '../../src/solvers/uls-uniaxial';
 import { rectangularSection } from '../../src/geometry/rectangle';
 import { rectangularRebarLayout } from '../../src/geometry/rebar-layout';
 import { createConcrete } from '../../src/model/concrete';
@@ -66,5 +67,41 @@ describe('interactionCurveAtN', () => {
     // Effort normal absurde : aucune orientation ne le supporte.
     const courbe = interactionCurveAtN(poteauCarre(), 1e9, profile, { steps: 12 });
     expect(courbe).toHaveLength(0);
+  });
+});
+
+describe('interactionCurveNM', () => {
+  it('couvre de la traction dominante a la compression quasi uniforme', () => {
+    const courbe = interactionCurveNM(poteauCarre(), profile, { steps: 40 });
+
+    expect(courbe.length).toBe(40);
+    expect(courbe[0].N).toBeLessThan(0); // profondeur faible : traction
+    expect(courbe[39].N).toBeGreaterThan(2000); // profondeur grande : compression
+    // Profondeurs strictement croissantes.
+    for (let i = 1; i < courbe.length; i++) {
+      expect(courbe[i].neutralAxisDepth).toBeGreaterThan(courbe[i - 1].neutralAxisDepth);
+    }
+  });
+
+  it('a la forme en cloche : le moment croit puis decroit avec l effort normal', () => {
+    const courbe = interactionCurveNM(poteauCarre(), profile, { steps: 60 });
+    const moments = courbe.map((p) => p.M);
+    const iMax = moments.indexOf(Math.max(...moments));
+
+    // Le maximum est interieur, pas a une extremite : c'est le point d'equilibre.
+    expect(iMax).toBeGreaterThan(0);
+    expect(iMax).toBeLessThan(courbe.length - 1);
+  });
+
+  it('chaque point coincide avec le solveur droit au meme effort normal', () => {
+    const section = poteauCarre();
+    const courbe = interactionCurveNM(section, profile, { steps: 40 });
+    const point = courbe[25];
+
+    const parLeSolveur = verifyUniaxial(section, { N: point.N, M: 0 }, profile);
+
+    expect(parLeSolveur.converged).toBe(true);
+    expect(parLeSolveur.M_Rd).toBeCloseTo(point.M, 4);
+    expect(parLeSolveur.neutralAxisDepth).toBeCloseTo(point.neutralAxisDepth, 4);
   });
 });
