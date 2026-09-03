@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rebarRow, formatRow } from '../../src/geometry/rebar-layout';
+import { rebarRow, formatRow, rectangularRebarLayout } from '../../src/geometry/rebar-layout';
 import { createSteel } from '../../src/model/steel';
 import { ec2Recommended } from '../../src/norms/ec2-recommended';
 
@@ -141,6 +141,96 @@ describe('rebarRow', () => {
     });
 
     expect(rowExclude.bars).toHaveLength(0);
+  });
+});
+
+describe('rectangularRebarLayout', () => {
+  it('positionne les barres selon enrobage + etrier + demi-diametre', () => {
+    const layout = rectangularRebarLayout({
+      width: 400,
+      height: 600,
+      cover: 30,
+      stirrupDiameter: 8,
+      steel,
+      rows: [{ face: 'bottom', bars: { count: 3, diameter: 20 } }],
+    });
+
+    const a = 30 + 8 + 10; // 48 mm d'axe
+    expect(layout.bars).toHaveLength(3);
+    expect(layout.bars.every((b) => b.z === 600 / 2 - a)).toBe(true); // 252, z vers le bas
+    expect(layout.bars.map((b) => b.y)).toEqual([-(200 - a), 0, 200 - a]); // -152, 0, 152
+  });
+
+  it('face top : le lit est place du cote de la fibre superieure (z negatif)', () => {
+    const layout = rectangularRebarLayout({
+      width: 400,
+      height: 600,
+      cover: 30,
+      stirrupDiameter: 8,
+      steel,
+      rows: [{ face: 'top', bars: { count: 2, diameter: 20 } }],
+    });
+
+    expect(layout.bars.every((b) => b.z === -(600 / 2 - 48))).toBe(true); // -252
+  });
+
+  it('les lits lateraux ne redoublent pas les barres d angle : 4+4+2+2 donne 12 barres', () => {
+    const layout = rectangularRebarLayout({
+      width: 400,
+      height: 600,
+      cover: 30,
+      stirrupDiameter: 8,
+      steel,
+      rows: [
+        { face: 'bottom', bars: { count: 4, diameter: 20 } },
+        { face: 'top', bars: { count: 4, diameter: 20 } },
+        { face: 'left', bars: { count: 2, diameter: 20 } },
+        { face: 'right', bars: { count: 2, diameter: 20 } },
+      ],
+    });
+
+    expect(layout.bars).toHaveLength(12);
+
+    // Aucune position dupliquee (le controle qui attrape le double comptage).
+    const cles = new Set(layout.bars.map((b) => `${b.y.toFixed(6)}:${b.z.toFixed(6)}`));
+    expect(cles.size).toBe(12);
+
+    // Les lits lateraux sont bien a l'interieur, jamais sur les coins.
+    const zAngles = [600 / 2 - 48, -(600 / 2 - 48)];
+    const lateraux = layout.bars.filter((b) => Math.abs(Math.abs(b.y) - (200 - 48)) < 1e-9);
+    expect(lateraux).toHaveLength(4 + 4); // 4 barres d'angle des lits bas/haut + 4 laterales
+    expect(lateraux.filter((b) => !zAngles.some((z) => Math.abs(b.z - z) < 1e-9))).toHaveLength(4);
+  });
+
+  it('un recapitulatif est rendu par lit, dans l ordre de saisie', () => {
+    const layout = rectangularRebarLayout({
+      width: 400,
+      height: 600,
+      cover: 30,
+      steel,
+      rows: [
+        { face: 'bottom', bars: { count: 3, diameter: 20 } },
+        { face: 'top', bars: { diameter: 12, maxSpacing: 150 } },
+      ],
+    });
+
+    expect(layout.rows).toHaveLength(2);
+    expect(layout.rows[0].count).toBe(3);
+    expect(layout.rows[0].diameter).toBe(20);
+    expect(layout.rows[1].diameter).toBe(12);
+    expect(layout.rows[1].spacing).toBeLessThanOrEqual(150);
+  });
+
+  it('stirrupDiameter est optionnel et vaut 0 par defaut', () => {
+    const layout = rectangularRebarLayout({
+      width: 400,
+      height: 600,
+      cover: 30,
+      steel,
+      rows: [{ face: 'bottom', bars: { count: 2, diameter: 20 } }],
+    });
+
+    expect(layout.bars[0].z).toBeCloseTo(300 - (30 + 10), 9); // 260
   });
 });
 

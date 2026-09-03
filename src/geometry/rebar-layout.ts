@@ -109,6 +109,87 @@ export function rebarRow(params: {
   };
 }
 
+export type RowFace = 'top' | 'bottom' | 'left' | 'right';
+
+/**
+ * Ferraillage d'une section rectangulaire dans l'idiome de saisie usuel :
+ * enrobage, diametre d'etrier, puis un lit par face defini soit par un
+ * nombre de barres, soit par un espacement maximal.
+ *
+ * Distance d'axe = enrobage + Ø etrier + Ø barre / 2, avec le diametre du
+ * lit concerne, appliquee en profondeur comme lateralement.
+ *
+ * Les lits lateraux ('left'/'right') sont poses en mode 'exclude' : leurs
+ * barres d'extremite seraient les barres d'angle, deja posees par les lits
+ * 'bottom' et 'top'. Un poteau "4 + 4 + 2 + 2" donne donc 12 barres.
+ *
+ * Limite connue et assumee : pour un lit lateral, l'etendue verticale du
+ * segment est calculee avec le diametre DE CE LIT LATERAL, alors que ses
+ * extremites theoriques sont les barres d'angle, dont le diametre est celui
+ * des lits inferieur et superieur. Quand les diametres different, le
+ * segment est donc tres legerement decale (de l'ordre du demi-ecart de
+ * diametre) — negligeable devant les tolerances de pose. Choix documente,
+ * pas un defaut : un lit ne doit pas dependre d'un autre.
+ *
+ * Repere de sortie : barycentrique (origine au centre du rectangle), z vers
+ * le bas — directement consommable par `rectangularSection`.
+ */
+export function rectangularRebarLayout(params: {
+  width: number;
+  height: number;
+  cover: number;
+  stirrupDiameter?: number;
+  steel: SteelMaterial;
+  rows: Array<{ face: RowFace; bars: BarSpec }>;
+}): { bars: RebarLayer[]; rows: RowSummary[] } {
+  const { width: b, height: h, cover, steel } = params;
+  const stirrup = params.stirrupDiameter ?? 0;
+
+  const bars: RebarLayer[] = [];
+  const summaries: RowSummary[] = [];
+
+  for (const row of params.rows) {
+    const a = cover + stirrup + row.bars.diameter / 2;
+    const yGauche = -b / 2 + a;
+    const yDroite = b / 2 - a;
+    const zHaut = -h / 2 + a;
+    const zBas = h / 2 - a;
+
+    let from: Vertex;
+    let to: Vertex;
+    let endpoints: 'include' | 'exclude';
+
+    switch (row.face) {
+      case 'bottom':
+        from = { y: yGauche, z: zBas };
+        to = { y: yDroite, z: zBas };
+        endpoints = 'include';
+        break;
+      case 'top':
+        from = { y: yGauche, z: zHaut };
+        to = { y: yDroite, z: zHaut };
+        endpoints = 'include';
+        break;
+      case 'left':
+        from = { y: yGauche, z: zHaut };
+        to = { y: yGauche, z: zBas };
+        endpoints = 'exclude';
+        break;
+      case 'right':
+        from = { y: yDroite, z: zHaut };
+        to = { y: yDroite, z: zBas };
+        endpoints = 'exclude';
+        break;
+    }
+
+    const built = rebarRow({ from, to, bars: row.bars, steel, endpoints });
+    bars.push(...built.bars);
+    summaries.push(built.summary);
+  }
+
+  return { bars, rows: summaries };
+}
+
 /** Rendu lisible d'un lit, par exemple "4 HA12 @ 133 mm = 452 mm²". */
 export function formatRow(summary: RowSummary): string {
   const aire = `${Math.round(summary.totalArea)} mm²`;
