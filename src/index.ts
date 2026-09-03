@@ -43,3 +43,15 @@ export { parseModel, serializeModel, ModelParseError } from './persistence/parse
 
 export type { ResolvedModel } from './persistence/resolve';
 export { resolveModel } from './persistence/resolve';
+
+export type { MomentPoint, AxialMomentPoint } from './domains/interaction';
+export { interactionCurveAtN, interactionCurveNM } from './domains/interaction';
+
+export type { LoadingMode, UtilizationResult } from './domains/utilization';
+export { utilizationRatio } from './domains/utilization';
+
+export type { VerificationResult } from './domains/verify-section';
+export { verifySection } from './domains/verify-section';
+
+export type { NeutralAxisState } from './solvers/uls-biaxial';
+export { capacityAtAngle } from './solvers/uls-biaxial';

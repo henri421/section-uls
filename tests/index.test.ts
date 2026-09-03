@@ -9,6 +9,7 @@ import {
   verifyBiaxial,
 } from '../src/index';
 import { parseModel, serializeModel, resolveModel, FORMAT_VERSION } from '../src/index';
+import { verifySection, interactionCurveAtN, interactionCurveNM, utilizationRatio } from '../src/index';
 
 describe('API publique du noyau', () => {
   it("permet de verifier une section rectangulaire de bout en bout via l'entree publique", () => {
@@ -77,6 +78,31 @@ describe('API publique — session 2 et 3', () => {
   it('les primitives polygonales sont exportees', () => {
     expect(typeof polygonSection).toBe('function');
     expect(typeof rebarRow).toBe('function');
+  });
+});
+
+describe('API publique — verdict et domaine', () => {
+  it('le verdict est atteignable depuis l entree publique', () => {
+    const profile = ec2Recommended();
+    const concrete = createConcrete(25, profile);
+    const steel = createSteel(500, 200000, profile);
+
+    const layout = rectangularRebarLayout({
+      width: 400, height: 400, cover: 30, stirrupDiameter: 8, steel,
+      rows: [
+        { face: 'bottom', bars: { count: 3, diameter: 20 } },
+        { face: 'top', bars: { count: 3, diameter: 20 } },
+      ],
+    });
+    const section = rectangularSection({ width: 400, height: 400, concrete, rebars: layout.bars });
+
+    const v = verifySection(section, { N: 500, My: 30, Mz: 30 }, profile);
+    expect(typeof v.ok).toBe('boolean');
+    expect(v.utilization).toBeGreaterThan(0);
+
+    expect(interactionCurveAtN(section, 500, profile, { steps: 8 }).length).toBeGreaterThan(0);
+    expect(interactionCurveNM(section, profile, { steps: 8 })).toHaveLength(8);
+    expect(typeof utilizationRatio).toBe('function');
   });
 });
 

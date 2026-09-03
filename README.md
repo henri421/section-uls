@@ -16,6 +16,8 @@ Flexion composée **déviée** (N + My + Mz, axe neutre d'inclinaison quelconque
 
 **Enregistrement et chargement de modèles** : un cas de calcul complet — géométrie, matériaux, armatures, sollicitation, profil normatif — se sérialise en JSON et se recharge. Le format retient l'intention de saisie (« un pieu Ø600 », « 3 HA20 en face inférieure ») plutôt que ses conséquences, de sorte qu'un fichier rouvert reste modifiable. Le noyau ne gère aucun stockage : il produit et relit le format, l'hôte décide où le ranger.
 
+**Vérification et domaine d'interaction** : `verifySection` conclut — taux d'exploitation, verdict, et le motif de l'échec quand il y en a un. Deux chemins de chargement sont proposés : « N constant, moment majoré », qui correspond à l'usage en poteau, et proportionnel. Les diagrammes `N`–`M` et `My`–`Mz` sont rendus comme des listes de points, prêtes à tracer — le noyau ne dessine pas.
+
 ## Base normative
 
 - Loi béton parabole-rectangle, EN 1992-1-1 §3.1.7 éq. 3.17-3.18, paramètres du tableau 3.1 (y compris la branche `fck > 50 MPa`).
@@ -110,6 +112,34 @@ const r = verifyBiaxial(section, action, norm);
 // r.M_Rd_magnitude — capacite colineaire a (My, Mz)
 ```
 
+```ts
+import {
+  ec2Recommended, createConcrete, createSteel,
+  rectangularSection, rectangularRebarLayout,
+  verifySection, interactionCurveAtN,
+} from './src/index';
+
+const profile = ec2Recommended();
+const concrete = createConcrete(25, profile);
+const steel = createSteel(500, 200000, profile);
+
+const layout = rectangularRebarLayout({
+  width: 400, height: 400, cover: 30, stirrupDiameter: 8, steel,
+  rows: [
+    { face: 'bottom', bars: { count: 3, diameter: 20 } },
+    { face: 'top', bars: { count: 3, diameter: 20 } },
+  ],
+});
+const poteau = rectangularSection({ width: 400, height: 400, concrete, rebars: layout.bars });
+
+const v = verifySection(poteau, { N: 500, My: 80, Mz: 40 }, profile);
+// v.ok            — true si le taux ne dépasse pas 1
+// v.utilization   — |M_Ed| / |M_Rd|
+// v.reason        — pourquoi, quand ça ne passe pas
+
+const contour = interactionCurveAtN(poteau, 500, profile);  // à tracer
+```
+
 ## Validation
 
 La crédibilité de l'outil repose sur des vérifications indépendantes du chemin de calcul numérique, présentes dans `tests/` :
@@ -121,6 +151,8 @@ La crédibilité de l'outil repose sur des vérifications indépendantes du chem
 - **Approximation du cercle** : l'aire du polygone régulier converge vers `πr²` (0,16 % d'écart à 64 segments).
 - **Flexion déviée** (`tests/handcalc/biaxial-triangle-parabolic.test.ts`) : `N`, `My` et `Mz` d'un triangle intégralement sur la branche parabolique confrontés à trois intégrales fermées calculées à la main.
 - **Invariance par isométrie** : tourner la section et la sollicitation du même angle laisse la capacité inchangée.
+- **Compression centrée** (`tests/handcalc/compression-centree.test.ts`) : le sommet du diagramme `N`–`M` confronté à `fcd·Ac + (fyd − fcd)·As`, calculé à la main.
+- **Cohérence domaine / taux** : un point pris sur le contour rendu par le domaine donne un taux d'exploitation voisin de 1.
 
 ## Développement
 
@@ -134,8 +166,7 @@ npm run typecheck # tsc --noEmit
 
 Cet outil est une aide au calcul ; la vérification finale et la responsabilité des résultats incombent à l'ingénieur du projet. Limites connues de la version actuelle, documentées dans le code :
 
-- `verifyBiaxial` rend une **capacité** dans la direction de `(My, Mz)`, pas un verdict sollicitation/capacité — le domaine d'interaction complet reste à faire ;
-- pivot béton uniquement — la loi acier à branche horizontale n'impose pas de limite de déformation, donc aucun pivot acier n'intervient ;
+- le domaine ne parcourt que la branche du pivot béton — la loi acier à branche horizontale n'impose aucune limite de déformation, donc aucun pivot acier n'existe dans le modèle ;
 - contour simple sans trou (les réservations ne sont pas gérées) ;
 - une section circulaire est approximée par un polygone régulier (32 côtés par défaut, paramétrable) ;
 - pas de précontrainte, pas de vérification en service (méthode n), pas de contrôle de ductilité ;
