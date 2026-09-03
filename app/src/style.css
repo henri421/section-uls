@@ -1,0 +1,21 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0 auto;
+  max-width: 60rem;
+  padding: 1rem;
+  color: #1a1a1a;
+}
+
+header h1 {
+  margin-bottom: 0.25rem;
+}
+
+.avertissement {
+  color: #6b6b6b;
+  font-size: 0.85rem;
+}
+
+main {
+  display: grid;
+  gap: 1rem;
+}
