@@ -1,6 +1,7 @@
 import type { ConcreteMaterial } from '../model/concrete';
 import type { SteelMaterial } from '../model/steel';
 import type { Section } from '../model/section';
+import type { PolygonGeometry } from './polygon';
 
 export interface RectangularGeometry {
   kind: 'rectangle';
@@ -33,5 +34,24 @@ export function rectangularSection(params: {
       area: r.area,
       steel: r.steel,
     })),
+  };
+}
+
+/**
+ * Contour polygonal equivalent a un rectangle, dans le repere barycentrique
+ * (origine au centre, z vers le bas). Necessaire des que la section doit
+ * etre tournee : un rectangle tourne n'est plus aligne sur les axes, donc
+ * n'est plus representable par une `RectangularGeometry`.
+ */
+export function rectangleToPolygon(geometry: RectangularGeometry): PolygonGeometry {
+  const { width: b, height: h } = geometry;
+  return {
+    kind: 'polygon',
+    vertices: [
+      { y: -b / 2, z: -h / 2 },
+      { y: +b / 2, z: -h / 2 },
+      { y: +b / 2, z: +h / 2 },
+      { y: -b / 2, z: +h / 2 },
+    ],
   };
 }
