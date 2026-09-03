@@ -90,7 +90,23 @@ function tauxProportionnel(
   };
 
   // Balayage croissant pour encadrer le PREMIER changement de signe.
-  const PAS = 0.05;
+  //
+  // Pas choisi a 0,25 : le facteur d'homothetie recherche vaut typiquement
+  // entre 1 et 4 (l'inverse d'un taux d'exploitation courant), donc
+  // l'encadrement se trouve en une poignee de pas dans les cas reels, et le
+  // pire cas (ALPHA_MAX / PAS) tombe de 400 a 80 evaluations — chacune un
+  // `verifyBiaxial` complet, donc plusieurs dizaines de resolutions droites.
+  //
+  // Ce que ce pas coute en surete, honnetement : un pas plus grossier ne
+  // peut manquer qu'une PAIRE de racines rapprochees a l'interieur d'un
+  // meme intervalle de 0,25 — une remontee de `g` au-dessus de zero suivie
+  // d'un retour en dessous avant le prochain point de balayage. La premiere
+  // racine, celle qu'on cherche, est une transition du negatif vers le
+  // positif : elle reste detectee tant que `g` ne repasse pas negatif dans
+  // ce meme intervalle. Le mode proportionnel reste par ailleurs NETTEMENT
+  // plus couteux que le mode par defaut (« N constant »), qui ne fait qu'une
+  // seule resolution deviee la ou celui-ci en enchaine plusieurs dizaines.
+  const PAS = 0.25;
   const ALPHA_MAX = 20;
 
   let alphaBas = PAS;
@@ -138,7 +154,11 @@ function bissection(
   bas: number,
   haut: number,
   gBas: number,
-  iterations = 40
+  // Sur un intervalle initial de 0,25 (le pas de balayage ci-dessus), 30
+  // bissections donnent une precision de l'ordre de 10^-10 sur `alpha` —
+  // tres au-dela de ce que la physique justifie, et deja bien plus fin que
+  // la tolerance des tests.
+  iterations = 30
 ): number {
   let lo = bas;
   let hi = haut;
