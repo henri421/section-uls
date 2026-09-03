@@ -132,7 +132,19 @@ Le choix `exclude` sur les faces latérales évite le **double comptage des barr
 
 `rebarRow` et `rectangularRebarLayout` exposent, en plus des `RebarLayer`, un récapitulatif lisible destiné à la relecture et au futur affichage : nombre de barres, diamètre, espacement réel, aire totale du lit — par exemple `4 HA12 @ 133 mm = 452 mm²`. Forme retenue : un objet structuré (`{ count, diameter, spacing, totalArea }`) plus une fonction de formatage, pas une chaîne construite en dur dans le constructeur.
 
-### 4.5 `circularRebarCage` — ajout de `stirrupDiameter`
+### 4.5 `rectangularSection` — accepter des armatures déjà positionnées
+
+Manque constaté en préparant le plan : `rectangularSection` n'accepte aujourd'hui que des armatures décrites par `depthFromTop`, et les place toutes à `y = 0`. Le résultat de `rectangularRebarLayout`, qui porte de vraies positions `y`, serait donc inutilisable avec le constructeur rectangle — c'est-à-dire précisément avec la géométrie pour laquelle il est écrit.
+
+Le paramètre `rebars` accepte donc les deux formes, discriminées à l'exécution par la présence de `depthFromTop` :
+
+```ts
+rebars: Array<{ depthFromTop: number; area: number; steel: SteelMaterial }> | RebarLayer[]
+```
+
+La forme historique conserve son comportement exact (`y = 0`, `z = depthFromTop − height/2`) ; la forme `RebarLayer[]` est reprise telle quelle, ses coordonnées étant déjà barycentriques — ce que produit `rectangularRebarLayout`. Aucun test existant n'est affecté.
+
+### 4.6 `circularRebarCage` — ajout de `stirrupDiameter`
 
 Une cage de pieu comporte une spirale, ignorée en session 2. Paramètre `stirrupDiameter?: number` ajouté, **défaut 0** : le comportement existant est préservé à l'identique, et les tests de la session 2 restent valides sans modification. Le rayon de la cage devient `diameter/2 − cover − stirrupDiameter − barDiameter/2`.
 
@@ -143,13 +155,17 @@ Une cage de pieu comporte une spirale, ignorée en session 2. Paramètre `stirru
 Généralise `integratePolygon` en renvoyant **les deux composantes de moment** ainsi que les résultantes séparées :
 
 ```ts
+interface Resultant { force: number; y: number; z: number; }  // force en valeur absolue (kN), point d'application (mm)
+
 interface BiaxialResultant {
   N: number;                 // kN
   My: number; Mz: number;    // kN·m, conventions §3.1
-  compression: { force: number; y: number; z: number };  // résultante et son point d'application
-  tension:     { force: number; y: number; z: number };  // force en valeur absolue
+  compression: Resultant | null;
+  tension: Resultant | null;
 }
 ```
+
+Une résultante nulle est rendue `null`, jamais un objet de force nulle dont le point d'application serait `0` ou `NaN` : une section entièrement comprimée n'a pas de point d'application de traction, et le type doit obliger l'appelant à traiter ce cas.
 
 Mise en œuvre :
 
@@ -196,14 +212,16 @@ interface BiaxialResult {
   M_Rd_magnitude: number;
   N_Rd: number;
   leverArm: number | null;       // §7
-  compression: { force: number; y: number; z: number };
-  tension:     { force: number; y: number; z: number };
+  compression: Resultant | null; // points d'application ramenés dans le repère section
+  tension: Resultant | null;
   rootCount: number;             // §6.3
   converged: boolean;
 }
 
 verifyBiaxial(section: Section, action: BiaxialAction, norm: NormProfile): BiaxialResult
 ```
+
+**Seule la _direction_ de `(My, Mz)` est utilisée**, jamais sa magnitude : l'action fixe l'orientation du plan de flexion, et le solveur rend la capacité dans cette direction. `{ My: 1, Mz: 0 }` et `{ My: 1000, Mz: 0 }` donnent le même résultat. La comparaison entre sollicitation et capacité appartient à la session 4. Ce point doit être écrit dans la documentation de la fonction, faute de quoi l'appelant croira que l'action est comparée.
 
 Algorithme :
 
@@ -264,13 +282,25 @@ Sur ce même poteau : directions 0°/90°/180°/270° de même magnitude résist
 
 Configuration que la flexion droite ne produit **jamais**, donc preuve neuve et non un doublon de la session 2, et première référence fermée indépendante portant sur les **deux** composantes de moment.
 
-On choisit un axe neutre incliné coupant un coin de poteau carré, assez loin de la fibre extrême pour que **tout le triangle comprimé soit sur le plateau** de la loi parabole-rectangle. La condition est explicite : `ε ≥ εc2` est acquis en deçà de `x·(1 − εc2/εcu2)` de la fibre extrême, soit `0,4286·x` avec les valeurs recommandées. La contrainte y vaut uniformément `fcd`, d'où :
+**Deux pistes écartées, et pourquoi.** Une zone comprimée « entièrement sur le plateau » n'existe pas : la zone comprimée s'étend jusqu'à l'axe neutre, et le plateau n'en couvre que les premiers `x·(1 − εc2/εcu2) ≈ 0,4286·x`. Et un champ de contrainte uniforme est inutilisable comme preuve : les deux moments autour du centroïde s'y annulent identiquement, quelle que soit l'asymétrie de la forme.
+
+**Cas retenu — branche parabolique pure sur un triangle de largeur linéaire.** Le test appelle `integratePolygonBiaxial` directement, avec un champ de déformation choisi, **hors solveur** : on est donc libre de caler la fibre extrême à `εc2` plutôt qu'à `εcu2`, ce qui place toute la zone comprimée sur la branche parabolique, sans plateau.
+
+Géométrie (sommets donnés explicitement, délibérément **non centrés sur le centroïde** — l'intégrateur intègre autour de l'origine du repère qu'on lui donne, ce qui rend le calcul à la main direct) : sommet en `(0, 0)`, base horizontale de `(−100, 300)` à `(200, 300)`. À la hauteur `z` : largeur `w(z) = z`, milieu de bande `ȳ(z) = z/6`.
+
+Champ : `ε(z) = εc2·(1 − z/300)`, donc, avec `n = 2`, `σ(z) = fcd·(1 − (z/300)²)`.
+
+En posant `s = z/300`, les trois intégrales sont exactes :
 
 ```
-N = fcd · A_triangle      M_y = −fcd · A_triangle · z_G      M_z = +fcd · A_triangle · y_G
+N   = fcd · 9,0e4 · ∫₀¹ (s − s³) ds  = fcd · 2,25e4          = 375 kN
+M_y = −fcd · 2,7e7 · ∫₀¹ (s² − s⁴) ds = −fcd · 3,6e6         = −60 kN·m
+M_z = M_y / (−6)                      = +fcd · 6,0e5         = +10 kN·m
 ```
 
-Aire et centroïde d'un triangle, calculés à la main, sans intégrale. La comparaison porte sur `integratePolygonBiaxial` appelé directement avec ce champ de déformation, **hors solveur** : c'est l'intégration qui est prouvée, isolément.
+pour `fcd = 25/1,5 = 16,667 MPa` (C25/30, `αcc = 1`). Le point d'application de la compression suit : `z_c = 160 mm`, `y_c = 26,667 mm`, et l'on vérifie `M_y = −N·z_c` et `M_z = +N·y_c`.
+
+Ce cas unique prouve d'un coup l'effort normal, **les deux** composantes de moment, le point d'application de la résultante de compression, et le cas « aucune traction » (`ε ≥ 0` partout, donc résultante de traction nulle). La convergence vers ces valeurs exactes quand le nombre de bandes augmente est vérifiée en plus de la comparaison à tolérance.
 
 Contrôle complémentaire, gratuit : sur un cas de flexion **simple** (`N = 0`), les deux résultantes sont égales en module et `M_Rd_magnitude = F · leverArm` exactement. Recoupement direct du bras de levier de §7.
 
