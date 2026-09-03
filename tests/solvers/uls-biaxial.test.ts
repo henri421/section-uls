@@ -117,4 +117,43 @@ describe('verifyBiaxial', () => {
     const produit = (r.compression!.force * r.leverArm!) / 1000; // kN * mm -> kN·m
     expect(Math.abs(produit - r.M_Rd_magnitude) / r.M_Rd_magnitude).toBeLessThan(1e-3);
   });
+
+  it('forme du diagramme d interaction : la capacite croit puis decroit avec N', () => {
+    // Signature de toute section en beton arme sous flexion composee : a
+    // faible effort normal, la section est sous-comprimee (l'axe neutre est
+    // proche de la fibre tendue) et ajouter de la compression eloigne l'axe
+    // neutre, ce qui AUGMENTE le bras de levier interne et donc M_Rd. Au-dela
+    // du point d'equilibre (balanced point), le beton comprime s'epuise avant
+    // que l'acier tendu ait plastifie : ajouter encore de la compression ne
+    // fait plus que reduire la reserve de flexion, et M_Rd chute. Le diagramme
+    // d'interaction (N, M_Rd) est donc en cloche, pas monotone.
+    const section = poteauCarre();
+    const direction = { My: 1, Mz: 1 };
+
+    const m0 = verifyBiaxial(section, { N: 0, ...direction }, profile).M_Rd_magnitude;
+    const m600 = verifyBiaxial(section, { N: 600, ...direction }, profile).M_Rd_magnitude;
+    const m1200 = verifyBiaxial(section, { N: 1200, ...direction }, profile).M_Rd_magnitude;
+    const m2400 = verifyBiaxial(section, { N: 2400, ...direction }, profile).M_Rd_magnitude;
+
+    expect(m1200).toBeGreaterThan(m600);
+    expect(m600).toBeGreaterThan(m0);
+    expect(m2400).toBeLessThan(m1200);
+  });
+
+  it('ordre de grandeur : la flexion diagonale a 45 deg est moins efficace que la flexion droite', () => {
+    // A effort normal egal, la zone comprimee en flexion diagonale est un
+    // triangle (coin du poteau), moins efficace qu'une bande rectangulaire
+    // pleine largeur en flexion droite : la capacite doit donc etre
+    // strictement inferieure a celle du solveur droit, mais rester du meme
+    // ordre de grandeur (pas effondree). Bornes larges et deliberement non
+    // resserrees sur la valeur observee : ce sont des garde-fous
+    // d'ordre de grandeur, pas des valeurs de reference.
+    const section = poteauCarre();
+    const droit = verifyUniaxial(section, { N: 600, M: 0 }, profile);
+    const diagonal = verifyBiaxial(section, { N: 600, My: 1, Mz: 1 }, profile);
+
+    const ratio = diagonal.M_Rd_magnitude / droit.M_Rd;
+    expect(ratio).toBeGreaterThan(0.75);
+    expect(ratio).toBeLessThan(1.0);
+  });
 });
