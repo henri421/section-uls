@@ -1,0 +1,36 @@
+{
+  "formatVersion": 1,
+  "engineVersion": "0.1.0",
+  "name": "Pieu P12 — temoin de format, ne pas regenerer",
+  "norm": {
+    "name": "EC2_recommended",
+    "gammaC": 1.5,
+    "gammaS": 1.15,
+    "alphaCc": 1,
+    "nBands": 200
+  },
+  "concrete": {
+    "fck": 25
+  },
+  "steel": {
+    "fyk": 500,
+    "Es": 200000
+  },
+  "geometry": {
+    "kind": "circle",
+    "diameter": 600,
+    "segments": 32
+  },
+  "reinforcement": {
+    "kind": "circular-cage",
+    "cover": 50,
+    "stirrupDiameter": 12,
+    "barDiameter": 20,
+    "count": 8
+  },
+  "action": {
+    "N": 1200,
+    "My": 1,
+    "Mz": 1
+  }
+}
