@@ -2,6 +2,20 @@
 
 Noyau de calcul TypeScript pour la vérification de sections en béton armé à l'état limite ultime selon l'Eurocode 2 (EN 1992-1-1). Calcul entièrement local, sans dépendance d'exécution : le noyau ne touche ni au DOM ni au réseau, et peut être consommé par n'importe quelle interface.
 
+## Application
+
+Une interface web permet de saisir une section, de la voir dessinée avec ses armatures et son axe neutre oblique, d'obtenir le verdict de vérification, et d'enregistrer son travail.
+
+```bash
+npm run dev      # serveur de developpement
+npm run build    # construit dans docs/, servi par GitHub Pages
+npm run preview  # verifie le resultat construit
+```
+
+L'interface n'invente aucun état : elle édite un modèle, dont tout le reste est dérivé. Ce qui est enregistré est donc exactement ce qui est calculé.
+
+La sortie construite est committée dans `docs/` : **toute modification de l'interface exige de relancer `npm run build` avant de pousser**, sans quoi la page en ligne diverge de la source.
+
 ## Capacités actuelles
 
 Flexion composée droite (N + M autour d'un axe), pour :
@@ -171,4 +185,7 @@ Cet outil est une aide au calcul ; la vérification finale et la responsabilité
 - une section circulaire est approximée par un polygone régulier (32 côtés par défaut, paramétrable) ;
 - pas de précontrainte, pas de vérification en service (méthode n), pas de contrôle de ductilité ;
 - un modèle ne porte qu'un seul acier, appliqué à toutes les barres — le mélange d'aciers (sections existantes renforcées) n'est pas encore représentable ;
-- le format est en version 1 et aucune migration n'est prévue : toute évolution ultérieure devra s'accompagner d'une stratégie de reprise des fichiers existants.
+- le format est en version 1 et aucune migration n'est prévue : toute évolution ultérieure devra s'accompagner d'une stratégie de reprise des fichiers existants ;
+- l'interface n'est pas couverte par des tests automatiques au niveau du DOM : la logique est extraite en fonctions pures testées, et le câblage — volontairement mince — est vérifié à la main ;
+- les diagrammes d'interaction sont calculés par la bibliothèque (`interactionCurveAtN`, `interactionCurveNM`) mais ne sont pas encore tracés par l'interface ;
+- le mode de chargement proportionnel est nettement plus coûteux que le mode « N constant » (quelques secondes contre quelques dizaines de millisecondes) : il ne se déclenche que sur demande explicite.

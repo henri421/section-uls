@@ -1,21 +1,221 @@
+:root {
+  --encre: #1a1a1a;
+  --papier: #fbfbf9;
+  --trait: #c8c6c0;
+  --appui: #f2f1ec;
+  --ok: #1f6f3f;
+  --non-ok: #a52121;
+  --attention: #8a6d00;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
-  font-family: system-ui, sans-serif;
-  margin: 0 auto;
-  max-width: 60rem;
-  padding: 1rem;
-  color: #1a1a1a;
+  margin: 0;
+  background: var(--papier);
+  color: var(--encre);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+header {
+  padding: 1rem 1.25rem 0.75rem;
+  border-bottom: 1px solid var(--trait);
 }
 
 header h1 {
-  margin-bottom: 0.25rem;
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
 }
 
 .avertissement {
-  color: #6b6b6b;
-  font-size: 0.85rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: var(--attention);
 }
 
 main {
   display: grid;
+  grid-template-columns: minmax(280px, 22rem) minmax(280px, 1fr) minmax(240px, 20rem);
   gap: 1rem;
+  padding: 1rem 1.25rem 2rem;
+  align-items: start;
+}
+
+/* Une seule regle de bascule : au-dessous, les trois zones s'empilent. */
+@media (max-width: 60rem) {
+  main {
+    grid-template-columns: 1fr;
+  }
+}
+
+fieldset {
+  border: 1px solid var(--trait);
+  border-radius: 4px;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+legend {
+  padding: 0 0.35rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6a6862;
+}
+
+label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.35rem 0;
+}
+
+label > span {
+  flex: 0 0 11rem;
+  font-size: 0.82rem;
+}
+
+label.zone {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+label.case {
+  align-items: center;
+}
+
+label.case > span {
+  flex: 1;
+}
+
+input[type='text'],
+select,
+textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--trait);
+  border-radius: 3px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+
+textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+}
+
+button {
+  margin-top: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--trait);
+  border-radius: 3px;
+  background: var(--appui);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #e8e7e1;
+}
+
+.lit {
+  background: #fdfdfb;
+}
+
+.paire {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 0.5rem;
+}
+
+.paire label > span {
+  flex: 0 0 2.5rem;
+}
+
+.derive {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  color: #4a4842;
+}
+
+/* --- Trace --- */
+
+#section svg {
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  background: #fff;
+  border: 1px solid var(--trait);
+  border-radius: 4px;
+}
+
+.contour {
+  fill: var(--appui);
+  stroke: var(--encre);
+}
+
+.barre {
+  fill: var(--encre);
+}
+
+.axe-neutre {
+  stroke: var(--non-ok);
+  stroke-dasharray: 12 8;
+}
+
+/* --- Resultat --- */
+
+.verdict {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.verdict.ok {
+  background: #eaf4ee;
+  color: var(--ok);
+}
+
+.verdict.non-ok {
+  background: #f8ecec;
+  color: var(--non-ok);
+}
+
+.ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--trait);
+  font-size: 0.85rem;
+}
+
+.motif {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: var(--non-ok);
+}
+
+.erreur {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.7rem;
+  border-left: 3px solid var(--non-ok);
+  background: #f8ecec;
+  color: var(--non-ok);
+  font-size: 0.85rem;
+}
+
+.attente {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--appui);
+  font-size: 0.85rem;
 }

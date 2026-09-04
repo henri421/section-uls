@@ -1,27 +1,524 @@
+import { resolveModel, verifySection, FORMAT_VERSION, ENGINE_VERSION } from '../../src/index';
+import type { SectionModel, VerificationResult, ResolvedModel } from '../../src/index';
+import { formToModel, modelToForm, FormError } from './form';
+import type { FormState, RowInput, FreeRowInput } from './form';
+import { outlineOf, boundingBox, neutralAxisSegment, barRadius } from './draw';
+import { formatNumber, formatAngleDegrees, formatUtilization } from './format';
 import {
-  ec2Recommended, createConcrete, createSteel,
-  rectangularSection, rectangularRebarLayout, verifySection,
-} from '../../src/index';
+  chargerLocalement,
+  sauvegarderLocalement,
+  telechargerModele,
+  lireFichier,
+} from './storage';
 import './style.css';
 
-// Squelette : prouve que la chaine outillage -> noyau -> page fonctionne de
-// bout en bout. Remplace par le vrai cablage a la tache 5.
-const profile = ec2Recommended();
-const concrete = createConcrete(25, profile);
-const steel = createSteel(500, 200000, profile);
+/**
+ * Cablage de l'interface. Volontairement MINCE : il lit les champs, appelle
+ * les fonctions pures et le noyau, puis ecrit dans le document. Tout ce qui
+ * calcule ou transforme vit dans `form.ts`, `draw.ts` et `format.ts`, qui
+ * sont testes. Si du calcul apparait ici, c'est qu'une fonction pure manque.
+ *
+ * Le modele est la SOURCE DE VERITE : chaque modification reconstruit un
+ * `SectionModel`, dont tout le reste est derive. Aucun etat parallele n'est
+ * maintenu — ni positions de barres, ni geometrie reconstruite pour le
+ * dessin — de sorte que ce qui est enregistre est exactement ce qui est
+ * calcule, et que l'ecran ne peut pas montrer autre chose.
+ */
 
-const layout = rectangularRebarLayout({
-  width: 400, height: 400, cover: 30, stirrupDiameter: 8, steel,
-  rows: [
-    { face: 'bottom', bars: { count: 3, diameter: 20 } },
-    { face: 'top', bars: { count: 3, diameter: 20 } },
-  ],
+// --- Modele de depart -------------------------------------------------------
+
+function modeleParDefaut(): SectionModel {
+  return {
+    formatVersion: FORMAT_VERSION,
+    engineVersion: ENGINE_VERSION,
+    name: 'Poteau P1',
+    norm: { name: 'EC2_recommended', gammaC: 1.5, gammaS: 1.15, alphaCc: 1, nBands: 200 },
+    concrete: { fck: 25 },
+    steel: { fyk: 500, Es: 200000 },
+    geometry: { kind: 'rectangle', width: 400, height: 400 },
+    reinforcement: {
+      kind: 'rectangular-layout',
+      cover: 30,
+      stirrupDiameter: 8,
+      rows: [
+        { face: 'bottom', bars: { count: 3, diameter: 20 } },
+        { face: 'top', bars: { count: 3, diameter: 20 } },
+      ],
+    },
+    action: { N: 500, My: 80, Mz: 40 },
+  };
+}
+
+let etat: FormState = modelToForm(chargerLocalement() ?? modeleParDefaut());
+
+/** Dernier resultat valide, conserve pour ne pas l'effacer sur une saisie fautive. */
+let dernierResultat: string = '';
+let dernierDessin: string = '';
+
+// --- Fabriques de balisage --------------------------------------------------
+
+function echapper(texte: string): string {
+  return texte.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function champTexte(champ: keyof FormState, libelle: string, valeur: string): string {
+  return `<label><span>${libelle}</span><input type="text" inputmode="decimal" data-champ="${champ}" value="${echapper(valeur)}" /></label>`;
+}
+
+function champZone(champ: keyof FormState, libelle: string, valeur: string, lignes: number): string {
+  return `<label class="zone"><span>${libelle}</span><textarea rows="${lignes}" data-champ="${champ}">${echapper(valeur)}</textarea></label>`;
+}
+
+function champChoix(
+  champ: keyof FormState,
+  libelle: string,
+  valeur: string,
+  options: Array<[string, string]>
+): string {
+  const items = options
+    .map(([v, l]) => `<option value="${v}"${v === valeur ? ' selected' : ''}>${l}</option>`)
+    .join('');
+  return `<label><span>${libelle}</span><select data-champ="${champ}" data-structure="1">${items}</select></label>`;
+}
+
+function litRectangulaire(lit: RowInput, index: number): string {
+  const faces: Array<[string, string]> = [
+    ['bottom', 'inferieure'],
+    ['top', 'superieure'],
+    ['left', 'gauche'],
+    ['right', 'droite'],
+  ];
+  const options = faces
+    .map(([v, l]) => `<option value="${v}"${v === lit.face ? ' selected' : ''}>${l}</option>`)
+    .join('');
+
+  return `<fieldset class="lit">
+    <legend>Lit ${index + 1}</legend>
+    <label><span>Face</span><select data-lit="${index}" data-champ="face" data-structure="1">${options}</select></label>
+    <label><span>Diametre (mm)</span><input type="text" inputmode="decimal" data-lit="${index}" data-champ="diameter" value="${echapper(lit.diameter)}" /></label>
+    <label class="case"><input type="checkbox" data-lit="${index}" data-champ="useSpacing" data-structure="1"${lit.useSpacing ? ' checked' : ''} /><span>Definir par espacement maximal</span></label>
+    ${
+      lit.useSpacing
+        ? `<label><span>Espacement max (mm)</span><input type="text" inputmode="decimal" data-lit="${index}" data-champ="maxSpacing" value="${echapper(lit.maxSpacing)}" /></label>`
+        : `<label><span>Nombre de barres</span><input type="text" inputmode="numeric" data-lit="${index}" data-champ="count" value="${echapper(lit.count)}" /></label>`
+    }
+    <button type="button" data-action="supprimer-lit" data-lit="${index}">Supprimer ce lit</button>
+  </fieldset>`;
+}
+
+function litLibre(lit: FreeRowInput, index: number): string {
+  return `<fieldset class="lit">
+    <legend>Lit ${index + 1}</legend>
+    <div class="paire">
+      ${['fromY', 'fromZ', 'toY', 'toZ']
+        .map(
+          (c) =>
+            `<label><span>${c}</span><input type="text" inputmode="decimal" data-libre="${index}" data-champ="${c}" value="${echapper(String(lit[c as 'fromY']))}" /></label>`
+        )
+        .join('')}
+    </div>
+    <label><span>Diametre (mm)</span><input type="text" inputmode="decimal" data-libre="${index}" data-champ="diameter" value="${echapper(lit.diameter)}" /></label>
+    <label class="case"><input type="checkbox" data-libre="${index}" data-champ="useSpacing" data-structure="1"${lit.useSpacing ? ' checked' : ''} /><span>Definir par espacement maximal</span></label>
+    ${
+      lit.useSpacing
+        ? `<label><span>Espacement max (mm)</span><input type="text" inputmode="decimal" data-libre="${index}" data-champ="maxSpacing" value="${echapper(lit.maxSpacing)}" /></label>`
+        : `<label><span>Nombre de barres</span><input type="text" inputmode="numeric" data-libre="${index}" data-champ="count" value="${echapper(lit.count)}" /></label>`
+    }
+    <label class="case"><input type="checkbox" data-libre="${index}" data-champ="excludeEndpoints"${lit.excludeEndpoints ? ' checked' : ''} /><span>Exclure les extremites (barres intermediaires seules)</span></label>
+    <button type="button" data-action="supprimer-libre" data-libre="${index}">Supprimer ce lit</button>
+  </fieldset>`;
+}
+
+function blocGeometrie(): string {
+  if (etat.geometryKind === 'rectangle') {
+    return champTexte('width', 'Largeur (mm)', etat.width) + champTexte('height', 'Hauteur (mm)', etat.height);
+  }
+  if (etat.geometryKind === 'circle') {
+    return (
+      champTexte('diameter', 'Diametre (mm)', etat.diameter) +
+      champTexte('segments', 'Cotes du polygone (vide = 32)', etat.segments)
+    );
+  }
+  return champZone('vertices', 'Sommets, un par ligne : y ; z', etat.vertices, 8);
+}
+
+function blocFerraillage(): string {
+  const kind = etat.reinforcementKind;
+
+  if (kind === 'rectangular-layout') {
+    return (
+      champTexte('cover', 'Enrobage (mm)', etat.cover) +
+      champTexte('stirrupDiameter', 'Diametre etrier (mm, vide = 0)', etat.stirrupDiameter) +
+      etat.rows.map(litRectangulaire).join('') +
+      `<button type="button" data-action="ajouter-lit">Ajouter un lit</button>`
+    );
+  }
+
+  if (kind === 'circular-cage') {
+    return (
+      champTexte('cover', 'Enrobage (mm)', etat.cover) +
+      champTexte('stirrupDiameter', 'Diametre spirale (mm, vide = 0)', etat.stirrupDiameter) +
+      champTexte('cageBarDiameter', 'Diametre des barres (mm)', etat.cageBarDiameter) +
+      champTexte('cageCount', 'Nombre de barres', etat.cageCount) +
+      champTexte('cageRotationOffset', 'Decalage angulaire (rad, vide = 0)', etat.cageRotationOffset)
+    );
+  }
+
+  if (kind === 'rows') {
+    return (
+      etat.freeRows.map(litLibre).join('') +
+      `<button type="button" data-action="ajouter-libre">Ajouter un lit</button>`
+    );
+  }
+
+  return champZone('bars', 'Barres, une par ligne : y ; z ; aire', etat.bars, 8);
+}
+
+function htmlFormulaire(): string {
+  return `
+  <fieldset>
+    <legend>Identification</legend>
+    <label><span>Nom</span><input type="text" data-champ="name" value="${echapper(etat.name)}" /></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Materiaux</legend>
+    ${champTexte('fck', 'fck (MPa)', etat.fck)}
+    ${champTexte('fyk', 'fyk (MPa)', etat.fyk)}
+    ${champTexte('Es', 'Es (MPa)', etat.Es)}
+    <p class="derive" id="derives"></p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Geometrie</legend>
+    ${champChoix('geometryKind', 'Forme', etat.geometryKind, [
+      ['rectangle', 'Rectangle'],
+      ['polygon', 'Polygone'],
+      ['circle', 'Cercle'],
+    ])}
+    ${blocGeometrie()}
+  </fieldset>
+
+  <fieldset>
+    <legend>Ferraillage</legend>
+    ${champChoix('reinforcementKind', 'Mode de saisie', etat.reinforcementKind, [
+      ['rectangular-layout', 'Par faces (rectangle)'],
+      ['circular-cage', 'Cage circulaire'],
+      ['rows', 'Lits sur segments'],
+      ['bars', 'Barres libres'],
+    ])}
+    ${blocFerraillage()}
+  </fieldset>
+
+  <fieldset>
+    <legend>Sollicitation</legend>
+    ${champTexte('N', 'N (kN, positif en compression)', etat.N)}
+    ${champTexte('My', 'My (kN.m)', etat.My)}
+    ${champTexte('Mz', 'Mz (kN.m)', etat.Mz)}
+    ${champChoix('mode', 'Chemin de chargement', etat.mode, [
+      ['constant-N', 'N constant, moment majore'],
+      ['proportional', 'Proportionnel (calcul long, sur demande)'],
+    ])}
+    <button type="button" data-action="calculer-proportionnel">Calculer en proportionnel</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>Coefficients normatifs</legend>
+    ${champTexte('gammaC', 'gamma_c', etat.gammaC)}
+    ${champTexte('gammaS', 'gamma_s', etat.gammaS)}
+    ${champTexte('alphaCc', 'alpha_cc', etat.alphaCc)}
+    ${champTexte('nBands', 'Bandes d integration', etat.nBands)}
+  </fieldset>
+
+  <fieldset>
+    <legend>Modele</legend>
+    <button type="button" data-action="enregistrer">Enregistrer</button>
+    <label class="fichier"><span>Charger</span><input type="file" accept="application/json,.json" data-action="charger" /></label>
+  </fieldset>`;
+}
+
+// --- Dessin -----------------------------------------------------------------
+
+function dessiner(resolu: ResolvedModel, resultat: VerificationResult): string {
+  const contour = outlineOf(resolu.section);
+  const boite = boundingBox(contour);
+  const largeur = boite.yMax - boite.yMin;
+  const hauteur = boite.zMax - boite.zMin;
+  const marge = Math.max(largeur, hauteur) * 0.12;
+  const trait = Math.max(largeur, hauteur) / 250;
+
+  const points = contour.map((p) => `${p.y},${p.z}`).join(' ');
+
+  // Les barres viennent de la section RESOLUE : le dessin montre exactement
+  // ce que le moteur integre, jamais une reconstruction parallele.
+  const barres = resolu.section.rebars
+    .map((r) => `<circle cx="${r.y}" cy="${r.z}" r="${barRadius(r.area)}" class="barre" />`)
+    .join('');
+
+  let axe = '';
+  if (resultat.neutralAxis !== null) {
+    const segment = neutralAxisSegment(boite, resultat.neutralAxis.angle, resultat.neutralAxis.offset);
+    if (segment !== null) {
+      axe = `<line x1="${segment.a.y}" y1="${segment.a.z}" x2="${segment.b.y}" y2="${segment.b.z}" class="axe-neutre" stroke-width="${trait * 2}" />`;
+    }
+  }
+
+  // L'axe vertical du SVG va vers le bas, comme le repere du module : aucune
+  // inversion, donc aucune occasion de se tromper de signe a l'affichage.
+  return `<svg viewBox="${boite.yMin - marge} ${boite.zMin - marge} ${largeur + 2 * marge} ${hauteur + 2 * marge}" preserveAspectRatio="xMidYMid meet">
+    <polygon points="${points}" class="contour" stroke-width="${trait}" />
+    ${barres}
+    ${axe}
+  </svg>`;
+}
+
+// --- Resultat ---------------------------------------------------------------
+
+function ligne(libelle: string, valeur: string): string {
+  return `<div class="ligne"><span>${libelle}</span><strong>${valeur}</strong></div>`;
+}
+
+function htmlResultat(resultat: VerificationResult): string {
+  const verdict = resultat.ok
+    ? `<p class="verdict ok">Verifie — taux ${formatUtilization(resultat.utilization)}</p>`
+    : `<p class="verdict non-ok">Non verifie — taux ${formatUtilization(resultat.utilization)}</p>`;
+
+  const details = [
+    ligne('Chemin de chargement', resultat.mode === 'constant-N' ? 'N constant' : 'proportionnel'),
+    resultat.M_Rd
+      ? ligne(
+          'Moment resistant (kN.m)',
+          `${formatNumber(Math.hypot(resultat.M_Rd.y, resultat.M_Rd.z), 1)} — My ${formatNumber(resultat.M_Rd.y, 1)}, Mz ${formatNumber(resultat.M_Rd.z, 1)}`
+        )
+      : '',
+    resultat.neutralAxis
+      ? ligne(
+          'Axe neutre',
+          `${formatAngleDegrees(resultat.neutralAxis.angle)} deg, position ${formatNumber(resultat.neutralAxis.offset, 1)} mm`
+        )
+      : '',
+    resultat.leverArm !== null ? ligne('Bras de levier (mm)', formatNumber(resultat.leverArm, 1)) : '',
+    resultat.reason ? `<p class="motif">${echapper(resultat.reason)}</p>` : '',
+  ].join('');
+
+  return verdict + details;
+}
+
+// --- Boucle de calcul -------------------------------------------------------
+
+const zoneSaisie = document.querySelector<HTMLElement>('#saisie');
+const zoneSection = document.querySelector<HTMLElement>('#section');
+const zoneResultat = document.querySelector<HTMLElement>('#resultat');
+
+function afficherErreur(message: string): void {
+  if (!zoneResultat) return;
+  // L'erreur s'ajoute au dernier resultat valide, elle ne l'efface pas : on
+  // doit voir a la fois ce qui bloque et ce qu'on avait.
+  zoneResultat.innerHTML = `<p class="erreur">${echapper(message)}</p>${dernierResultat}`;
+}
+
+function recalculer(mode?: 'proportional'): void {
+  if (!zoneResultat || !zoneSection) return;
+
+  let modele: SectionModel;
+  try {
+    modele = formToModel(etat);
+  } catch (e) {
+    afficherErreur(e instanceof FormError ? e.message : String(e));
+    return;
+  }
+
+  try {
+    const resolu = resolveModel(modele);
+    const resultat = verifySection(resolu.section, resolu.action, resolu.norm, {
+      mode: mode ?? etat.mode,
+    });
+
+    dernierResultat = htmlResultat(resultat);
+    dernierDessin = dessiner(resolu, resultat);
+    zoneResultat.innerHTML = dernierResultat;
+    zoneSection.innerHTML = dernierDessin;
+
+    const derives = document.querySelector('#derives');
+    if (derives) {
+      derives.textContent = `fcd = ${formatNumber(resolu.concrete.fcd, 2)} MPa — fyd = ${formatNumber(resolu.steel.fyd, 1)} MPa`;
+    }
+
+    sauvegarderLocalement(modele);
+  } catch (e) {
+    afficherErreur(e instanceof Error ? e.message : String(e));
+  }
+}
+
+let minuterie: number | undefined;
+function recalculerBientot(): void {
+  // Delai d'apaisement : une verification coute de 25 a 120 ms selon la
+  // section, confortable au clavier mais inutile a relancer a chaque frappe.
+  window.clearTimeout(minuterie);
+  minuterie = window.setTimeout(() => recalculer(), 200);
+}
+
+function rendreFormulaire(): void {
+  if (!zoneSaisie) return;
+  zoneSaisie.innerHTML = htmlFormulaire();
+}
+
+// --- Cablage des evenements -------------------------------------------------
+
+/**
+ * Aligne le mode de ferraillage et ses champs sur la geometrie choisie.
+ *
+ * Sans cela, passer d'un rectangle a un cercle laisserait un ferraillage
+ * « par faces », que le format refuse a juste titre : l'utilisateur verrait
+ * une erreur au moment ou il change de forme, alors qu'il n'a rien fait de
+ * fautif. Les champs de la nouvelle forme sont remplis de valeurs usuelles
+ * s'ils sont vides — jamais ecrases s'ils portent deja une saisie.
+ */
+function accorderFerraillageAGeometrie(): void {
+  if (etat.geometryKind === 'rectangle' && etat.reinforcementKind !== 'rectangular-layout') {
+    etat.reinforcementKind = 'rectangular-layout';
+    if (etat.rows.length === 0) {
+      etat.rows = [
+        { face: 'bottom', diameter: '20', useSpacing: false, count: '3', maxSpacing: '' },
+        { face: 'top', diameter: '20', useSpacing: false, count: '3', maxSpacing: '' },
+      ];
+    }
+  }
+
+  if (etat.geometryKind === 'circle' && etat.reinforcementKind !== 'circular-cage') {
+    etat.reinforcementKind = 'circular-cage';
+    if (etat.cageBarDiameter.trim() === '') etat.cageBarDiameter = '20';
+    if (etat.cageCount.trim() === '') etat.cageCount = '8';
+  }
+
+  if (
+    etat.geometryKind === 'polygon' &&
+    etat.reinforcementKind !== 'rows' &&
+    etat.reinforcementKind !== 'bars'
+  ) {
+    etat.reinforcementKind = 'rows';
+  }
+}
+
+/** Remplit les champs de la geometrie choisie s'ils sont vides. */
+function completerGeometrie(): void {
+  if (etat.geometryKind === 'rectangle') {
+    if (etat.width.trim() === '') etat.width = '400';
+    if (etat.height.trim() === '') etat.height = '400';
+  } else if (etat.geometryKind === 'circle') {
+    if (etat.diameter.trim() === '') etat.diameter = '600';
+    if (etat.cover.trim() === '') etat.cover = '50';
+  } else if (etat.vertices.trim() === '') {
+    etat.vertices = '0 ; 0\n400 ; 0\n400 ; 400\n0 ; 400';
+  }
+}
+
+function appliquerSaisie(cible: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): void {
+  const champ = cible.dataset.champ;
+  if (!champ) return;
+
+  const valeur =
+    cible instanceof HTMLInputElement && cible.type === 'checkbox' ? cible.checked : cible.value;
+
+  const indexLit = cible.dataset.lit;
+  const indexLibre = cible.dataset.libre;
+
+  if (indexLit !== undefined) {
+    const lit = etat.rows[Number(indexLit)];
+    if (lit) Object.assign(lit, { [champ]: valeur });
+  } else if (indexLibre !== undefined) {
+    const lit = etat.freeRows[Number(indexLibre)];
+    if (lit) Object.assign(lit, { [champ]: valeur });
+  } else {
+    Object.assign(etat, { [champ]: valeur });
+  }
+
+  // Un changement de structure (forme, mode de saisie, case a cocher qui
+  // change les champs affiches) impose de reconstruire le formulaire ; une
+  // simple frappe ne doit pas le faire, sous peine de perdre le focus.
+  if (champ === 'geometryKind') {
+    completerGeometrie();
+    accorderFerraillageAGeometrie();
+  }
+
+  if (cible.dataset.structure === '1') {
+    rendreFormulaire();
+    recalculer();
+  } else {
+    recalculerBientot();
+  }
+}
+
+document.addEventListener('input', (evenement) => {
+  const cible = evenement.target;
+  if (
+    cible instanceof HTMLInputElement ||
+    cible instanceof HTMLSelectElement ||
+    cible instanceof HTMLTextAreaElement
+  ) {
+    if (cible.dataset.champ) appliquerSaisie(cible);
+  }
 });
 
-const section = rectangularSection({ width: 400, height: 400, concrete, rebars: layout.bars });
-const v = verifySection(section, { N: 500, My: 80, Mz: 40 }, profile);
+document.addEventListener('change', (evenement) => {
+  const cible = evenement.target;
+  if (cible instanceof HTMLInputElement && cible.dataset.action === 'charger') {
+    const fichier = cible.files?.[0];
+    if (!fichier) return;
+    lireFichier(fichier)
+      .then((modele) => {
+        etat = modelToForm(modele);
+        rendreFormulaire();
+        recalculer();
+      })
+      .catch((e: unknown) => {
+        // Le message du noyau nomme le champ fautif : on l'affiche tel quel.
+        afficherErreur(e instanceof Error ? e.message : String(e));
+      });
+  }
+});
 
-const cible = document.querySelector('#resultat');
-if (cible) {
-  cible.textContent = `Taux d'exploitation : ${v.utilization.toFixed(3)} — ${v.ok ? 'verifie' : 'non verifie'}`;
-}
+document.addEventListener('click', (evenement) => {
+  const cible = evenement.target;
+  if (!(cible instanceof HTMLElement)) return;
+  const action = cible.dataset.action;
+  if (!action) return;
+
+  if (action === 'ajouter-lit') {
+    etat.rows.push({ face: 'bottom', diameter: '20', useSpacing: false, count: '2', maxSpacing: '' });
+    rendreFormulaire();
+    recalculer();
+  } else if (action === 'supprimer-lit') {
+    etat.rows.splice(Number(cible.dataset.lit), 1);
+    rendreFormulaire();
+    recalculer();
+  } else if (action === 'ajouter-libre') {
+    etat.freeRows.push({
+      fromY: '0', fromZ: '0', toY: '100', toZ: '0',
+      diameter: '20', useSpacing: false, count: '2', maxSpacing: '',
+      excludeEndpoints: false,
+    });
+    rendreFormulaire();
+    recalculer();
+  } else if (action === 'supprimer-libre') {
+    etat.freeRows.splice(Number(cible.dataset.libre), 1);
+    rendreFormulaire();
+    recalculer();
+  } else if (action === 'enregistrer') {
+    try {
+      const modele = formToModel(etat);
+      const nom = (modele.name ?? 'section').replace(/[^\w-]+/g, '-').toLowerCase();
+      telechargerModele(modele, `${nom}.json`);
+    } catch (e) {
+      afficherErreur(e instanceof Error ? e.message : String(e));
+    }
+  } else if (action === 'calculer-proportionnel') {
+    // Le mode proportionnel coute de 3,6 s a 7,7 s : il ne part JAMAIS tout
+    // seul, et l'attente doit etre visible.
+    if (zoneResultat) zoneResultat.innerHTML = `<p class="attente">Calcul en cours…</p>${dernierResultat}`;
+    window.setTimeout(() => recalculer('proportional'), 0);
+  }
+});
+
+rendreFormulaire();
+recalculer();
