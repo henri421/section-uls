@@ -17,5 +17,10 @@ export default defineConfig({
   // vivent hors de `app/`, et `npm test` ne trouverait plus rien.
   test: {
     root: '.',
+    // `.worktrees/` contient des copies de travail completes du depot, donc
+    // une seconde suite de tests identique : sans cette exclusion, chaque
+    // session en cours double le decompte et fait passer deux fois les
+    // memes tests.
+    exclude: ['**/node_modules/**', '**/dist/**', '.worktrees/**'],
   },
 });
