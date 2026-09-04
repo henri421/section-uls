@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { verifySection } from '../../src/domains/verify-section';
 import { interactionCurveAtN } from '../../src/domains/interaction';
+import { capacityAtAngle } from '../../src/solvers/uls-biaxial';
 import { rectangularSection } from '../../src/geometry/rectangle';
 import { rectangularRebarLayout } from '../../src/geometry/rebar-layout';
 import { createConcrete } from '../../src/model/concrete';
@@ -63,6 +64,30 @@ describe('verifySection', () => {
 
     const v = verifySection(section, { N: 600, My: point.My, Mz: point.Mz }, profile);
     expect(v.utilization).toBeCloseTo(1, 3);
+  });
+
+  it('remonte la profondeur d axe neutre deja calculee, sans la recalculer', () => {
+    const section = poteauCarre();
+    const v = verifySection(section, { N: 600, My: 20, Mz: 20 }, profile);
+
+    expect(v.neutralAxisDepth).not.toBeNull();
+    const x = v.neutralAxisDepth as number;
+    expect(Number.isFinite(x)).toBe(true);
+    expect(x).toBeGreaterThan(0);
+
+    // C'est bien la valeur de la resolution retenue : l'interface n'a plus a
+    // rappeler `capacityAtAngle` pour l'obtenir.
+    const etat = capacityAtAngle(section, v.neutralAxis!.angle, 600, profile);
+    expect(etat).not.toBeNull();
+    expect(x).toBeCloseTo(etat!.x, 6);
+  });
+
+  it('rend une profondeur d axe neutre nulle hors du domaine resistant', () => {
+    const v = verifySection(poteauCarre(), { N: 1e9, My: 10, Mz: 0 }, profile);
+
+    expect(v.neutralAxis).toBeNull();
+    expect(v.leverArm).toBeNull();
+    expect(v.neutralAxisDepth).toBeNull();
   });
 
   it('accepte le mode proportionnel', () => {

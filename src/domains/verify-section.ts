@@ -12,6 +12,12 @@ export interface VerificationResult {
   /** Capacite dans la direction sollicitante ; null si hors domaine. */
   M_Rd: { y: number; z: number } | null;
   neutralAxis: { angle: number; offset: number } | null;
+  /**
+   * Profondeur perpendiculaire depuis la fibre extreme comprimee (mm) ; null
+   * si hors domaine. Recopiee de la resolution retenue : l'appelant n'a pas a
+   * rappeler `capacityAtAngle` pour une valeur deja calculee.
+   */
+  neutralAxisDepth: number | null;
   leverArm: number | null;
   /** Renseigne des que `ok` est faux, pour dire POURQUOI. */
   reason?: string;
@@ -54,6 +60,7 @@ export function verifySection(
     neutralAxis: capacity
       ? { angle: capacity.neutralAxis.angle, offset: capacity.neutralAxis.offset }
       : null,
+    neutralAxisDepth: capacity ? capacity.neutralAxisDepth : null,
     leverArm: capacity ? capacity.leverArm : null,
     ...(reason !== undefined ? { reason } : {}),
   };
