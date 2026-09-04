@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { dataBounds, includeOrigin, makeScale, niceTicks, padBounds, polylinePath } from '../../app/src/plot';
-import type { Bounds, PlotBox, PlotPoint } from '../../app/src/plot';
+import {
+  dataBounds,
+  includeOrigin,
+  makeScale,
+  niceTicks,
+  padBounds,
+  plotSvg,
+  polylinePath,
+} from '../../app/src/plot';
+import type { Bounds, PlotBox, PlotPoint, PlotSeries } from '../../app/src/plot';
 
 /**
  * Verifie qu'un pas est de la forme 1, 2 ou 5 fois une puissance de dix,
@@ -222,5 +230,135 @@ describe('chemins de polyligne', () => {
 
     expect(chemin.startsWith('M ')).toBe(true);
     expect(chemin).not.toContain('L');
+  });
+});
+
+function cercleDeClasse(svg: string, classe: string): { cx: number; cy: number } | null {
+  const motif = new RegExp(`<circle class="${classe}" cx="(-?[\\d.]+)" cy="(-?[\\d.]+)"`);
+  const trouve = svg.match(motif);
+  return trouve ? { cx: Number(trouve[1]), cy: Number(trouve[2]) } : null;
+}
+
+function compte(svg: string, motif: RegExp): number {
+  return svg.match(motif)?.length ?? 0;
+}
+
+describe('assemblage du graphe SVG', () => {
+  const cloche: PlotSeries = {
+    points: [
+      { x: 0, y: 0 },
+      { x: 5, y: 12 },
+      { x: 10, y: 0 },
+    ],
+    classe: 'contour',
+  };
+
+  it('rend un viewBox et aucune dimension en dur', () => {
+    // La mise a l'echelle est l'affaire de la CSS, comme pour le dessin de la
+    // section.
+    const svg = plotSvg([cloche], { xLabel: 'N', yLabel: 'M' });
+
+    expect(svg.startsWith('<svg')).toBe(true);
+    expect(svg.trimEnd().endsWith('</svg>')).toBe(true);
+    expect(svg).toContain('viewBox=');
+    expect(/<svg[^>]*\swidth=/.test(svg)).toBe(false);
+    expect(/<svg[^>]*\sheight=/.test(svg)).toBe(false);
+  });
+
+  it('rend une balise path par serie', () => {
+    const svg = plotSvg(
+      [cloche, { points: [{ x: 1, y: 1 }, { x: 2, y: 2 }], classe: 'seconde' }],
+      { xLabel: 'N', yLabel: 'M' }
+    );
+
+    expect(compte(svg, /<path\b/g)).toBe(2);
+  });
+
+  it('ignore une serie vide sans produire de path vide', () => {
+    const svg = plotSvg([{ points: [], classe: 'vide' }, cloche], {
+      xLabel: 'N',
+      yLabel: 'M',
+    });
+
+    expect(compte(svg, /<path\b/g)).toBe(1);
+    expect(svg).not.toContain('d=""');
+    expect(svg).not.toContain('NaN');
+  });
+
+  it('rend un graphe sans donnees du tout sans casser', () => {
+    const svg = plotSvg([{ points: [], classe: 'vide' }], { xLabel: 'N', yLabel: 'M' });
+
+    expect(svg).toContain('</svg>');
+    expect(compte(svg, /<path\b/g)).toBe(0);
+    expect(svg).not.toContain('NaN');
+  });
+
+  it('rend un marqueur hors bornes ET elargit le cadrage pour le contenir', () => {
+    // C'est le cas d'une section depassee : precisement celui ou l'on veut
+    // voir DE COMBIEN. Le point sollicitant ne doit jamais etre rogne.
+    const svg = plotSvg([cloche], {
+      xLabel: 'N',
+      yLabel: 'M',
+      box: BOITE,
+      markers: [{ point: { x: 100, y: 40 }, classe: 'sollicitation' }],
+    });
+
+    const marqueur = cercleDeClasse(svg, 'sollicitation');
+    expect(marqueur).not.toBeNull();
+
+    const m = marqueur as NonNullable<typeof marqueur>;
+    expect(m.cx).toBeGreaterThanOrEqual(BOITE.margin.left);
+    expect(m.cx).toBeLessThanOrEqual(BOITE.width - BOITE.margin.right);
+    expect(m.cy).toBeGreaterThanOrEqual(BOITE.margin.top);
+    expect(m.cy).toBeLessThanOrEqual(BOITE.height - BOITE.margin.bottom);
+  });
+
+  it('elargit aussi le cadrage aux extremites des segments', () => {
+    const svg = plotSvg([cloche], {
+      xLabel: 'N',
+      yLabel: 'M',
+      box: BOITE,
+      markers: [{ point: { x: 200, y: 90 }, classe: 'bout' }],
+      segments: [{ a: { x: 0, y: 0 }, b: { x: 200, y: 90 }, classe: 'homothetie' }],
+    });
+
+    const bout = cercleDeClasse(svg, 'bout');
+    expect(bout).not.toBeNull();
+    expect((bout as NonNullable<typeof bout>).cx).toBeLessThanOrEqual(
+      BOITE.width - BOITE.margin.right
+    );
+    expect(svg).toContain('homothetie');
+    expect(svg).not.toContain('NaN');
+  });
+
+  it('ne laisse jamais passer NaN, y compris sur un point unique', () => {
+    // Un NaN dans un attribut SVG ne leve rien : il efface silencieusement le
+    // trace.
+    const svg = plotSvg([{ points: [{ x: 3, y: 3 }], classe: 'unique' }], {
+      xLabel: 'N (kN)',
+      yLabel: 'M (kNm)',
+    });
+
+    expect(svg).not.toContain('NaN');
+    expect(svg).not.toContain('Infinity');
+  });
+
+  it('porte les libelles d axes et des etiquettes de graduation a virgule', () => {
+    const svg = plotSvg([{ points: [{ x: 0, y: 0 }, { x: 0.003, y: 1 }], classe: 'c' }], {
+      xLabel: 'N (kN)',
+      yLabel: 'M (kNm)',
+    });
+
+    expect(svg).toContain('N (kN)');
+    expect(svg).toContain('M (kNm)');
+    // Separateur decimal francais, via formatNumber.
+    expect(svg).toContain(',');
+    expect(svg).not.toContain('NaN');
+  });
+
+  it('ne referme pas les contours de series', () => {
+    const svg = plotSvg([cloche], { xLabel: 'N', yLabel: 'M' });
+
+    expect(svg).not.toContain('Z"');
   });
 });
