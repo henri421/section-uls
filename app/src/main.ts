@@ -227,11 +227,8 @@ function htmlFormulaire(): string {
     ${champTexte('N', 'N (kN, positif en compression)', etat.N)}
     ${champTexte('My', 'My (kN.m)', etat.My)}
     ${champTexte('Mz', 'Mz (kN.m)', etat.Mz)}
-    ${champChoix('mode', 'Chemin de chargement', etat.mode, [
-      ['constant-N', 'N constant'],
-      ['proportional', 'Proportionnel'],
-    ])}
-    <button type="button" data-action="calculer-proportionnel">Calculer en proportionnel</button>
+    <p class="note">Chemin de chargement : <strong>N constant</strong>, recalcule en continu.</p>
+    <button type="button" data-action="calculer-proportionnel">Calculer en proportionnel (quelques secondes)</button>
   </fieldset>
 
   <fieldset>
@@ -555,8 +552,13 @@ function recalculer(mode?: 'proportional'): void {
 
   try {
     const resolu = resolveModel(modele);
+    // Le recalcul automatique est TOUJOURS en « N constant ». Le mode
+    // proportionnel coute plusieurs secondes — 3,3 s sur une dalle courante
+    // contre 0,27 s — et il est synchrone : le declencher a chaque frappe
+    // fige la page, ce qui se lit a l'ecran comme des valeurs qui ne se
+    // mettent plus a jour. Il ne part donc que sur action explicite.
     const resultat = verifySection(resolu.section, resolu.action, resolu.norm, {
-      mode: mode ?? etat.mode,
+      mode: mode ?? 'constant-N',
     });
 
     dernierResultat = htmlResultat(resolu, resultat);

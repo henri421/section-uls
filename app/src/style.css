@@ -231,6 +231,12 @@ label.large > input {
   width: 100%;
 }
 
+.note {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: #4a4842;
+}
+
 .aire-lit {
   margin: 0.15rem 0 0;
   font-size: 0.78rem;

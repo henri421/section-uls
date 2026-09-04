@@ -195,7 +195,7 @@ Cet outil est une aide au calcul ; la vérification finale et la responsabilité
 - pas de précontrainte, pas de contrôle de ductilité ;
 - un modèle ne porte qu'un seul acier, appliqué à toutes les barres — le mélange d'aciers (sections existantes renforcées) n'est pas encore représentable ;
 - le format est en version 1 et aucune migration n'est prévue : toute évolution ultérieure devra s'accompagner d'une stratégie de reprise des fichiers existants ;
-- l'interface n'est pas couverte par des tests automatiques au niveau du DOM : la logique est extraite en fonctions pures testées, et le câblage — volontairement mince — est vérifié à la main ;
+- le câblage de l'interface est couvert par des tests de bout en bout dans un DOM simulé (`tests/app/cablage.test.ts`) : saisir une valeur doit changer le résultat affiché. Ces tests ont été ajoutés après une régression réelle que la seule couverture des fonctions pures n'avait pas vue ;
 - les diagrammes d'interaction sont calculés par la bibliothèque (`interactionCurveAtN`, `interactionCurveNM`) mais ne sont pas encore tracés par l'interface ;
 - le mode de chargement proportionnel est nettement plus coûteux que le mode « N constant » (quelques secondes contre quelques dizaines de millisecondes) : il ne se déclenche que sur demande explicite ;
 - la vérification en service ne couvre que la **flexion droite** et la section **fissurée** : une section entièrement comprimée est détectée et signalée, non calculée ;
