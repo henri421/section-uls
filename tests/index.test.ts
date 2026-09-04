@@ -10,6 +10,7 @@ import {
 } from '../src/index';
 import { parseModel, serializeModel, resolveModel, FORMAT_VERSION } from '../src/index';
 import { verifySection, interactionCurveAtN, interactionCurveNM, utilizationRatio } from '../src/index';
+import { verifyServiceUniaxial, crackedProperties } from '../src/index';
 
 describe('API publique du noyau', () => {
   it("permet de verifier une section rectangulaire de bout en bout via l'entree publique", () => {
@@ -129,5 +130,24 @@ describe('API publique — persistance', () => {
 
     expect(resolu.section.rebars).toHaveLength(3);
     expect(resolu.concrete.fcd).toBeCloseTo(25 / 1.5, 9);
+  });
+});
+
+describe('API publique — service', () => {
+  it('la verification en service est atteignable depuis l entree publique', () => {
+    const profile = ec2Recommended();
+    const concrete = createConcrete(25, profile);
+    const steel = createSteel(500, 200000, profile);
+    const As = 3 * (Math.PI * 20 ** 2) / 4;
+
+    const section = rectangularSection({
+      width: 300, height: 500, concrete,
+      rebars: [{ depthFromTop: 450, area: As, steel }],
+    });
+
+    const r = verifyServiceUniaxial(section, { N: 0, M: 100 });
+    expect(r.converged).toBe(true);
+    expect(r.sigmaC).toBeGreaterThan(0);
+    expect(typeof crackedProperties).toBe('function');
   });
 });

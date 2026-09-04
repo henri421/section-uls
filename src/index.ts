@@ -55,3 +55,9 @@ export { verifySection } from './domains/verify-section';
 
 export type { NeutralAxisState } from './solvers/uls-biaxial';
 export { capacityAtAngle } from './solvers/uls-biaxial';
+
+export type { HomogenisedProperties } from './service/cracked-section';
+export { crackedProperties } from './service/cracked-section';
+
+export type { ServiceLimits, ServiceOptions, ServiceResult } from './service/verify-service';
+export { verifyServiceUniaxial } from './service/verify-service';

@@ -32,6 +32,8 @@ Flexion composée **déviée** (N + My + Mz, axe neutre d'inclinaison quelconque
 
 **Vérification et domaine d'interaction** : `verifySection` conclut — taux d'exploitation, verdict, et le motif de l'échec quand il y en a un. Deux chemins de chargement sont proposés : « N constant, moment majoré », qui correspond à l'usage en poteau, et proportionnel. Les diagrammes `N`–`M` et `My`–`Mz` sont rendus comme des listes de points, prêtes à tracer — le noyau ne dessine pas.
 
+**Vérification en service (méthode n)** : section fissurée homogénéisée, contraintes du béton et des armatures confrontées aux limites de l'EN 1992-1-1 §7.2. Solveur entièrement distinct de celui de l'ELU — hypothèses élastiques, béton tendu négligé — et à ne jamais confondre avec lui. Flexion droite, coefficient d'équivalence paramétrable (défaut 15, valeur conventionnelle intégrant le fluage, non prescrite par la norme sous cette forme).
+
 ## Base normative
 
 - Loi béton parabole-rectangle, EN 1992-1-1 §3.1.7 éq. 3.17-3.18, paramètres du tableau 3.1 (y compris la branche `fck > 50 MPa`).
@@ -167,6 +169,7 @@ La crédibilité de l'outil repose sur des vérifications indépendantes du chem
 - **Invariance par isométrie** : tourner la section et la sollicitation du même angle laisse la capacité inchangée.
 - **Compression centrée** (`tests/handcalc/compression-centree.test.ts`) : le sommet du diagramme `N`–`M` confronté à `fcd·Ac + (fyd − fcd)·As`, calculé à la main.
 - **Cohérence domaine / taux** : un point pris sur le contour rendu par le domaine donne un taux d'exploitation voisin de 1.
+- **Méthode n** (`tests/handcalc/methode-n-poutre.test.ts`) : axe neutre, bras de levier et contraintes d'une poutre fissurée confrontés au calcul classique fermé.
 
 ## Développement
 
@@ -183,9 +186,11 @@ Cet outil est une aide au calcul ; la vérification finale et la responsabilité
 - le domaine ne parcourt que la branche du pivot béton — la loi acier à branche horizontale n'impose aucune limite de déformation, donc aucun pivot acier n'existe dans le modèle ;
 - contour simple sans trou (les réservations ne sont pas gérées) ;
 - une section circulaire est approximée par un polygone régulier (32 côtés par défaut, paramétrable) ;
-- pas de précontrainte, pas de vérification en service (méthode n), pas de contrôle de ductilité ;
+- pas de précontrainte, pas de contrôle de ductilité ;
 - un modèle ne porte qu'un seul acier, appliqué à toutes les barres — le mélange d'aciers (sections existantes renforcées) n'est pas encore représentable ;
 - le format est en version 1 et aucune migration n'est prévue : toute évolution ultérieure devra s'accompagner d'une stratégie de reprise des fichiers existants ;
 - l'interface n'est pas couverte par des tests automatiques au niveau du DOM : la logique est extraite en fonctions pures testées, et le câblage — volontairement mince — est vérifié à la main ;
 - les diagrammes d'interaction sont calculés par la bibliothèque (`interactionCurveAtN`, `interactionCurveNM`) mais ne sont pas encore tracés par l'interface ;
-- le mode de chargement proportionnel est nettement plus coûteux que le mode « N constant » (quelques secondes contre quelques dizaines de millisecondes) : il ne se déclenche que sur demande explicite.
+- le mode de chargement proportionnel est nettement plus coûteux que le mode « N constant » (quelques secondes contre quelques dizaines de millisecondes) : il ne se déclenche que sur demande explicite ;
+- la vérification en service ne couvre que la **flexion droite** et la section **fissurée** : une section entièrement comprimée est détectée et signalée, non calculée ;
+- l'ouverture de fissures (§7.3) et les flèches (§7.4) ne sont pas traitées.
