@@ -94,3 +94,76 @@ function padIntervalle(min: number, max: number, fraction: number): { min: numbe
   const marge = etendue * fraction;
   return { min: min - marge, max: max + marge };
 }
+
+/** Mantisses admissibles d'un pas de graduation : 1, 2, 5 fois une puissance de dix. */
+const MANTISSES = [1, 2, 5, 10];
+
+/**
+ * Graduations aux multiples de 1, 2 ou 5 fois une puissance de dix — celles
+ * qu'un lecteur lit sans effort.
+ *
+ * `cible` est un nombre SOUHAITE, pas une promesse : on retient le pas lisible
+ * dont le nombre de multiples couvrant la plage tombe au plus pres de la
+ * cible, et le compte reel peut differer de un ou deux. C'est le comportement
+ * voulu : des graduations a 13,7 seraient plus proches de la cible et
+ * illisibles.
+ *
+ * Comme les graduations sont les multiples entiers du pas, zero est toujours
+ * present — exactement, pas a 1e-16 pres — des que la plage franchit zero.
+ * C'est l'axe : il ne doit jamais manquer.
+ */
+export function niceTicks(min: number, max: number, cible: number): number[] {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return [];
+
+  const bas = Math.min(min, max);
+  const haut = Math.max(min, max);
+  const etendue = haut - bas;
+
+  // Etendue nulle : aucun pas ne peut couvrir la plage, et en chercher un
+  // ferait diverger le calcul du pas brut. Une seule graduation suffit.
+  if (etendue === 0) return [bas];
+
+  // Cible absurde (nulle ou negative) : on se rabat sur une graduation, ce qui
+  // borne le pas par le haut au lieu de le faire tendre vers zero — sans quoi
+  // le tableau rendu serait demesure.
+  const nSouhaite = Number.isFinite(cible) && cible >= 1 ? cible : 1;
+
+  const brut = etendue / nSouhaite;
+  const puissance = 10 ** Math.floor(Math.log10(brut));
+
+  let meilleurPas = puissance;
+  let meilleurEcart = Number.POSITIVE_INFINITY;
+
+  for (const mantisse of MANTISSES) {
+    const pas = mantisse * puissance;
+    const ecart = Math.abs(compteDeGraduations(bas, haut, pas) - nSouhaite);
+    if (ecart < meilleurEcart) {
+      meilleurEcart = ecart;
+      meilleurPas = pas;
+    }
+  }
+
+  const premier = Math.ceil(bas / meilleurPas);
+  const dernier = Math.floor(haut / meilleurPas);
+
+  const ticks: number[] = [];
+  for (let i = premier; i <= dernier; i++) {
+    ticks.push(arrondirBruitFlottant(i * meilleurPas));
+  }
+
+  return ticks;
+}
+
+function compteDeGraduations(bas: number, haut: number, pas: number): number {
+  return Math.floor(haut / pas) - Math.ceil(bas / pas) + 1;
+}
+
+/**
+ * Efface le bruit de la multiplication flottante : `3 * 0.001` vaut
+ * 0,003000000000000000... et s'afficherait tel quel dans une etiquette d'axe.
+ * Douze chiffres significatifs conservent toute la precision utile a un
+ * graphe et suppriment la trainee binaire.
+ */
+function arrondirBruitFlottant(valeur: number): number {
+  return Number(valeur.toPrecision(12));
+}
