@@ -1,8 +1,15 @@
-import { resolveModel, verifySection, FORMAT_VERSION, ENGINE_VERSION } from '../../src/index';
+import {
+  resolveModel,
+  verifySection,
+  capacityAtAngle,
+  polygonArea,
+  FORMAT_VERSION,
+  ENGINE_VERSION,
+} from '../../src/index';
 import type { SectionModel, VerificationResult, ResolvedModel } from '../../src/index';
 import { formToModel, modelToForm, FormError } from './form';
 import type { FormState, RowInput, FreeRowInput } from './form';
-import { outlineOf, boundingBox, neutralAxisSegment, barRadius } from './draw';
+import { outlineOf, boundingBox, neutralAxisSegment, barRadius, splitByLine, zetaOf } from './draw';
 import { formatNumber, formatAngleDegrees, formatUtilization } from './format';
 import {
   chargerLocalement,
@@ -239,37 +246,81 @@ function htmlFormulaire(): string {
 
 // --- Dessin -----------------------------------------------------------------
 
+function chemin(points: Array<{ y: number; z: number }>): string {
+  return points.map((p) => `${p.y},${p.z}`).join(' ');
+}
+
 function dessiner(resolu: ResolvedModel, resultat: VerificationResult): string {
   const contour = outlineOf(resolu.section);
   const boite = boundingBox(contour);
   const largeur = boite.yMax - boite.yMin;
   const hauteur = boite.zMax - boite.zMin;
-  const marge = Math.max(largeur, hauteur) * 0.12;
-  const trait = Math.max(largeur, hauteur) / 250;
+  const marge = Math.max(largeur, hauteur) * 0.1;
+  const trait = Math.max(largeur, hauteur) / 300;
 
-  const points = contour.map((p) => `${p.y},${p.z}`).join(' ');
+  const axeNeutre = resultat.neutralAxis;
+
+  // Zones comprimee et tendue : une simple ligne d'axe neutre ne donne pas a
+  // VOIR ce qui travaille en compression et ce qui travaille en traction.
+  let zones = '';
+  if (axeNeutre !== null) {
+    const parts = splitByLine(contour, axeNeutre.angle, axeNeutre.offset);
+    if (parts.compressed.length >= 3) {
+      zones += `<polygon points="${chemin(parts.compressed)}" class="zone-comprimee" />`;
+    }
+    if (parts.tensioned.length >= 3) {
+      zones += `<polygon points="${chemin(parts.tensioned)}" class="zone-tendue" />`;
+    }
+  }
 
   // Les barres viennent de la section RESOLUE : le dessin montre exactement
-  // ce que le moteur integre, jamais une reconstruction parallele.
+  // ce que le moteur integre, jamais une reconstruction parallele. Chacune
+  // est coloree selon le cote de l'axe neutre ou elle se trouve.
   const barres = resolu.section.rebars
-    .map((r) => `<circle cx="${r.y}" cy="${r.z}" r="${barRadius(r.area)}" class="barre" />`)
+    .map((r) => {
+      const comprimee =
+        axeNeutre !== null && zetaOf({ y: r.y, z: r.z }, axeNeutre.angle) < axeNeutre.offset;
+      const classe = comprimee ? 'barre-comprimee' : 'barre-tendue';
+      return `<circle cx="${r.y}" cy="${r.z}" r="${barRadius(r.area)}" class="${classe}" />`;
+    })
     .join('');
 
   let axe = '';
-  if (resultat.neutralAxis !== null) {
-    const segment = neutralAxisSegment(boite, resultat.neutralAxis.angle, resultat.neutralAxis.offset);
+  if (axeNeutre !== null) {
+    const segment = neutralAxisSegment(boite, axeNeutre.angle, axeNeutre.offset);
     if (segment !== null) {
-      axe = `<line x1="${segment.a.y}" y1="${segment.a.z}" x2="${segment.b.y}" y2="${segment.b.z}" class="axe-neutre" stroke-width="${trait * 2}" />`;
+      axe = `<line x1="${segment.a.y}" y1="${segment.a.z}" x2="${segment.b.y}" y2="${segment.b.z}" class="axe-neutre" stroke-width="${trait * 1.6}" />`;
+    }
+  }
+
+  // Points d'application des resultantes et bras de levier qui les separe.
+  // `capacityAtAngle` ne coute qu'une seule resolution droite : negligeable
+  // devant la verification elle-meme, qui en enchaine une vingtaine.
+  let resultantes = '';
+  if (axeNeutre !== null) {
+    const etat = capacityAtAngle(resolu.section, axeNeutre.angle, resolu.action.N, resolu.norm);
+    if (etat && etat.compression && etat.tension) {
+      const r = trait * 5;
+      const c = etat.compression;
+      const t = etat.tension;
+      resultantes =
+        `<line x1="${c.y}" y1="${c.z}" x2="${t.y}" y2="${t.z}" class="bras-levier" stroke-width="${trait}" />` +
+        `<circle cx="${c.y}" cy="${c.z}" r="${r}" class="resultante" stroke-width="${trait * 1.2}" />` +
+        `<circle cx="${t.y}" cy="${t.z}" r="${r}" class="resultante" stroke-width="${trait * 1.2}" />`;
     }
   }
 
   // L'axe vertical du SVG va vers le bas, comme le repere du module : aucune
   // inversion, donc aucune occasion de se tromper de signe a l'affichage.
-  return `<svg viewBox="${boite.yMin - marge} ${boite.zMin - marge} ${largeur + 2 * marge} ${hauteur + 2 * marge}" preserveAspectRatio="xMidYMid meet">
-    <polygon points="${points}" class="contour" stroke-width="${trait}" />
+  const svg = `<svg viewBox="${boite.yMin - marge} ${boite.zMin - marge} ${largeur + 2 * marge} ${hauteur + 2 * marge}" preserveAspectRatio="xMidYMid meet">
+    ${zones}
+    <polygon points="${chemin(contour)}" class="contour" stroke-width="${trait}" />
     ${barres}
     ${axe}
+    ${resultantes}
   </svg>`;
+
+  return `${svg}<p class="legende"><span class="c">zone comprimee</span><span class="t">zone tendue</span><span class="n">axe neutre</span><span>cercles : resultantes, reliees par le bras de levier</span></p>`;
 }
 
 // --- Resultat ---------------------------------------------------------------
@@ -278,30 +329,81 @@ function ligne(libelle: string, valeur: string): string {
   return `<div class="ligne"><span>${libelle}</span><strong>${valeur}</strong></div>`;
 }
 
-function htmlResultat(resultat: VerificationResult): string {
-  const verdict = resultat.ok
-    ? `<p class="verdict ok">Verifie — taux ${formatUtilization(resultat.utilization)}</p>`
-    : `<p class="verdict non-ok">Non verifie — taux ${formatUtilization(resultat.utilization)}</p>`;
+function groupe(titre: string, lignes: string[]): string {
+  const contenu = lignes.filter((l) => l !== '').join('');
+  return contenu === '' ? '' : `<div class="groupe"><h3>${titre}</h3>${contenu}</div>`;
+}
 
-  const details = [
+function htmlResultat(resolu: ResolvedModel, resultat: VerificationResult): string {
+  const taux = resultat.utilization;
+  const verdict = resultat.ok
+    ? `<p class="verdict ok">Verifie — taux ${formatUtilization(taux)}</p>`
+    : `<p class="verdict non-ok">Non verifie — taux ${formatUtilization(taux)}</p>`;
+
+  // Jauge : le taux lu d'un coup d'oeil, plafonnee visuellement a 100 % pour
+  // rester lisible quand la section est tres largement depassee.
+  const remplissage = Number.isFinite(taux) ? Math.min(taux, 1) * 100 : 100;
+  const jauge = `<div class="jauge${resultat.ok ? '' : ' depasse'}"><div style="width:${remplissage.toFixed(1)}%"></div></div>`;
+
+  const magnitudeSollicitante = Math.hypot(resolu.action.My, resolu.action.Mz);
+  const magnitudeResistante = resultat.M_Rd
+    ? Math.hypot(resultat.M_Rd.y, resultat.M_Rd.z)
+    : null;
+
+  const aireBeton = polygonArea(outlineOf(resolu.section));
+  const aireAcier = resolu.section.rebars.reduce((somme, r) => somme + r.area, 0);
+
+  const sollicitation = groupe('Sollicitation', [
+    ligne('Effort normal N', `${formatNumber(resolu.action.N, 1)} kN`),
+    ligne(
+      'Moment sollicitant',
+      `${formatNumber(magnitudeSollicitante, 1)} kN.m — My ${formatNumber(resolu.action.My, 1)}, Mz ${formatNumber(resolu.action.Mz, 1)}`
+    ),
     ligne('Chemin de chargement', resultat.mode === 'constant-N' ? 'N constant' : 'proportionnel'),
+  ]);
+
+  const resistance = groupe('Resistance', [
+    magnitudeResistante !== null
+      ? ligne('Moment resistant', `${formatNumber(magnitudeResistante, 1)} kN.m`)
+      : '',
     resultat.M_Rd
       ? ligne(
-          'Moment resistant (kN.m)',
-          `${formatNumber(Math.hypot(resultat.M_Rd.y, resultat.M_Rd.z), 1)} — My ${formatNumber(resultat.M_Rd.y, 1)}, Mz ${formatNumber(resultat.M_Rd.z, 1)}`
+          'Composantes M_Rd',
+          `My ${formatNumber(resultat.M_Rd.y, 1)}, Mz ${formatNumber(resultat.M_Rd.z, 1)} kN.m`
         )
+      : '',
+    magnitudeResistante !== null && magnitudeResistante > 0
+      ? ligne(
+          'Marge disponible',
+          `${formatNumber(magnitudeResistante - magnitudeSollicitante, 1)} kN.m`
+        )
+      : '',
+  ]);
+
+  const equilibre = groupe('Equilibre de la section', [
+    resultat.neutralAxis
+      ? ligne('Inclinaison de l axe neutre', `${formatAngleDegrees(resultat.neutralAxis.angle)} deg`)
       : '',
     resultat.neutralAxis
-      ? ligne(
-          'Axe neutre',
-          `${formatAngleDegrees(resultat.neutralAxis.angle)} deg, position ${formatNumber(resultat.neutralAxis.offset, 1)} mm`
-        )
+      ? ligne('Position de l axe neutre', `${formatNumber(resultat.neutralAxis.offset, 1)} mm`)
       : '',
-    resultat.leverArm !== null ? ligne('Bras de levier (mm)', formatNumber(resultat.leverArm, 1)) : '',
-    resultat.reason ? `<p class="motif">${echapper(resultat.reason)}</p>` : '',
-  ].join('');
+    resultat.leverArm !== null
+      ? ligne('Bras de levier interne', `${formatNumber(resultat.leverArm, 1)} mm`)
+      : '',
+  ]);
 
-  return verdict + details;
+  const materiaux = groupe('Materiaux et ferraillage', [
+    ligne('fcd', `${formatNumber(resolu.concrete.fcd, 2)} MPa`),
+    ligne('fyd', `${formatNumber(resolu.steel.fyd, 1)} MPa`),
+    ligne('Armatures', `${resolu.section.rebars.length} barres, ${formatNumber(aireAcier, 0)} mm²`),
+    aireBeton > 0
+      ? ligne('Taux d armature', `${formatNumber((100 * aireAcier) / aireBeton, 2)} %`)
+      : '',
+  ]);
+
+  const motif = resultat.reason ? `<p class="motif">${echapper(resultat.reason)}</p>` : '';
+
+  return verdict + jauge + sollicitation + resistance + equilibre + materiaux + motif;
 }
 
 // --- Boucle de calcul -------------------------------------------------------
@@ -334,7 +436,7 @@ function recalculer(mode?: 'proportional'): void {
       mode: mode ?? etat.mode,
     });
 
-    dernierResultat = htmlResultat(resultat);
+    dernierResultat = htmlResultat(resolu, resultat);
     dernierDessin = dessiner(resolu, resultat);
     zoneResultat.innerHTML = dernierResultat;
     zoneSection.innerHTML = dernierDessin;

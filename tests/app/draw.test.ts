@@ -88,3 +88,53 @@ describe('geometrie du trace', () => {
     expect(barRadius(Math.PI * 100)).toBeCloseTo(10, 9); // HA20 -> rayon 10
   });
 });
+
+import { splitByLine, zetaOf } from '../../app/src/draw';
+
+describe('decoupage du contour par l axe neutre', () => {
+  const carre = [
+    { y: -200, z: -200 },
+    { y: 200, z: -200 },
+    { y: 200, z: 200 },
+    { y: -200, z: 200 },
+  ];
+
+  it('axe horizontal a mi-hauteur : deux moities d aire egale', () => {
+    const { compressed, tensioned } = splitByLine(carre, 0, 0);
+
+    expect(polygonArea(compressed)).toBeCloseTo(400 * 200, 6);
+    expect(polygonArea(tensioned)).toBeCloseTo(400 * 200, 6);
+  });
+
+  it('la compression est du cote des zeta inferieurs, donc en haut a angle nul', () => {
+    const { compressed } = splitByLine(carre, 0, 0);
+    // angle 0 : zeta = z, donc la zone comprimee est celle des z negatifs.
+    expect(Math.max(...compressed.map((p) => p.z))).toBeCloseTo(0, 9);
+    expect(Math.min(...compressed.map((p) => p.z))).toBeCloseTo(-200, 9);
+  });
+
+  it('les deux parts se conservent : leur somme redonne l aire totale', () => {
+    // Un decoupage en diagonale, ou aucune des deux parts n'est triviale.
+    const { compressed, tensioned } = splitByLine(carre, Math.PI / 4, 30);
+    const total = polygonArea(carre);
+
+    expect(polygonArea(compressed) + polygonArea(tensioned)).toBeCloseTo(total, 6);
+    expect(polygonArea(compressed)).toBeGreaterThan(0);
+    expect(polygonArea(tensioned)).toBeGreaterThan(0);
+  });
+
+  it('une droite hors du contour laisse une part vide et l autre entiere', () => {
+    const loin = splitByLine(carre, 0, 5000);
+    expect(polygonArea(loin.compressed)).toBeCloseTo(polygonArea(carre), 6);
+    expect(loin.tensioned).toHaveLength(0);
+
+    const autreCote = splitByLine(carre, 0, -5000);
+    expect(autreCote.compressed).toHaveLength(0);
+    expect(polygonArea(autreCote.tensioned)).toBeCloseTo(polygonArea(carre), 6);
+  });
+
+  it('zetaOf redonne bien la coordonnee perpendiculaire du solveur', () => {
+    expect(zetaOf({ y: 0, z: 100 }, 0)).toBeCloseTo(100, 9);
+    expect(zetaOf({ y: 100, z: 0 }, Math.PI / 2)).toBeCloseTo(-100, 9);
+  });
+});

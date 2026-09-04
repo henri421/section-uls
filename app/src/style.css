@@ -6,6 +6,9 @@
   --ok: #1f6f3f;
   --non-ok: #a52121;
   --attention: #8a6d00;
+  --compression: #2f5d8a;
+  --traction: #a8442a;
+  --libelle: 12rem;
   color-scheme: light;
 }
 
@@ -17,7 +20,7 @@ body {
   margin: 0;
   background: var(--papier);
   color: var(--encre);
-  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 header {
@@ -39,70 +42,129 @@ header h1 {
 
 main {
   display: grid;
-  grid-template-columns: minmax(280px, 22rem) minmax(280px, 1fr) minmax(240px, 20rem);
+  grid-template-columns: 24rem minmax(0, 1fr) 22rem;
   gap: 1rem;
   padding: 1rem 1.25rem 2rem;
   align-items: start;
+  max-width: 100rem;
+  margin: 0 auto;
 }
 
-/* Une seule regle de bascule : au-dessous, les trois zones s'empilent. */
-@media (max-width: 60rem) {
+/*
+ * Les elements d'une grille valent `min-width: auto` par defaut : un contenu
+ * large — ici le dessin — refuse alors de se comprimer et deborde sur la
+ * colonne voisine, ce qui se lit a l'ecran comme un chevauchement. Autoriser
+ * explicitement le retrecissement est la correction de fond.
+ */
+main > section {
+  min-width: 0;
+  overflow: hidden;
+}
+
+#section {
+  position: sticky;
+  top: 1rem;
+}
+
+@media (max-width: 78rem) {
   main {
-    grid-template-columns: 1fr;
+    grid-template-columns: 22rem minmax(0, 1fr);
+  }
+  #resultat {
+    grid-column: 1 / -1;
   }
 }
 
+@media (max-width: 60rem) {
+  main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #section {
+    position: static;
+  }
+  :root {
+    --libelle: 10rem;
+  }
+}
+
+/* --- Saisie --- */
+
 fieldset {
+  /*
+   * Un `fieldset` porte par defaut une largeur minimale intrinseque
+   * (`min-inline-size: min-content`) : sans cette neutralisation, chaque
+   * cadre se dimensionne sur son contenu et les cadres n'ont pas tous la
+   * meme largeur.
+   */
+  min-inline-size: 0;
+  width: 100%;
   border: 1px solid var(--trait);
   border-radius: 4px;
   margin: 0 0 0.75rem;
   padding: 0.5rem 0.75rem 0.75rem;
+  background: #fff;
 }
 
 legend {
   padding: 0 0.35rem;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: #6a6862;
 }
 
 label {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.5rem;
-  margin: 0.35rem 0;
+  margin: 0.3rem 0;
+  min-width: 0;
 }
 
 label > span {
-  flex: 0 0 11rem;
+  flex: 0 0 var(--libelle);
   font-size: 0.82rem;
 }
 
 label.zone {
   flex-direction: column;
   align-items: stretch;
+  gap: 0.25rem;
 }
 
-label.case {
-  align-items: center;
+label.zone > span {
+  flex: none;
 }
 
 label.case > span {
   flex: 1;
+  order: 2;
+}
+
+label.case > input {
+  flex: none;
+  order: 1;
 }
 
 input[type='text'],
 select,
 textarea {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
-  padding: 0.25rem 0.4rem;
+  padding: 0.28rem 0.4rem;
   border: 1px solid var(--trait);
   border-radius: 3px;
   background: #fff;
   color: inherit;
   font: inherit;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--compression);
+  outline-offset: 1px;
 }
 
 textarea {
@@ -112,7 +174,7 @@ textarea {
 
 button {
   margin-top: 0.4rem;
-  padding: 0.3rem 0.7rem;
+  padding: 0.32rem 0.7rem;
   border: 1px solid var(--trait);
   border-radius: 3px;
   background: var(--appui);
@@ -127,6 +189,7 @@ button:hover {
 
 .lit {
   background: #fdfdfb;
+  margin-bottom: 0.5rem;
 }
 
 .paire {
@@ -141,6 +204,8 @@ button:hover {
 
 .derive {
   margin: 0.5rem 0 0;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--trait);
   font-size: 0.82rem;
   color: #4a4842;
 }
@@ -148,34 +213,97 @@ button:hover {
 /* --- Trace --- */
 
 #section svg {
+  display: block;
   width: 100%;
   height: auto;
-  max-height: 70vh;
+  max-height: 78vh;
   background: #fff;
   border: 1px solid var(--trait);
   border-radius: 4px;
 }
 
+.zone-comprimee {
+  fill: var(--compression);
+  fill-opacity: 0.18;
+}
+
+.zone-tendue {
+  fill: var(--traction);
+  fill-opacity: 0.09;
+}
+
 .contour {
-  fill: var(--appui);
+  fill: none;
   stroke: var(--encre);
 }
 
-.barre {
-  fill: var(--encre);
+.barre-comprimee {
+  fill: var(--compression);
+}
+
+.barre-tendue {
+  fill: var(--traction);
 }
 
 .axe-neutre {
-  stroke: var(--non-ok);
-  stroke-dasharray: 12 8;
+  stroke: var(--encre);
+  stroke-dasharray: 14 9;
+}
+
+.resultante {
+  stroke: var(--encre);
+  fill: none;
+}
+
+.bras-levier {
+  stroke: var(--encre);
+  stroke-dasharray: 3 4;
+  fill: none;
+}
+
+.legende {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+  color: #4a4842;
+}
+
+.legende span::before {
+  content: '';
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-right: 0.35rem;
+  vertical-align: -1px;
+  border-radius: 2px;
+}
+
+.legende .c::before {
+  background: var(--compression);
+  opacity: 0.5;
+}
+
+.legende .t::before {
+  background: var(--traction);
+  opacity: 0.5;
+}
+
+.legende .n::before {
+  height: 0;
+  border-top: 2px dashed var(--encre);
+  border-radius: 0;
+  vertical-align: 3px;
 }
 
 /* --- Resultat --- */
 
 .verdict {
-  margin: 0 0 0.75rem;
-  padding: 0.5rem 0.7rem;
+  margin: 0 0 0.6rem;
+  padding: 0.6rem 0.75rem;
   border-radius: 4px;
+  font-size: 1rem;
   font-weight: 600;
 }
 
@@ -189,17 +317,61 @@ button:hover {
   color: var(--non-ok);
 }
 
+.jauge {
+  height: 0.55rem;
+  margin: 0.35rem 0 0.9rem;
+  border: 1px solid var(--trait);
+  border-radius: 999px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.jauge > div {
+  height: 100%;
+  background: var(--ok);
+}
+
+.jauge.depasse > div {
+  background: var(--non-ok);
+}
+
+.groupe {
+  margin: 0 0 0.75rem;
+}
+
+.groupe > h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6a6862;
+}
+
 .ligne {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 0.75rem;
-  padding: 0.25rem 0;
-  border-bottom: 1px solid var(--trait);
+  padding: 0.22rem 0;
+  border-bottom: 1px solid #eceae4;
   font-size: 0.85rem;
 }
 
+.ligne > span {
+  color: #4a4842;
+}
+
+.ligne > strong {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .motif {
-  margin: 0.75rem 0 0;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.6rem;
+  border-left: 3px solid var(--non-ok);
+  background: #f8ecec;
   font-size: 0.85rem;
   color: var(--non-ok);
 }
@@ -207,9 +379,9 @@ button:hover {
 .erreur {
   margin: 0 0 0.75rem;
   padding: 0.5rem 0.7rem;
-  border-left: 3px solid var(--non-ok);
-  background: #f8ecec;
-  color: var(--non-ok);
+  border-left: 3px solid var(--attention);
+  background: #fdf6e3;
+  color: #6b5400;
   font-size: 0.85rem;
 }
 

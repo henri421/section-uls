@@ -18,6 +18,76 @@ export interface Segment {
   b: Point;
 }
 
+export interface SplitOutline {
+  /** Partie comprimee du contour (cote `zeta < offset`). Vide si aucune. */
+  compressed: Point[];
+  /** Partie tendue du contour. Vide si aucune. */
+  tensioned: Point[];
+}
+
+/**
+ * Coordonnee perpendiculaire a l'axe neutre, exactement celle du solveur :
+ * la droite d'axe neutre est le lieu `zeta = offset`, et la compression se
+ * trouve du cote des `zeta` inferieurs.
+ */
+export function zetaOf(p: Point, angle: number): number {
+  return -p.y * Math.sin(angle) + p.z * Math.cos(angle);
+}
+
+/**
+ * Decoupe le contour de part et d'autre de l'axe neutre, par l'algorithme de
+ * Sutherland-Hodgman applique a un demi-plan.
+ *
+ * Sert a MONTRER la zone comprimee et la zone tendue, ce qu'une simple ligne
+ * d'axe neutre ne donne pas a voir. Le decoupage est purement graphique : il
+ * ne participe a aucun calcul de resistance, qui reste l'affaire du noyau.
+ *
+ * Limite connue et acceptee : sur un contour non convexe, le decoupage peut
+ * produire un polygone comportant des aretes de raccord de largeur nulle.
+ * Le rendu reste correct — la surface peinte est la bonne — mais le contour
+ * intermediaire n'est pas un polygone simple au sens strict.
+ */
+export function splitByLine(polygon: Point[], angle: number, offset: number): SplitOutline {
+  return {
+    compressed: clipDemiPlan(polygon, angle, offset, true),
+    tensioned: clipDemiPlan(polygon, angle, offset, false),
+  };
+}
+
+function clipDemiPlan(
+  polygon: Point[],
+  angle: number,
+  offset: number,
+  garderComprime: boolean
+): Point[] {
+  if (polygon.length < 3) return [];
+
+  const dedans = (p: Point): boolean =>
+    garderComprime ? zetaOf(p, angle) <= offset : zetaOf(p, angle) >= offset;
+
+  const sortie: Point[] = [];
+  const n = polygon.length;
+
+  for (let i = 0; i < n; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % n];
+    const aDedans = dedans(a);
+    const bDedans = dedans(b);
+
+    if (aDedans) sortie.push(a);
+
+    // L'arete traverse la droite : on ajoute le point d'intersection.
+    if (aDedans !== bDedans) {
+      const za = zetaOf(a, angle);
+      const zb = zetaOf(b, angle);
+      const t = (offset - za) / (zb - za);
+      sortie.push({ y: a.y + t * (b.y - a.y), z: a.z + t * (b.z - a.z) });
+    }
+  }
+
+  return sortie.length >= 3 ? sortie : [];
+}
+
 /**
  * Contour a dessiner. On passe par `rectangleToPolygon` plutot que de
  * reconstruire les sommets : le trace montre ainsi exactement la geometrie
