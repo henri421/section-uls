@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { dataBounds, includeOrigin, niceTicks, padBounds } from '../../app/src/plot';
-import type { PlotPoint } from '../../app/src/plot';
+import { dataBounds, includeOrigin, makeScale, niceTicks, padBounds, polylinePath } from '../../app/src/plot';
+import type { Bounds, PlotBox, PlotPoint } from '../../app/src/plot';
 
 /**
  * Verifie qu'un pas est de la forme 1, 2 ou 5 fois une puissance de dix,
@@ -136,5 +136,91 @@ describe('graduations lisibles', () => {
   it('borne le nombre de graduations meme si la cible est absurde', () => {
     expect(niceTicks(0, 1, 0).length).toBeLessThan(100);
     expect(niceTicks(0, 1, -3).length).toBeLessThan(100);
+  });
+});
+
+const BOITE: PlotBox = {
+  width: 400,
+  height: 300,
+  margin: { top: 10, right: 20, bottom: 40, left: 50 },
+};
+
+describe('transformation vers l ecran', () => {
+  const bornes: Bounds = { xMin: -100, xMax: 300, yMin: 0, yMax: 80 };
+  const echelle = makeScale(bornes, BOITE);
+
+  it('place xMin sur la marge gauche et xMax sur le bord droit du cadre utile', () => {
+    expect(echelle.x(-100)).toBeCloseTo(50, 9);
+    expect(echelle.x(300)).toBeCloseTo(400 - 20, 9);
+  });
+
+  it('INVERSE l axe vertical : yMax en haut, yMin en bas', () => {
+    // En SVG l'axe vertical descend. Sans inversion le graphe est a l'envers :
+    // cela se voit tout de suite a l'ecran, et rien ne l'attrape en test si on
+    // ne l'assert pas.
+    expect(echelle.y(80)).toBeCloseTo(10, 9);
+    expect(echelle.y(0)).toBeCloseTo(300 - 40, 9);
+    expect(echelle.y(80)).toBeLessThan(echelle.y(0));
+  });
+
+  it('place le milieu de la plage au milieu du cadre', () => {
+    expect(echelle.x(100)).toBeCloseTo((50 + 380) / 2, 9);
+    expect(echelle.y(40)).toBeCloseTo((10 + 260) / 2, 9);
+  });
+
+  it('ne rend pas NaN sur des bornes d etendue nulle', () => {
+    const plate = makeScale({ xMin: 5, xMax: 5, yMin: -2, yMax: -2 }, BOITE);
+
+    expect(Number.isFinite(plate.x(5))).toBe(true);
+    expect(Number.isFinite(plate.y(-2))).toBe(true);
+  });
+});
+
+describe('chemins de polyligne', () => {
+  const echelle = makeScale({ xMin: 0, xMax: 10, yMin: 0, yMax: 10 }, BOITE);
+
+  it('rend une chaine vide sur un tableau vide', () => {
+    // Ni « M » seul, ni undefined : un attribut `d` incomplet est une erreur
+    // silencieuse en SVG.
+    expect(polylinePath([], echelle)).toBe('');
+  });
+
+  it('commence par M et enchaine un L par point suivant', () => {
+    const chemin = polylinePath(
+      [
+        { x: 0, y: 0 },
+        { x: 5, y: 5 },
+        { x: 10, y: 0 },
+      ],
+      echelle
+    );
+
+    expect(chemin.startsWith('M ')).toBe(true);
+    expect(chemin.match(/L/g)?.length).toBe(2);
+    expect(chemin).not.toContain('NaN');
+  });
+
+  it('ne referme JAMAIS le trace par Z', () => {
+    // Le contour d'un diagramme d'interaction n'est pas ferme : le noyau ne
+    // parcourt que la branche du pivot beton. Refermer dessinerait un domaine
+    // qui n'a pas ete calcule.
+    const chemin = polylinePath(
+      [
+        { x: 0, y: 0 },
+        { x: 10, y: 10 },
+        { x: 0, y: 10 },
+      ],
+      echelle
+    );
+
+    expect(chemin).not.toContain('Z');
+    expect(chemin).not.toContain('z');
+  });
+
+  it('rend un point unique sans L', () => {
+    const chemin = polylinePath([{ x: 5, y: 5 }], echelle);
+
+    expect(chemin.startsWith('M ')).toBe(true);
+    expect(chemin).not.toContain('L');
   });
 });

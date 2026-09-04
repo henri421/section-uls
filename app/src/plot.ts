@@ -167,3 +167,64 @@ function compteDeGraduations(bas: number, haut: number, pas: number): number {
 function arrondirBruitFlottant(valeur: number): number {
   return Number(valeur.toPrecision(12));
 }
+
+export interface PlotScale {
+  x(valeur: number): number;
+  y(valeur: number): number;
+}
+
+/**
+ * Transformation des coordonnees DONNEES vers les coordonnees ECRAN.
+ *
+ * Le piege est l'axe vertical : en SVG il DESCEND. La valeur maximale des
+ * donnees tombe donc sur la coordonnee ecran la plus PETITE, faute de quoi le
+ * graphe est dessine a l'envers.
+ *
+ * Etendue nulle : plutot que de diviser par zero — un NaN dans un attribut SVG
+ * ne leve rien, il efface silencieusement le trace — on renvoie le milieu du
+ * cadre. En pratique `padBounds` a deja ouvert l'intervalle en amont ; c'est
+ * une ceinture de securite.
+ */
+export function makeScale(b: Bounds, box: PlotBox): PlotScale {
+  const gauche = box.margin.left;
+  const droite = box.width - box.margin.right;
+  const haut = box.margin.top;
+  const bas = box.height - box.margin.bottom;
+
+  const etendueX = b.xMax - b.xMin;
+  const etendueY = b.yMax - b.yMin;
+
+  return {
+    x(valeur: number): number {
+      if (etendueX === 0) return (gauche + droite) / 2;
+      return gauche + ((valeur - b.xMin) / etendueX) * (droite - gauche);
+    },
+    y(valeur: number): number {
+      if (etendueY === 0) return (haut + bas) / 2;
+      return haut + ((b.yMax - valeur) / etendueY) * (bas - haut);
+    },
+  };
+}
+
+/** Coordonnee ecran mise en forme : deux decimales suffisent au sous-pixel. */
+function coordonnee(valeur: number): string {
+  return valeur.toFixed(2);
+}
+
+/**
+ * Chemin `M … L …` d'une polyligne, OUVERT : jamais de `Z`.
+ *
+ * Le contour d'un diagramme d'interaction n'est pas ferme — le noyau ne
+ * parcourt que la branche du pivot beton et n'atteint jamais la traction pure.
+ * Refermer le trace dessinerait un domaine qui n'a pas ete calcule.
+ */
+export function polylinePath(points: PlotPoint[], scale: PlotScale): string {
+  if (points.length === 0) return '';
+
+  return points
+    .map(
+      (p, i) =>
+        `${i === 0 ? 'M' : 'L'} ${coordonnee(scale.x(p.x))} ${coordonnee(scale.y(p.y))}`
+    )
+    .join(' ');
+}
