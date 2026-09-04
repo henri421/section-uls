@@ -210,6 +210,52 @@ button:hover {
   color: #4a4842;
 }
 
+
+/*
+ * Libelle AU-DESSUS du controle. Reserve aux champs dont le contenu est long
+ * — listes deroulantes, selecteur de fichier — dont le texte se trouvait
+ * tronque quand ils partageaient la ligne avec leur libelle.
+ */
+label.large {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+}
+
+label.large > span {
+  flex: none;
+}
+
+label.large > select,
+label.large > input {
+  width: 100%;
+}
+
+.aire-lit {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  color: #4a4842;
+  font-variant-numeric: tabular-nums;
+}
+
+.sous-titre {
+  margin: 0.6rem 0 0.1rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #6a6862;
+}
+
+.repere {
+  stroke: #9a978f;
+  fill: none;
+}
+
+.repere-texte {
+  fill: #6a6862;
+  font-family: system-ui, sans-serif;
+}
+
 /* --- Trace --- */
 
 #section svg {

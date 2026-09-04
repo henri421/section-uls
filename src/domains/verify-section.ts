@@ -44,7 +44,7 @@ export function verifySection(
   const reason = ok
     ? undefined
     : (taux.reason ??
-        `capacite depassee en flexion : taux d'exploitation ${taux.utilization.toFixed(3)}`);
+        `capacite depassee en flexion : taux d'exploitation ${taux.utilization.toFixed(2)}`);
 
   return {
     ok,

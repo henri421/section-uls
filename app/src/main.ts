@@ -8,6 +8,7 @@ import {
 } from '../../src/index';
 import type { SectionModel, VerificationResult, ResolvedModel } from '../../src/index';
 import { formToModel, modelToForm, FormError } from './form';
+import { rectangularRebarLayout, rebarRow, formatRow } from '../../src/index';
 import type { FormState, RowInput, FreeRowInput } from './form';
 import { outlineOf, boundingBox, neutralAxisSegment, barRadius, splitByLine, zetaOf } from './draw';
 import { formatNumber, formatAngleDegrees, formatUtilization } from './format';
@@ -85,10 +86,10 @@ function champChoix(
   const items = options
     .map(([v, l]) => `<option value="${v}"${v === valeur ? ' selected' : ''}>${l}</option>`)
     .join('');
-  return `<label><span>${libelle}</span><select data-champ="${champ}" data-structure="1">${items}</select></label>`;
+  return `<label class="large"><span>${libelle}</span><select data-champ="${champ}" data-structure="1">${items}</select></label>`;
 }
 
-function litRectangulaire(lit: RowInput, index: number): string {
+function litRectangulaire(lit: RowInput, index: number, recapitulatif?: string): string {
   const faces: Array<[string, string]> = [
     ['bottom', 'inferieure'],
     ['top', 'superieure'],
@@ -101,7 +102,7 @@ function litRectangulaire(lit: RowInput, index: number): string {
 
   return `<fieldset class="lit">
     <legend>Lit ${index + 1}</legend>
-    <label><span>Face</span><select data-lit="${index}" data-champ="face" data-structure="1">${options}</select></label>
+    <label class="large"><span>Face</span><select data-lit="${index}" data-champ="face" data-structure="1">${options}</select></label>
     <label><span>Diametre (mm)</span><input type="text" inputmode="decimal" data-lit="${index}" data-champ="diameter" value="${echapper(lit.diameter)}" /></label>
     <label class="case"><input type="checkbox" data-lit="${index}" data-champ="useSpacing" data-structure="1"${lit.useSpacing ? ' checked' : ''} /><span>Definir par espacement maximal</span></label>
     ${
@@ -109,11 +110,12 @@ function litRectangulaire(lit: RowInput, index: number): string {
         ? `<label><span>Espacement max (mm)</span><input type="text" inputmode="decimal" data-lit="${index}" data-champ="maxSpacing" value="${echapper(lit.maxSpacing)}" /></label>`
         : `<label><span>Nombre de barres</span><input type="text" inputmode="numeric" data-lit="${index}" data-champ="count" value="${echapper(lit.count)}" /></label>`
     }
+    ${recapitulatif ? `<p class="aire-lit">${echapper(recapitulatif)}</p>` : ''}
     <button type="button" data-action="supprimer-lit" data-lit="${index}">Supprimer ce lit</button>
   </fieldset>`;
 }
 
-function litLibre(lit: FreeRowInput, index: number): string {
+function litLibre(lit: FreeRowInput, index: number, recapitulatif?: string): string {
   return `<fieldset class="lit">
     <legend>Lit ${index + 1}</legend>
     <div class="paire">
@@ -132,6 +134,7 @@ function litLibre(lit: FreeRowInput, index: number): string {
         : `<label><span>Nombre de barres</span><input type="text" inputmode="numeric" data-libre="${index}" data-champ="count" value="${echapper(lit.count)}" /></label>`
     }
     <label class="case"><input type="checkbox" data-libre="${index}" data-champ="excludeEndpoints"${lit.excludeEndpoints ? ' checked' : ''} /><span>Exclure les extremites (barres intermediaires seules)</span></label>
+    ${recapitulatif ? `<p class="aire-lit">${echapper(recapitulatif)}</p>` : ''}
     <button type="button" data-action="supprimer-libre" data-libre="${index}">Supprimer ce lit</button>
   </fieldset>`;
 }
@@ -153,10 +156,11 @@ function blocFerraillage(): string {
   const kind = etat.reinforcementKind;
 
   if (kind === 'rectangular-layout') {
+    const recap = recapitulatifDesLits();
     return (
       champTexte('cover', 'Enrobage (mm)', etat.cover) +
       champTexte('stirrupDiameter', 'Diametre etrier (mm, vide = 0)', etat.stirrupDiameter) +
-      etat.rows.map(litRectangulaire).join('') +
+      etat.rows.map((lit, i) => litRectangulaire(lit, i, recap?.[i])).join('') +
       `<button type="button" data-action="ajouter-lit">Ajouter un lit</button>`
     );
   }
@@ -172,8 +176,9 @@ function blocFerraillage(): string {
   }
 
   if (kind === 'rows') {
+    const recap = recapitulatifDesLits();
     return (
-      etat.freeRows.map(litLibre).join('') +
+      etat.freeRows.map((lit, i) => litLibre(lit, i, recap?.[i])).join('') +
       `<button type="button" data-action="ajouter-libre">Ajouter un lit</button>`
     );
   }
@@ -209,7 +214,7 @@ function htmlFormulaire(): string {
   <fieldset>
     <legend>Ferraillage</legend>
     ${champChoix('reinforcementKind', 'Mode de saisie', etat.reinforcementKind, [
-      ['rectangular-layout', 'Par faces (rectangle)'],
+      ['rectangular-layout', 'Lits par faces'],
       ['circular-cage', 'Cage circulaire'],
       ['rows', 'Lits sur segments'],
       ['bars', 'Barres libres'],
@@ -223,8 +228,8 @@ function htmlFormulaire(): string {
     ${champTexte('My', 'My (kN.m)', etat.My)}
     ${champTexte('Mz', 'Mz (kN.m)', etat.Mz)}
     ${champChoix('mode', 'Chemin de chargement', etat.mode, [
-      ['constant-N', 'N constant, moment majore'],
-      ['proportional', 'Proportionnel (calcul long, sur demande)'],
+      ['constant-N', 'N constant'],
+      ['proportional', 'Proportionnel'],
     ])}
     <button type="button" data-action="calculer-proportionnel">Calculer en proportionnel</button>
   </fieldset>
@@ -240,8 +245,62 @@ function htmlFormulaire(): string {
   <fieldset>
     <legend>Modele</legend>
     <button type="button" data-action="enregistrer">Enregistrer</button>
-    <label class="fichier"><span>Charger</span><input type="file" accept="application/json,.json" data-action="charger" /></label>
+    <label class="large fichier"><span>Charger un modele</span><input type="file" accept="application/json,.json" data-action="charger" /></label>
   </fieldset>`;
+}
+
+
+/**
+ * Recapitulatif des lits tel que le produirait le generateur d'armatures,
+ * pour l'afficher a cote de la saisie.
+ *
+ * Rend `null` des que la saisie n'est pas encore exploitable — un champ en
+ * cours de frappe, une dimension manquante. On prefere n'afficher aucune
+ * aire plutot qu'une aire fausse, et surtout ne pas transformer une saisie
+ * intermediaire en message d'erreur.
+ */
+function recapitulatifDesLits(): string[] | null {
+  try {
+    if (etat.reinforcementKind === 'rectangular-layout') {
+      const modele = formToModel(etat);
+      if (modele.geometry.kind !== 'rectangle') return null;
+      if (modele.reinforcement.kind !== 'rectangular-layout') return null;
+      const layout = rectangularRebarLayout({
+        width: modele.geometry.width,
+        height: modele.geometry.height,
+        cover: modele.reinforcement.cover,
+        stirrupDiameter: modele.reinforcement.stirrupDiameter,
+        steel: resoudreAcier(modele),
+        rows: modele.reinforcement.rows,
+      });
+      return layout.rows.map(formatRow);
+    }
+
+    if (etat.reinforcementKind === 'rows') {
+      const modele = formToModel(etat);
+      if (modele.reinforcement.kind !== 'rows') return null;
+      const acier = resoudreAcier(modele);
+      return modele.reinforcement.rows.map((row) =>
+        formatRow(
+          rebarRow({
+            from: row.from,
+            to: row.to,
+            bars: row.bars,
+            steel: acier,
+            endpoints: row.endpoints,
+          }).summary
+        )
+      );
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function resoudreAcier(modele: SectionModel) {
+  return resolveModel(modele).steel;
 }
 
 // --- Dessin -----------------------------------------------------------------
@@ -310,6 +369,23 @@ function dessiner(resolu: ResolvedModel, resultat: VerificationResult): string {
     }
   }
 
+  // Repere : l'axe neutre est repere par une position SIGNEE, donc le lecteur
+  // doit voir dans quel sens comptent y et z. Le zero est le centroide de la
+  // section, ce que materialise la petite croix a l'origine.
+  const fleche = Math.max(largeur, hauteur) * 0.13;
+  const police = Math.max(largeur, hauteur) * 0.055;
+  const repere =
+    `<line x1="0" y1="0" x2="${fleche}" y2="0" class="repere" stroke-width="${trait}" />` +
+    `<line x1="${fleche}" y1="0" x2="${fleche - fleche * 0.22}" y2="${-fleche * 0.11}" class="repere" stroke-width="${trait}" />` +
+    `<line x1="${fleche}" y1="0" x2="${fleche - fleche * 0.22}" y2="${fleche * 0.11}" class="repere" stroke-width="${trait}" />` +
+    `<text x="${fleche + police * 0.3}" y="${police * 0.35}" class="repere-texte" font-size="${police}">y</text>` +
+    `<line x1="0" y1="0" x2="0" y2="${fleche}" class="repere" stroke-width="${trait}" />` +
+    `<line x1="0" y1="${fleche}" x2="${-fleche * 0.11}" y2="${fleche - fleche * 0.22}" class="repere" stroke-width="${trait}" />` +
+    `<line x1="0" y1="${fleche}" x2="${fleche * 0.11}" y2="${fleche - fleche * 0.22}" class="repere" stroke-width="${trait}" />` +
+    `<text x="${police * 0.3}" y="${fleche + police}" class="repere-texte" font-size="${police}">z</text>` +
+    `<line x1="${-police * 0.25}" y1="0" x2="${police * 0.25}" y2="0" class="repere" stroke-width="${trait}" />` +
+    `<line x1="0" y1="${-police * 0.25}" x2="0" y2="${police * 0.25}" class="repere" stroke-width="${trait}" />`;
+
   // L'axe vertical du SVG va vers le bas, comme le repere du module : aucune
   // inversion, donc aucune occasion de se tromper de signe a l'affichage.
   const svg = `<svg viewBox="${boite.yMin - marge} ${boite.zMin - marge} ${largeur + 2 * marge} ${hauteur + 2 * marge}" preserveAspectRatio="xMidYMid meet">
@@ -318,9 +394,10 @@ function dessiner(resolu: ResolvedModel, resultat: VerificationResult): string {
     ${barres}
     ${axe}
     ${resultantes}
+    ${repere}
   </svg>`;
 
-  return `${svg}<p class="legende"><span class="c">zone comprimee</span><span class="t">zone tendue</span><span class="n">axe neutre</span><span>cercles : resultantes, reliees par le bras de levier</span></p>`;
+  return `${svg}<p class="legende"><span class="c">zone comprimee</span><span class="t">zone tendue</span><span class="n">axe neutre</span><span>cercles : resultantes, reliees par le bras de levier</span><span>origine du repere au centroide, y vers la droite, z vers le bas</span></p>`;
 }
 
 // --- Resultat ---------------------------------------------------------------
@@ -392,18 +469,64 @@ function htmlResultat(resolu: ResolvedModel, resultat: VerificationResult): stri
       : '',
   ]);
 
-  const materiaux = groupe('Materiaux et ferraillage', [
+  const materiaux = groupe('Materiaux', [
     ligne('fcd', `${formatNumber(resolu.concrete.fcd, 2)} MPa`),
     ligne('fyd', `${formatNumber(resolu.steel.fyd, 1)} MPa`),
-    ligne('Armatures', `${resolu.section.rebars.length} barres, ${formatNumber(aireAcier, 0)} mm²`),
+    ligne('Aire de beton', `${formatNumber(aireBeton, 0)} mm²`),
+  ]);
+
+  // Separation inferieures / superieures par rapport au centroide, et non
+  // par rapport a l'axe neutre : c'est la lecture du plan de ferraillage,
+  // celle qu'attend l'utilisateur quand il verifie sa saisie.
+  const inferieures = resolu.section.rebars.filter((r) => r.z > 0);
+  const superieures = resolu.section.rebars.filter((r) => r.z <= 0);
+  const aire = (barres: typeof inferieures): number =>
+    barres.reduce((somme, r) => somme + r.area, 0);
+
+  // Armatures TENDUES : celles du cote tendu de l'axe neutre. C'est sur
+  // elles seules que porte le ratio d'acier demande.
+  const axeNeutre = resultat.neutralAxis;
+  const tendues =
+    axeNeutre === null
+      ? []
+      : resolu.section.rebars.filter(
+          (r) => zetaOf({ y: r.y, z: r.z }, axeNeutre.angle) > axeNeutre.offset
+        );
+  const aireTendue = aire(tendues);
+
+  // Ratio pondere : par metre courant, le volume d'acier vaut As x 1 m et le
+  // volume de beton Ac x 1 m, donc le rapport des aires suffit — multiplie
+  // par la masse volumique de l'acier.
+  const MASSE_VOLUMIQUE_ACIER = 7850; // kg/m³
+  const ratioTendu = aireBeton > 0 ? (aireTendue / aireBeton) * MASSE_VOLUMIQUE_ACIER : 0;
+
+  const ferraillage = groupe('Ferraillage', [
+    ligne(
+      'Armatures inferieures',
+      `${inferieures.length} barres, ${formatNumber(aire(inferieures), 0)} mm²`
+    ),
+    ligne(
+      'Armatures superieures',
+      `${superieures.length} barres, ${formatNumber(aire(superieures), 0)} mm²`
+    ),
+    ligne('Total', `${resolu.section.rebars.length} barres, ${formatNumber(aireAcier, 0)} mm²`),
     aireBeton > 0
-      ? ligne('Taux d armature', `${formatNumber((100 * aireAcier) / aireBeton, 2)} %`)
+      ? ligne('Taux d armature total', `${formatNumber((100 * aireAcier) / aireBeton, 2)} %`)
+      : '',
+    axeNeutre !== null
+      ? ligne(
+          'Armatures tendues',
+          `${tendues.length} barres, ${formatNumber(aireTendue, 0)} mm²`
+        )
+      : '',
+    axeNeutre !== null && aireBeton > 0
+      ? ligne('Ratio acier tendu', `${formatNumber(ratioTendu, 1)} kg/m³ de beton`)
       : '',
   ]);
 
   const motif = resultat.reason ? `<p class="motif">${echapper(resultat.reason)}</p>` : '';
 
-  return verdict + jauge + sollicitation + resistance + equilibre + materiaux + motif;
+  return verdict + jauge + sollicitation + resistance + equilibre + materiaux + ferraillage + motif;
 }
 
 // --- Boucle de calcul -------------------------------------------------------

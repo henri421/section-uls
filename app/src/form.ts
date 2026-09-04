@@ -4,6 +4,7 @@ import type {
 } from '../../src/index';
 import type { LoadingMode } from '../../src/index';
 import { ec2Recommended, FORMAT_VERSION, ENGINE_VERSION } from '../../src/index';
+import { evaluateExpression, ExpressionError } from './expression';
 
 /** Un lit tel qu'il est saisi : nombre de barres OU espacement maximal. */
 export interface RowInput {
@@ -58,14 +59,22 @@ export class FormError extends Error {}
 
 // --- Conversion chaine -> nombre, seul endroit ou une saisie est refusee ---
 
-/** Nombre requis : leve `FormError` en nommant le champ si la saisie est vide ou non numerique. */
+/**
+ * Nombre requis : leve `FormError` en nommant le champ si la saisie n'est pas
+ * evaluable.
+ *
+ * La saisie n'est pas seulement lue, elle est EVALUEE : « 30+10 » vaut 40,
+ * « 500/2 » vaut 250. Un ingenieur cote rarement une valeur brute — un
+ * enrobage se compose d'un enrobage nominal et d'un diametre d'etrier — et
+ * pouvoir taper le calcul garde la trace du raisonnement dans le champ.
+ */
 function nombreRequis(valeur: string, champ: string): number {
-  const texte = valeur.trim();
-  const n = Number(texte);
-  if (texte === '' || !Number.isFinite(n)) {
-    throw new FormError(`${champ} : valeur numerique attendue, recu "${valeur}"`);
+  try {
+    return evaluateExpression(valeur);
+  } catch (e) {
+    const detail = e instanceof ExpressionError ? e.message : String(e);
+    throw new FormError(`${champ} : valeur ou expression attendue, recu "${valeur}" (${detail})`);
   }
-  return n;
 }
 
 /** Nombre optionnel : une saisie vide devient `undefined`, jamais `0`. */
@@ -82,11 +91,23 @@ function texteDe(valeur: number | undefined): string {
 
 function parseLigneNombres(ligne: string, champ: string, numeroLigne: number, arite: number): number[] {
   const parties = ligne.split(';').map((p) => p.trim());
-  const valeurs = parties.map((p) => (p === '' ? NaN : Number(p)));
-  if (parties.length !== arite || valeurs.some((v) => !Number.isFinite(v))) {
-    throw new FormError(`${champ} : ligne ${numeroLigne}, valeurs numeriques attendues ("${ligne}")`);
+  if (parties.length !== arite) {
+    throw new FormError(
+      `${champ} : ligne ${numeroLigne}, ${arite} valeurs separees par « ; » attendues ("${ligne}")`
+    );
   }
-  return valeurs;
+  // Chaque partie est EVALUEE, comme les champs simples : « 250-48 » est une
+  // cote parfaitement legitime pour une position de barre.
+  return parties.map((partie) => {
+    try {
+      return evaluateExpression(partie);
+    } catch (e) {
+      const detail = e instanceof ExpressionError ? e.message : String(e);
+      throw new FormError(
+        `${champ} : ligne ${numeroLigne}, valeur ou expression attendue ("${partie}" — ${detail})`
+      );
+    }
+  });
 }
 
 /** Analyse une zone de texte « une entree par ligne », en ignorant les lignes vides. */
