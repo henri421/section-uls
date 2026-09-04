@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { interactionCurveAtN, interactionCurveNM } from '../../src/domains/interaction';
+import {
+  interactionCurveAtN,
+  interactionCurveNM,
+  interactionDiagramNM,
+} from '../../src/domains/interaction';
+import type { DiagramPointNM } from '../../src/domains/interaction';
 import { verifyBiaxial } from '../../src/solvers/uls-biaxial';
 import { verifyUniaxial } from '../../src/solvers/uls-uniaxial';
 import { rectangularSection } from '../../src/geometry/rectangle';
@@ -103,5 +108,86 @@ describe('interactionCurveNM', () => {
     expect(parLeSolveur.converged).toBe(true);
     expect(parLeSolveur.M_Rd).toBeCloseTo(point.M, 4);
     expect(parLeSolveur.neutralAxisDepth).toBeCloseTo(point.neutralAxisDepth, 4);
+  });
+});
+
+describe('interactionDiagramNM — les deux branches', () => {
+  it('rend deux fois plus de points que de pas, moitie par branche', () => {
+    const d = interactionDiagramNM(poteauCarre(), profile, { steps: 20 });
+
+    expect(d).toHaveLength(40);
+    expect(d.filter((p) => p.sense === -1)).toHaveLength(20);
+    expect(d.filter((p) => p.sense === 1)).toHaveLength(20);
+  });
+
+  it('sur une section symetrique, la branche opposee est le miroir exact', () => {
+    const steps = 16;
+    const positive = interactionCurveNM(poteauCarre(), profile, { steps });
+    const d = interactionDiagramNM(poteauCarre(), profile, { steps });
+    const negative = d.filter((p) => p.sense === -1);
+
+    for (let i = 0; i < steps; i++) {
+      expect(negative[i].N).toBeCloseTo(positive[i].N, 6);
+      expect(negative[i].M).toBeCloseTo(-positive[i].M, 6);
+    }
+  });
+
+  it('sur une section dissymetrique, les deux branches different vraiment', () => {
+    // Armatures en fibre inferieure seulement : flechir dans l'autre sens
+    // n'offre plus que le beton et rien en traction.
+    const section = rectangularSection({
+      width: 300, height: 500, concrete,
+      rebars: [{ depthFromTop: 450, area: 3 * Math.PI * 10 ** 2, steel }],
+    });
+    const steps = 24;
+    const d = interactionDiagramNM(section, profile, { steps });
+    const positive = d.filter((p) => p.sense === 1);
+    const negative = d.filter((p) => p.sense === -1);
+
+    // La comparaison se fait A EFFORT NORMAL EGAL, ici en flexion PURE.
+    // Comparer les maxima de |M| sur chaque branche entiere n'aurait aucun
+    // sens mecanique : ces maxima tombent a des efforts normaux tres
+    // differents (ici +412 kN sur une branche, +1750 kN sur l'autre), et le
+    // moment y est domine par l'excentrement du bloc comprime autour du
+    // centroide beton, pas par le ferraillage.
+    const momentEnFlexionPure = (branche: DiagramPointNM[]): number => {
+      for (let i = 1; i < branche.length; i++) {
+        const a = branche[i - 1];
+        const b = branche[i];
+        // L'effort normal est monotone le long d'une branche : une seule
+        // traversee de N = 0, donc une interpolation lineaire suffit.
+        if (a.N * b.N <= 0 && a.N !== b.N) {
+          return a.M + ((0 - a.N) / (b.N - a.N)) * (b.M - a.M);
+        }
+      }
+      throw new Error('la branche ne traverse pas N = 0');
+    };
+
+    const mPos = Math.abs(momentEnFlexionPure(positive));
+    const mNeg = Math.abs(momentEnFlexionPure(negative));
+
+    // Le sens qui tend les armatures resiste nettement plus : dans l'autre
+    // sens la fibre tendue n'a aucune armature et la traction du beton est
+    // negligee, il ne reste donc presque rien.
+    expect(mPos).toBeGreaterThan(5 * mNeg);
+  });
+
+  it('est ordonne pour un trace d un seul trait : N croit puis decroit', () => {
+    const d = interactionDiagramNM(poteauCarre(), profile, { steps: 20 });
+    const iMax = d.reduce((best, p, i) => (p.N > d[best].N ? i : best), 0);
+
+    // Une seule montee, une seule descente : pas d aller-retour.
+    for (let i = 1; i <= iMax; i++) expect(d[i].N).toBeGreaterThanOrEqual(d[i - 1].N);
+    for (let i = iMax + 1; i < d.length; i++) expect(d[i].N).toBeLessThanOrEqual(d[i - 1].N);
+  });
+
+  it('laisse le contour OUVERT du cote traction, sans le refermer', () => {
+    const d = interactionDiagramNM(poteauCarre(), profile, { steps: 20 });
+    // Les deux extremites sont les deux etats de traction dominante : elles se
+    // ressemblent mais la fonction ne doit PAS avoir ajoute de point de
+    // fermeture artificiel entre elles.
+    expect(d[0].sense).toBe(-1);
+    expect(d[d.length - 1].sense).toBe(1);
+    expect(d[0].neutralAxisDepth).toBeCloseTo(d[d.length - 1].neutralAxisDepth, 9);
   });
 });

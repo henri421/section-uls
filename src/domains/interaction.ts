@@ -101,3 +101,62 @@ export function interactionCurveNM(
 
   return points;
 }
+
+export interface DiagramPointNM extends AxialMomentPoint {
+  /**
+   * Sens de flexion : `1` quand la fibre superieure est comprimee (la branche
+   * de `interactionCurveNM`), `-1` pour la branche opposee, obtenue sur la
+   * section tournee de pi. `neutralAxisDepth` se mesure toujours depuis la
+   * fibre comprimee de SA branche.
+   */
+  sense: 1 | -1;
+}
+
+/**
+ * Diagramme N-M COMPLET : les deux sens de flexion.
+ *
+ * `interactionCurveNM` balaye la profondeur d'axe neutre depuis la fibre
+ * superieure, donc ne decrit que les moments d'un seul signe. La branche
+ * opposee s'obtient en balayant la section TOURNEE DE PI : la rotation envoie
+ * (y, z) sur (-y, -z), donc le moment rendu dans le repere tourne vaut
+ * l'oppose du moment dans le repere de la section (M_section = -M_tourne),
+ * tandis que l'effort normal est invariant. Aucune approximation, aucune
+ * mecanique nouvelle.
+ *
+ * Sur une section symetriquement armee les deux branches sont miroir et
+ * l'omission ne se voit pas. Sur une section a ferraillage dissymetrique —
+ * dalle a deux nappes inegales, section en T, voile — elles different, et
+ * n'en tracer qu'une cache la moitie du domaine.
+ *
+ * ORDRE DES POINTS : branche opposee dans l'ordre du balayage, puis branche
+ * positive A L'ENVERS. Le contour est donc parcourable d'un seul trait, en
+ * montant du cote traction jusqu'a la compression maximale puis en
+ * redescendant vers la traction de l'autre sens.
+ *
+ * AUCUN POINT DE FERMETURE n'est ajoute entre les deux extremites, et ce
+ * n'est pas un oubli : le noyau ne parcourt que la branche du pivot beton
+ * (la loi acier bilineaire a branche horizontale n'impose aucune deformation
+ * limite, donc aucun pivot acier n'existe dans le modele), il n'atteint donc
+ * jamais la traction pure N = -A_s*f_yd. Refermer le contour dessinerait un
+ * domaine qui n'a pas ete calcule — credible et faux.
+ */
+export function interactionDiagramNM(
+  section: Section,
+  norm: NormProfile,
+  options?: { steps?: number }
+): DiagramPointNM[] {
+  const positive = interactionCurveNM(section, norm, options);
+  const opposee = interactionCurveNM(rotateSection(section, Math.PI), norm, options).map(
+    (p): DiagramPointNM => ({
+      neutralAxisDepth: p.neutralAxisDepth,
+      N: p.N,
+      M: -p.M,
+      sense: -1,
+    })
+  );
+
+  return [
+    ...opposee,
+    ...positive.map((p): DiagramPointNM => ({ ...p, sense: 1 })).reverse(),
+  ];
+}
