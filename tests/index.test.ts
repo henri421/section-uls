@@ -10,6 +10,8 @@ import {
 } from '../src/index';
 import { parseModel, serializeModel, resolveModel, FORMAT_VERSION } from '../src/index';
 import { verifySection, interactionCurveAtN, interactionCurveNM, utilizationRatio } from '../src/index';
+import { interactionDiagramNM } from '../src/index';
+import type { DiagramPointNM } from '../src/index';
 import { verifyServiceUniaxial, crackedProperties } from '../src/index';
 import { verifyCrackWidth, effectiveTensionArea } from '../src/index';
 import { sectionCurvature, uncrackedProperties } from '../src/index';
@@ -106,6 +108,23 @@ describe('API publique — verdict et domaine', () => {
     expect(interactionCurveAtN(section, 500, profile, { steps: 8 }).length).toBeGreaterThan(0);
     expect(interactionCurveNM(section, profile, { steps: 8 })).toHaveLength(8);
     expect(typeof utilizationRatio).toBe('function');
+  });
+
+  it('le diagramme N-M complet est atteignable depuis l entree publique', () => {
+    const profile = ec2Recommended();
+    const concrete = createConcrete(25, profile);
+    const steel = createSteel(500, 200000, profile);
+
+    const section = rectangularSection({
+      width: 300, height: 500, concrete,
+      rebars: [{ depthFromTop: 450, area: 3 * Math.PI * 10 ** 2, steel }],
+    });
+
+    const diagramme: DiagramPointNM[] = interactionDiagramNM(section, profile, { steps: 8 });
+
+    expect(diagramme).toHaveLength(16);
+    expect(diagramme[0].sense).toBe(-1);
+    expect(diagramme[diagramme.length - 1].sense).toBe(1);
   });
 });
 

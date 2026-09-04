@@ -44,8 +44,8 @@ export { parseModel, serializeModel, ModelParseError } from './persistence/parse
 export type { ResolvedModel } from './persistence/resolve';
 export { resolveModel } from './persistence/resolve';
 
-export type { MomentPoint, AxialMomentPoint } from './domains/interaction';
-export { interactionCurveAtN, interactionCurveNM } from './domains/interaction';
+export type { MomentPoint, AxialMomentPoint, DiagramPointNM } from './domains/interaction';
+export { interactionCurveAtN, interactionCurveNM, interactionDiagramNM } from './domains/interaction';
 
 export type { LoadingMode, UtilizationResult } from './domains/utilization';
 export { utilizationRatio } from './domains/utilization';

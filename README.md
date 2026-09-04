@@ -32,6 +32,12 @@ Flexion composée **déviée** (N + My + Mz, axe neutre d'inclinaison quelconque
 
 **Vérification et domaine d'interaction** : `verifySection` conclut — taux d'exploitation, verdict, et le motif de l'échec quand il y en a un. Deux chemins de chargement sont proposés : « N constant, moment majoré », qui correspond à l'usage en poteau, et proportionnel. Les diagrammes `N`–`M` et `My`–`Mz` sont rendus comme des listes de points, prêtes à tracer — le noyau ne dessine pas.
 
+`interactionCurveNM` balaye la profondeur d'axe neutre depuis la fibre supérieure : elle ne décrit donc **qu'une seule branche**, celle des moments d'un seul signe. `interactionDiagramNM` rend le diagramme **complet**, ses deux sens de flexion : la branche opposée s'obtient en balayant la section tournée de π, ce qui envoie `(y, z)` sur `(−y, −z)` et donc `M` sur `−M`, l'effort normal restant inchangé. Aucune approximation. Sur une section symétriquement armée les deux branches sont miroir et l'omission ne se voit pas ; sur une dalle à deux nappes inégales, une section en T, un voile dissymétrique, elles diffèrent et n'en tracer qu'une cache la moitié du domaine.
+
+Les points sont ordonnés pour un tracé d'un seul trait : la branche opposée dans l'ordre du balayage, puis la branche positive à l'envers — l'effort normal monte de la traction dominante jusqu'à la compression maximale, puis redescend. Chaque point porte `sense` (`1` fibre supérieure comprimée, `-1` l'autre sens) et sa profondeur d'axe neutre, mesurée depuis la fibre comprimée de **sa** branche.
+
+**Le contour reste ouvert du côté traction, et ce n'est pas un oubli** : le noyau ne parcourt que la branche du pivot béton, il n'atteint donc jamais la traction pure `N = −A_s·f_yd`. Aucun point de fermeture n'est ajouté entre les deux extrémités — refermer dessinerait un domaine qui n'a pas été calculé, crédible et faux.
+
 **Vérification en service (méthode n)** : section fissurée homogénéisée, contraintes du béton et des armatures confrontées aux limites de l'EN 1992-1-1 §7.2. Solveur entièrement distinct de celui de l'ELU — hypothèses élastiques, béton tendu négligé — et à ne jamais confondre avec lui. Flexion droite, coefficient d'équivalence paramétrable (défaut 15, valeur conventionnelle intégrant le fluage, non prescrite par la norme sous cette forme).
 
 **Ouverture de fissures (§7.3)** : `w_k` calculée selon l'équation 7.8, avec l'aire effective de béton tendu, le diamètre équivalent des barres et le basculement automatique sur l'équation 7.14 quand l'espacement sort du domaine de validité de 7.11. Sections rectangulaires en flexion droite. La limite `w_max` est paramétrable : elle dépend de la classe d'exposition, que le module ne connaît pas.
@@ -136,7 +142,7 @@ const r = verifyBiaxial(section, action, norm);
 import {
   ec2Recommended, createConcrete, createSteel,
   rectangularSection, rectangularRebarLayout,
-  verifySection, interactionCurveAtN,
+  verifySection, interactionCurveAtN, interactionDiagramNM,
 } from './src/index';
 
 const profile = ec2Recommended();
@@ -158,6 +164,12 @@ const v = verifySection(poteau, { N: 500, My: 80, Mz: 40 }, profile);
 // v.reason        — pourquoi, quand ça ne passe pas
 
 const contour = interactionCurveAtN(poteau, 500, profile);  // à tracer
+
+// Diagramme N–M complet : 2 × steps points, contour ouvert côté traction.
+const diagramme = interactionDiagramNM(poteau, profile, { steps: 40 });
+// diagramme[i].sense — 1 fibre supérieure comprimée, -1 l'autre sens
+// diagramme[i].N     — kN, positif en compression
+// diagramme[i].M     — kN·m, dans le repère de la section
 ```
 
 ## Validation
@@ -189,14 +201,14 @@ npm run typecheck # tsc --noEmit
 
 Cet outil est une aide au calcul ; la vérification finale et la responsabilité des résultats incombent à l'ingénieur du projet. Limites connues de la version actuelle, documentées dans le code :
 
-- le domaine ne parcourt que la branche du pivot béton — la loi acier à branche horizontale n'impose aucune limite de déformation, donc aucun pivot acier n'existe dans le modèle ;
+- le domaine ne parcourt que la branche du pivot béton — la loi acier à branche horizontale n'impose aucune limite de déformation, donc aucun pivot acier n'existe dans le modèle. Le contour `N`–`M` est donc **ouvert du côté traction** : `interactionDiagramNM` ne le referme pas, plutôt que d'inventer un domaine non calculé ;
 - contour simple sans trou (les réservations ne sont pas gérées) ;
 - une section circulaire est approximée par un polygone régulier (32 côtés par défaut, paramétrable) ;
 - pas de précontrainte, pas de contrôle de ductilité ;
 - un modèle ne porte qu'un seul acier, appliqué à toutes les barres — le mélange d'aciers (sections existantes renforcées) n'est pas encore représentable ;
 - le format est en version 1 et aucune migration n'est prévue : toute évolution ultérieure devra s'accompagner d'une stratégie de reprise des fichiers existants ;
 - le câblage de l'interface est couvert par des tests de bout en bout dans un DOM simulé (`tests/app/cablage.test.ts`) : saisir une valeur doit changer le résultat affiché. Ces tests ont été ajoutés après une régression réelle que la seule couverture des fonctions pures n'avait pas vue ;
-- les diagrammes d'interaction sont calculés par la bibliothèque (`interactionCurveAtN`, `interactionCurveNM`) mais ne sont pas encore tracés par l'interface ;
+- les diagrammes d'interaction sont calculés par la bibliothèque (`interactionCurveAtN`, `interactionCurveNM`, `interactionDiagramNM`) mais ne sont pas encore tracés par l'interface ;
 - le mode de chargement proportionnel est nettement plus coûteux que le mode « N constant » (quelques secondes contre quelques dizaines de millisecondes) : il ne se déclenche que sur demande explicite ;
 - la vérification en service ne couvre que la **flexion droite** et la section **fissurée** : une section entièrement comprimée est détectée et signalée, non calculée ;
 - l'ouverture de fissures ne couvre que les sections **rectangulaires** en flexion droite ; une autre géométrie lève une erreur plutôt que d'être approximée ;
