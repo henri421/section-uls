@@ -11,6 +11,7 @@ import {
 import { parseModel, serializeModel, resolveModel, FORMAT_VERSION } from '../src/index';
 import { verifySection, interactionCurveAtN, interactionCurveNM, utilizationRatio } from '../src/index';
 import { verifyServiceUniaxial, crackedProperties } from '../src/index';
+import { verifyCrackWidth, effectiveTensionArea } from '../src/index';
 
 describe('API publique du noyau', () => {
   it("permet de verifier une section rectangulaire de bout en bout via l'entree publique", () => {
@@ -149,5 +150,26 @@ describe('API publique — service', () => {
     expect(r.converged).toBe(true);
     expect(r.sigmaC).toBeGreaterThan(0);
     expect(typeof crackedProperties).toBe('function');
+  });
+});
+
+describe('API publique — ouverture de fissures', () => {
+  it("l'ouverture de fissure est atteignable de bout en bout depuis l'entree publique", () => {
+    const profile = ec2Recommended();
+    const concrete = createConcrete(25, profile);
+    const steel = createSteel(500, 200000, profile);
+
+    const section = rectangularSection({
+      width: 300, height: 500, concrete,
+      rebars: rectangularRebarLayout({
+        width: 300, height: 500, cover: 30, stirrupDiameter: 8, steel,
+        rows: [{ face: 'bottom', bars: { count: 3, diameter: 20 } }],
+      }).bars,
+    });
+
+    const r = verifyCrackWidth(section, { N: 0, M: 100 });
+    expect(r.converged).toBe(true);
+    expect(r.wk).toBeGreaterThan(0);
+    expect(typeof effectiveTensionArea).toBe('function');
   });
 });

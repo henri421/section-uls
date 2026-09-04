@@ -61,3 +61,9 @@ export { crackedProperties } from './service/cracked-section';
 
 export type { ServiceLimits, ServiceOptions, ServiceResult } from './service/verify-service';
 export { verifyServiceUniaxial } from './service/verify-service';
+
+export type { EffectiveTensionArea } from './service/effective-area';
+export { effectiveTensionArea, equivalentBarDiameter, barDiameterOf } from './service/effective-area';
+
+export type { CrackOptions, CrackResult } from './service/crack-width';
+export { verifyCrackWidth } from './service/crack-width';

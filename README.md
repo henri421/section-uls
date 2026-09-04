@@ -34,6 +34,8 @@ Flexion composée **déviée** (N + My + Mz, axe neutre d'inclinaison quelconque
 
 **Vérification en service (méthode n)** : section fissurée homogénéisée, contraintes du béton et des armatures confrontées aux limites de l'EN 1992-1-1 §7.2. Solveur entièrement distinct de celui de l'ELU — hypothèses élastiques, béton tendu négligé — et à ne jamais confondre avec lui. Flexion droite, coefficient d'équivalence paramétrable (défaut 15, valeur conventionnelle intégrant le fluage, non prescrite par la norme sous cette forme).
 
+**Ouverture de fissures (§7.3)** : `w_k` calculée selon l'équation 7.8, avec l'aire effective de béton tendu, le diamètre équivalent des barres et le basculement automatique sur l'équation 7.14 quand l'espacement sort du domaine de validité de 7.11. Sections rectangulaires en flexion droite. La limite `w_max` est paramétrable : elle dépend de la classe d'exposition, que le module ne connaît pas.
+
 ## Base normative
 
 - Loi béton parabole-rectangle, EN 1992-1-1 §3.1.7 éq. 3.17-3.18, paramètres du tableau 3.1 (y compris la branche `fck > 50 MPa`).
@@ -170,6 +172,7 @@ La crédibilité de l'outil repose sur des vérifications indépendantes du chem
 - **Compression centrée** (`tests/handcalc/compression-centree.test.ts`) : le sommet du diagramme `N`–`M` confronté à `fcd·Ac + (fyd − fcd)·As`, calculé à la main.
 - **Cohérence domaine / taux** : un point pris sur le contour rendu par le domaine donne un taux d'exploitation voisin de 1.
 - **Méthode n** (`tests/handcalc/methode-n-poutre.test.ts`) : axe neutre, bras de levier et contraintes d'une poutre fissurée confrontés au calcul classique fermé.
+- **Ouverture de fissure** (`tests/handcalc/ouverture-fissure.test.ts`) : les quatre étapes du calcul — méthode n, aire effective, déformation relative, ouverture — vérifiées séparément contre un recalcul manuel.
 
 ## Développement
 
@@ -193,4 +196,6 @@ Cet outil est une aide au calcul ; la vérification finale et la responsabilité
 - les diagrammes d'interaction sont calculés par la bibliothèque (`interactionCurveAtN`, `interactionCurveNM`) mais ne sont pas encore tracés par l'interface ;
 - le mode de chargement proportionnel est nettement plus coûteux que le mode « N constant » (quelques secondes contre quelques dizaines de millisecondes) : il ne se déclenche que sur demande explicite ;
 - la vérification en service ne couvre que la **flexion droite** et la section **fissurée** : une section entièrement comprimée est détectée et signalée, non calculée ;
-- l'ouverture de fissures (§7.3) et les flèches (§7.4) ne sont pas traitées.
+- l'ouverture de fissures ne couvre que les sections **rectangulaires** en flexion droite ; une autre géométrie lève une erreur plutôt que d'être approximée ;
+- la limite `w_max` vaut 0,3 mm par défaut, valeur du cas courant XC2–XC4 : elle dépend de la classe d'exposition et doit être ajustée au projet ;
+- les flèches (§7.4) ne sont pas traitées.
