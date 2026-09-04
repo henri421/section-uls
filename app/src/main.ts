@@ -11,6 +11,7 @@ import { formToModel, modelToForm, FormError } from './form';
 import { rectangularRebarLayout, rebarRow, formatRow } from '../../src/index';
 import type { FormState, RowInput, FreeRowInput } from './form';
 import { outlineOf, boundingBox, neutralAxisSegment, barRadius, splitByLine, zetaOf } from './draw';
+import { effectiveDepth, simplifiedLeverArm } from './lever-arm';
 import { formatNumber, formatAngleDegrees, formatUtilization } from './format';
 import {
   chargerLocalement,
@@ -462,6 +463,13 @@ function htmlResultat(
       : '',
   ]);
 
+  // Hauteur utile mesuree perpendiculairement a l'axe neutre, d'ou le bras
+  // de levier simplifie des abaques.
+  const hauteurUtile =
+    resultat.neutralAxis === null
+      ? null
+      : effectiveDepth(resolu.section, resultat.neutralAxis.angle, resultat.neutralAxis.offset);
+
   const equilibre = groupe('Equilibre de la section', [
     resultat.neutralAxis
       ? ligne('Inclinaison de l axe neutre', `${formatAngleDegrees(resultat.neutralAxis.angle)} deg`)
@@ -483,6 +491,15 @@ function htmlResultat(
       : '',
     resultat.leverArm !== null
       ? ligne('Distance entre resultantes', `${formatNumber(resultat.leverArm, 1)} mm`)
+      : '',
+    hauteurUtile !== null
+      ? ligne('Hauteur utile d', `${formatNumber(hauteurUtile, 1)} mm`)
+      : '',
+    hauteurUtile !== null && etatAxe !== null
+      ? ligne(
+          'Bras de levier z = d − 0,4x',
+          `${formatNumber(simplifiedLeverArm(hauteurUtile, etatAxe.x), 1)} mm`
+        )
       : '',
   ]);
 
@@ -543,11 +560,12 @@ function htmlResultat(
 
   const note =
     resultat.leverArm !== null
-      ? `<p class="note">La <strong>distance entre resultantes</strong> separe la resultante de compression
-         de la resultante de traction TOTALES, toutes armatures comprises. Elle differe du bras de levier
-         des abaques (<em>0,9d</em>, <em>0,8h</em>, ou <em>M/(A<sub>s</sub>&middot;f<sub>yd</sub>)</em>)
-         des qu'une seconde nappe se trouve du cote tendu, meme faiblement sollicitee : celle-ci
-         deplace le centre de gravite de la traction vers l'axe neutre et raccourcit la distance.</p>`
+      ? `<p class="note"><strong>Deux bras de levier, deux definitions.</strong>
+         La <em>distance entre resultantes</em> separe les resultantes de compression et de traction
+         TOTALES, toutes armatures comprises : elle se raccourcit des qu'une seconde nappe se trouve
+         du cote tendu, meme faiblement sollicitee. Le <em>z = d &minus; 0,4x</em> est celui des abaques,
+         fonde sur le bloc rectangulaire et sur la seule nappe la plus eloignee. Les deux sont exacts
+         et ne mesurent pas la meme chose.</p>`
       : '';
 
   const motif = resultat.reason ? `<p class="motif">${echapper(resultat.reason)}</p>` : '';
