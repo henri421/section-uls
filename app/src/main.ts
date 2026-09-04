@@ -6,7 +6,7 @@ import {
   FORMAT_VERSION,
   ENGINE_VERSION,
 } from '../../src/index';
-import type { SectionModel, VerificationResult, ResolvedModel } from '../../src/index';
+import type { SectionModel, VerificationResult, ResolvedModel, NeutralAxisState } from '../../src/index';
 import { formToModel, modelToForm, FormError } from './form';
 import { rectangularRebarLayout, rebarRow, formatRow } from '../../src/index';
 import type { FormState, RowInput, FreeRowInput } from './form';
@@ -306,7 +306,11 @@ function chemin(points: Array<{ y: number; z: number }>): string {
   return points.map((p) => `${p.y},${p.z}`).join(' ');
 }
 
-function dessiner(resolu: ResolvedModel, resultat: VerificationResult): string {
+function dessiner(
+  resolu: ResolvedModel,
+  resultat: VerificationResult,
+  etatAxe: NeutralAxisState | null
+): string {
   const contour = outlineOf(resolu.section);
   const boite = boundingBox(contour);
   const largeur = boite.yMax - boite.yMin;
@@ -354,7 +358,7 @@ function dessiner(resolu: ResolvedModel, resultat: VerificationResult): string {
   // devant la verification elle-meme, qui en enchaine une vingtaine.
   let resultantes = '';
   if (axeNeutre !== null) {
-    const etat = capacityAtAngle(resolu.section, axeNeutre.angle, resolu.action.N, resolu.norm);
+    const etat = etatAxe;
     if (etat && etat.compression && etat.tension) {
       const r = trait * 5;
       const c = etat.compression;
@@ -408,7 +412,11 @@ function groupe(titre: string, lignes: string[]): string {
   return contenu === '' ? '' : `<div class="groupe"><h3>${titre}</h3>${contenu}</div>`;
 }
 
-function htmlResultat(resolu: ResolvedModel, resultat: VerificationResult): string {
+function htmlResultat(
+  resolu: ResolvedModel,
+  resultat: VerificationResult,
+  etatAxe: NeutralAxisState | null
+): string {
   const taux = resultat.utilization;
   const verdict = resultat.ok
     ? `<p class="verdict ok">Verifie — taux ${formatUtilization(taux)}</p>`
@@ -461,8 +469,20 @@ function htmlResultat(resolu: ResolvedModel, resultat: VerificationResult): stri
     resultat.neutralAxis
       ? ligne('Position de l axe neutre', `${formatNumber(resultat.neutralAxis.offset, 1)} mm`)
       : '',
+    etatAxe?.compression
+      ? ligne(
+          'Resultante de compression',
+          `${formatNumber(etatAxe.compression.force, 0)} kN a z = ${formatNumber(etatAxe.compression.z, 1)} mm`
+        )
+      : '',
+    etatAxe?.tension
+      ? ligne(
+          'Resultante de traction',
+          `${formatNumber(etatAxe.tension.force, 0)} kN a z = ${formatNumber(etatAxe.tension.z, 1)} mm`
+        )
+      : '',
     resultat.leverArm !== null
-      ? ligne('Bras de levier interne', `${formatNumber(resultat.leverArm, 1)} mm`)
+      ? ligne('Distance entre resultantes', `${formatNumber(resultat.leverArm, 1)} mm`)
       : '',
   ]);
 
@@ -521,9 +541,18 @@ function htmlResultat(resolu: ResolvedModel, resultat: VerificationResult): stri
       : '',
   ]);
 
+  const note =
+    resultat.leverArm !== null
+      ? `<p class="note">La <strong>distance entre resultantes</strong> separe la resultante de compression
+         de la resultante de traction TOTALES, toutes armatures comprises. Elle differe du bras de levier
+         des abaques (<em>0,9d</em>, <em>0,8h</em>, ou <em>M/(A<sub>s</sub>&middot;f<sub>yd</sub>)</em>)
+         des qu'une seconde nappe se trouve du cote tendu, meme faiblement sollicitee : celle-ci
+         deplace le centre de gravite de la traction vers l'axe neutre et raccourcit la distance.</p>`
+      : '';
+
   const motif = resultat.reason ? `<p class="motif">${echapper(resultat.reason)}</p>` : '';
 
-  return verdict + jauge + sollicitation + resistance + equilibre + materiaux + ferraillage + motif;
+  return verdict + jauge + sollicitation + resistance + equilibre + materiaux + ferraillage + note + motif;
 }
 
 // --- Boucle de calcul -------------------------------------------------------
@@ -561,8 +590,16 @@ function recalculer(mode?: 'proportional'): void {
       mode: mode ?? 'constant-N',
     });
 
-    dernierResultat = htmlResultat(resolu, resultat);
-    dernierDessin = dessiner(resolu, resultat);
+    // Une seule resolution a angle fixe, partagee par le resultat et le
+    // dessin : elle ne coute qu'une resolution droite, mais la calculer deux
+    // fois serait deux fois trop.
+    const etatAxe =
+      resultat.neutralAxis === null
+        ? null
+        : capacityAtAngle(resolu.section, resultat.neutralAxis.angle, resolu.action.N, resolu.norm);
+
+    dernierResultat = htmlResultat(resolu, resultat, etatAxe);
+    dernierDessin = dessiner(resolu, resultat, etatAxe);
     zoneResultat.innerHTML = dernierResultat;
     zoneSection.innerHTML = dernierDessin;
 
