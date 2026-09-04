@@ -36,6 +36,8 @@ Flexion composée **déviée** (N + My + Mz, axe neutre d'inclinaison quelconque
 
 **Ouverture de fissures (§7.3)** : `w_k` calculée selon l'équation 7.8, avec l'aire effective de béton tendu, le diamètre équivalent des barres et le basculement automatique sur l'équation 7.14 quand l'espacement sort du domaine de validité de 7.11. Sections rectangulaires en flexion droite. La limite `w_max` est paramétrable : elle dépend de la classe d'exposition, que le module ne connaît pas.
 
+**Courbure et participation du béton tendu (§7.4.3)** : moment de fissuration, courbure en section non fissurée et en section fissurée, et interpolation entre les deux. **Ce n'est pas un calcul de flèche** — une flèche exige la portée, les appuis et le chargement, qui sont du niveau élément ; le module rend la courbure, l'appelant l'intègre le long de la pièce.
+
 ## Base normative
 
 - Loi béton parabole-rectangle, EN 1992-1-1 §3.1.7 éq. 3.17-3.18, paramètres du tableau 3.1 (y compris la branche `fck > 50 MPa`).
@@ -173,6 +175,7 @@ La crédibilité de l'outil repose sur des vérifications indépendantes du chem
 - **Cohérence domaine / taux** : un point pris sur le contour rendu par le domaine donne un taux d'exploitation voisin de 1.
 - **Méthode n** (`tests/handcalc/methode-n-poutre.test.ts`) : axe neutre, bras de levier et contraintes d'une poutre fissurée confrontés au calcul classique fermé.
 - **Ouverture de fissure** (`tests/handcalc/ouverture-fissure.test.ts`) : les quatre étapes du calcul — méthode n, aire effective, déformation relative, ouverture — vérifiées séparément contre un recalcul manuel.
+- **Courbure** (`tests/handcalc/courbure.test.ts`) : caractéristiques non fissurées, moment de fissuration, deux courbures et interpolation vérifiés séparément contre un recalcul manuel, plus un contrôle élémentaire `M_cr = f_ctm·b·h²/6` sur section non armée.
 
 ## Développement
 
@@ -198,4 +201,6 @@ Cet outil est une aide au calcul ; la vérification finale et la responsabilité
 - la vérification en service ne couvre que la **flexion droite** et la section **fissurée** : une section entièrement comprimée est détectée et signalée, non calculée ;
 - l'ouverture de fissures ne couvre que les sections **rectangulaires** en flexion droite ; une autre géométrie lève une erreur plutôt que d'être approximée ;
 - la limite `w_max` vaut 0,3 mm par défaut, valeur du cas courant XC2–XC4 : elle dépend de la classe d'exposition et doit être ajustée au projet ;
-- les flèches (§7.4) ne sont pas traitées.
+- la **courbure** est rendue au niveau de la section (§7.4.3) ; le calcul de **flèche** proprement dit, qui exige la portée, les appuis et le chargement, reste à la charge de l'appelant ;
+- l'équation 7.19 est appliquée sous la forme `(M_cr/M)`, exacte en flexion pure, approchée en flexion composée ;
+- l'équation 7.18 n'est **continue au moment de fissuration que pour `β = 1`** : avec la valeur courante `β = 0,5`, la courbure saute de `(1 − β)` fois l'écart entre les deux états. C'est une propriété de la norme, pas un artefact de calcul, et elle est testée comme telle.

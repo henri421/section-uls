@@ -12,6 +12,7 @@ import { parseModel, serializeModel, resolveModel, FORMAT_VERSION } from '../src
 import { verifySection, interactionCurveAtN, interactionCurveNM, utilizationRatio } from '../src/index';
 import { verifyServiceUniaxial, crackedProperties } from '../src/index';
 import { verifyCrackWidth, effectiveTensionArea } from '../src/index';
+import { sectionCurvature, uncrackedProperties } from '../src/index';
 
 describe('API publique du noyau', () => {
   it("permet de verifier une section rectangulaire de bout en bout via l'entree publique", () => {
@@ -171,5 +172,24 @@ describe('API publique — ouverture de fissures', () => {
     expect(r.converged).toBe(true);
     expect(r.wk).toBeGreaterThan(0);
     expect(typeof effectiveTensionArea).toBe('function');
+  });
+});
+
+describe('API publique — courbure', () => {
+  it('la courbure en service est atteignable de bout en bout depuis l entree publique', () => {
+    const profile = ec2Recommended();
+    const concrete = createConcrete(25, profile);
+    const steel = createSteel(500, 200000, profile);
+    const As = 3 * (Math.PI * 20 ** 2) / 4;
+
+    const section = rectangularSection({
+      width: 300, height: 500, concrete,
+      rebars: [{ depthFromTop: 452, area: As, steel }],
+    });
+
+    const r = sectionCurvature(section, { N: 0, M: 100 });
+    expect(r.converged).toBe(true);
+    expect(r.curvature).toBeGreaterThan(0);
+    expect(typeof uncrackedProperties).toBe('function');
   });
 });

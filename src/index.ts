@@ -67,3 +67,7 @@ export { effectiveTensionArea, equivalentBarDiameter, barDiameterOf } from './se
 
 export type { CrackOptions, CrackResult } from './service/crack-width';
 export { verifyCrackWidth } from './service/crack-width';
+
+export { uncrackedProperties } from './service/uncracked-section';
+export type { CurvatureOptions, CurvatureResult } from './service/curvature';
+export { sectionCurvature } from './service/curvature';
