@@ -250,3 +250,67 @@ describe('interactionDiagramNM — concordance avec le solveur droit', () => {
     }
   });
 });
+
+/**
+ * Le rayon du domaine My-Mz est la capacite du solveur devie.
+ *
+ * C'est ce que l'interface donne a lire : elle trace le contour, y place le
+ * point sollicitant, et tire un rayon de l'origine jusqu'a la capacite. Le
+ * rapport des deux longueurs DOIT etre le taux d'exploitation affiche a cote.
+ * Les deux grandeurs sont la meme, lue deux fois — si elles divergent, c'est un
+ * bug, et ce test est ce qui l'attrape avant l'ecran.
+ */
+describe('interactionCurveAtN — le rayon du domaine est la capacite', () => {
+  /** Rayon du contour dans une direction de moment donnee, par interpolation. */
+  function rayonDuContour(
+    points: Array<{ My: number; Mz: number }>,
+    direction: number
+  ): number {
+    const recentre = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      const ecartA = recentre(Math.atan2(a.Mz, a.My) - direction);
+      const ecartB = recentre(Math.atan2(b.Mz, b.My) - direction);
+
+      // Encadrement de la direction cherchee par deux points consecutifs. La
+      // borne a 1 radian ecarte le raccord de fin de tour, ou l'ecart angulaire
+      // change de signe en franchissant pi et non la direction cherchee.
+      if (ecartA <= 0 && ecartB >= 0 && Math.abs(ecartA) < 1 && Math.abs(ecartB) < 1) {
+        const t = ecartA === ecartB ? 0 : -ecartA / (ecartB - ecartA);
+        return Math.hypot(a.My + t * (b.My - a.My), a.Mz + t * (b.Mz - a.Mz));
+      }
+    }
+
+    throw new Error('le contour ne couvre pas cette direction de moment');
+  }
+
+  it('concorde avec verifyBiaxial, au pas de 72 points utilise par l interface', () => {
+    // Ecarts mesures le 2026-09-04 : 0,000 %, 0,019 % et 0,210 %. Ils viennent
+    // de l'effet de CORDE — le contour rendu est une ligne brisee, dont le
+    // segment passe legerement en deca de la courbe entre deux points. L'ecart
+    // s'annule a 360 points, ce qui confirme l'origine. La tolerance est fixee
+    // a 0,5 %, plus du double du plus large ecart mesure.
+    const TOLERANCE = 0.005;
+    const section = poteauCarre();
+
+    const cas: Array<{ N: number; My: number; Mz: number }> = [
+      { N: 600, My: 100, Mz: 60 },
+      { N: 0, My: 100, Mz: 100 },
+      { N: 1500, My: 50, Mz: 120 },
+    ];
+
+    for (const { N, My, Mz } of cas) {
+      const capacite = verifyBiaxial(section, { N, My, Mz }, profile);
+      expect(capacite.converged).toBe(true);
+
+      const contour = interactionCurveAtN(section, N, profile, { steps: 72 });
+      const rayon = rayonDuContour(contour, Math.atan2(Mz, My));
+
+      expect(Math.abs(rayon - capacite.M_Rd_magnitude) / capacite.M_Rd_magnitude).toBeLessThan(
+        TOLERANCE
+      );
+    }
+  });
+});

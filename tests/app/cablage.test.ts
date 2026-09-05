@@ -214,3 +214,73 @@ describe('diagramme N-M', () => {
     expect(diagramme(dom).textContent).not.toMatch(/deviee/i);
   });
 });
+
+/**
+ * Le domaine My-Mz, trace SUR BOUTON seulement.
+ *
+ * `interactionCurveAtN` enchaine une resolution droite par point : 77 a 380 ms
+ * pour 24 a 72 points (mesure du 2026-09-04), l'ordre de grandeur d'une
+ * verification complete. Le declencher au recalcul automatique figerait la page
+ * a chaque frappe — c'est mot pour mot la regression du mode proportionnel du
+ * 2026-09-04, vecue comme « les efforts ne se mettent plus a jour ».
+ */
+describe('domaine My-Mz', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /**
+   * Le domaine se repere par son propre conteneur, pas par son libelle :
+   * l'avertissement de flexion deviee du graphe N-M nomme lui aussi le
+   * « domaine My-Mz », et chercher ce texte confondrait les deux.
+   */
+  function domaine(dom: JSDOM): Element | null {
+    return dom.window.document.querySelector('#diagramme #domaine-mymz');
+  }
+
+  function cliquerTracerDomaine(dom: JSDOM): void {
+    const bouton = dom.window.document.querySelector('[data-action="tracer-domaine"]');
+    if (bouton === null) throw new Error('le bouton de trace du domaine est absent');
+    bouton.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+    // Le trace est differe d'un tour de boucle pour laisser peindre l'attente,
+    // comme le mode proportionnel : il faut donc laisser filer la minuterie.
+    vi.advanceTimersByTime(1);
+  }
+
+  it('n est PAS trace au chargement', async () => {
+    const dom = await monterApplication();
+    expect(domaine(dom)).toBeNull();
+  });
+
+  it("REGRESSION : le recalcul automatique ne l'arme jamais", async () => {
+    const dom = await monterApplication();
+
+    saisir(dom, 'My', '120');
+    vi.advanceTimersByTime(500);
+
+    expect(domaine(dom)).toBeNull();
+  });
+
+  it('apparait sur clic, sans NaN, en portant l effort normal du trace', async () => {
+    const dom = await monterApplication();
+    cliquerTracerDomaine(dom);
+
+    const zone = domaine(dom);
+    expect(zone).not.toBeNull();
+    expect(zone?.innerHTML).not.toContain('NaN');
+    // Un domaine My-Mz sans son N ne veut rien dire.
+    expect(zone?.textContent).toMatch(/500/);
+  });
+
+  it('redevient obsolete des que la saisie change', async () => {
+    // Le domaine est trace a N fixe : le garder a l'ecran apres un changement
+    // de sollicitation montrerait un domaine qui n'est plus celui du calcul.
+    const dom = await monterApplication();
+    cliquerTracerDomaine(dom);
+    expect(domaine(dom)).not.toBeNull();
+
+    saisir(dom, 'N', '600');
+    vi.advanceTimersByTime(500);
+
+    expect(domaine(dom)).toBeNull();
+  });
+});

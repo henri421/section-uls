@@ -10,7 +10,7 @@ import type { SectionModel, VerificationResult, ResolvedModel, NeutralAxisState 
 import { formToModel, modelToForm, FormError } from './form';
 import { rectangularRebarLayout, rebarRow, formatRow } from '../../src/index';
 import type { FormState, RowInput, FreeRowInput } from './form';
-import { interactionDiagramNM } from '../../src/index';
+import { interactionDiagramNM, interactionCurveAtN } from '../../src/index';
 import { outlineOf, boundingBox, neutralAxisSegment, barRadius, splitByLine, zetaOf } from './draw';
 import { plotSvg } from './plot';
 import { effectiveDepth, simplifiedLeverArm } from './lever-arm';
@@ -65,6 +65,8 @@ let etat: FormState = modelToForm(chargerLocalement() ?? modeleParDefaut());
 /** Dernier resultat valide, conserve pour ne pas l'effacer sur une saisie fautive. */
 let dernierResultat: string = '';
 let dernierDessin: string = '';
+/** Dernier diagramme N-M rendu, reaffiche tel quel pendant un trace de domaine. */
+let dernierDiagramme: string = '';
 
 // --- Fabriques de balisage --------------------------------------------------
 
@@ -232,6 +234,7 @@ function htmlFormulaire(): string {
     ${champTexte('Mz', 'Mz (kN.m)', etat.Mz)}
     <p class="note">Chemin de chargement : <strong>N constant</strong>, recalcule en continu.</p>
     <button type="button" data-action="calculer-proportionnel">Calculer en proportionnel (quelques secondes)</button>
+    <button type="button" data-action="tracer-domaine">Tracer le domaine My-Mz (une fraction de seconde)</button>
   </fieldset>
 
   <fieldset>
@@ -450,6 +453,73 @@ function dessinerDiagrammeNM(resolu: ResolvedModel): string {
       : '';
 
   return `<h2>Diagramme d'interaction N-My</h2>${svg}${limites}${avertissement}`;
+}
+
+/**
+ * Domaine resistant dans le plan des moments, a effort normal FIXE.
+ *
+ * Ne part JAMAIS au recalcul automatique. `interactionCurveAtN` enchaine une
+ * resolution droite par point : 77 a 380 ms pour 24 a 72 points (mesure du
+ * 2026-09-04), l'ordre de grandeur d'une verification complete. Le declencher
+ * a chaque frappe figerait la page — c'est exactement la regression du mode
+ * proportionnel du 2026-09-04. Bouton, et rien d'autre.
+ */
+function dessinerDomaineMyMz(resolu: ResolvedModel, resultat: VerificationResult): string {
+  const N = resolu.action.N;
+  const PAS = 72;
+  const points = interactionCurveAtN(resolu.section, N, resolu.norm, { steps: PAS });
+
+  const titre = `<h2>Domaine My-Mz a N = ${formatNumber(N, 1)} kN</h2>`;
+
+  // Un domaine vide est un RESULTAT, pas une panne : l'effort normal sort de
+  // la plage resistante quelle que soit l'orientation de l'axe neutre.
+  if (points.length === 0) {
+    return (
+      `<div id="domaine-mymz">${titre}` +
+      `<p class="motif">Aucun point du domaine n'existe a cet effort normal :
+       la section est depassee en compression ou en traction avant toute flexion.</p></div>`
+    );
+  }
+
+  // Cette courbe-ci EST fermee — le noyau balaye l'inclinaison de l'axe neutre
+  // sur un tour complet et ne repete pas le premier point, a charge pour
+  // l'appelant de refermer. On ne referme donc que si le tour est COMPLET :
+  // s'il manque des points, c'est qu'une orientation n'a pas de solution, et
+  // le trou doit rester visible plutot que d'etre enjambe par un raccord.
+  const tourComplet = points.length === PAS;
+  const trace = points.map((p) => ({ x: p.My, y: p.Mz }));
+  if (tourComplet) trace.push(trace[0]);
+
+  // Lecture geometrique du taux d'exploitation : `M_Rd` est la capacite
+  // COLINEAIRE a la sollicitation, donc le rayon du domaine dans sa direction.
+  // Le rapport des deux longueurs est le taux affiche a cote — la meme
+  // grandeur lue deux fois. Si elles divergent a l'ecran, c'est un bug.
+  const rayon =
+    resultat.M_Rd !== null
+      ? [{ a: { x: 0, y: 0 }, b: { x: resultat.M_Rd.y, y: resultat.M_Rd.z }, classe: 'plot-rayon' }]
+      : [];
+
+  const svg = plotSvg([{ points: trace, classe: 'plot-domaine' }], {
+    xLabel: 'My (kN.m)',
+    yLabel: 'Mz (kN.m)',
+    markers: [
+      {
+        point: { x: resolu.action.My, y: resolu.action.Mz },
+        classe: 'plot-sollicitation',
+        libelle: 'sollicitation',
+      },
+    ],
+    segments: rayon,
+  });
+
+  const legende =
+    '<p class="legende">' +
+    `<span>trace a N = ${formatNumber(N, 1)} kN constant</span>` +
+    '<span>le rayon en tirets va de l origine a la capacite : le rapport des deux longueurs est le taux</span>' +
+    (tourComplet ? '' : '<span>contour incomplet : certaines orientations n ont pas de solution</span>') +
+    '</p>';
+
+  return `<div id="domaine-mymz">${titre}${svg}${legende}</div>`;
 }
 
 // --- Resultat ---------------------------------------------------------------
@@ -672,7 +742,10 @@ function recalculer(mode?: 'proportional'): void {
     zoneResultat.innerHTML = dernierResultat;
     zoneSection.innerHTML = dernierDessin;
 
-    if (zoneDiagramme) zoneDiagramme.innerHTML = dessinerDiagrammeNM(resolu);
+    // Le domaine My-Mz eventuellement trace n'est PAS reconduit : il vaut pour
+    // un effort normal fixe, que la saisie vient peut-etre de changer.
+    dernierDiagramme = dessinerDiagrammeNM(resolu);
+    if (zoneDiagramme) zoneDiagramme.innerHTML = dernierDiagramme;
 
     const derives = document.querySelector('#derives');
     if (derives) {
@@ -682,6 +755,31 @@ function recalculer(mode?: 'proportional'): void {
     sauvegarderLocalement(modele);
   } catch (e) {
     afficherErreur(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * Trace le domaine My-Mz par-dessus le diagramme N-M deja affiche.
+ *
+ * Le domaine n'est PAS memorise : le prochain recalcul automatique le fera
+ * disparaitre, et c'est voulu. Il est trace a un effort normal fixe ; le
+ * garder a l'ecran apres un changement de sollicitation montrerait un domaine
+ * qui n'est plus celui du calcul affiche a cote.
+ */
+function tracerDomaine(): void {
+  if (!zoneDiagramme) return;
+
+  try {
+    const resolu = resolveModel(formToModel(etat));
+    const resultat = verifySection(resolu.section, resolu.action, resolu.norm, {
+      mode: 'constant-N',
+    });
+
+    dernierDiagramme = dessinerDiagrammeNM(resolu);
+    zoneDiagramme.innerHTML = dernierDiagramme + dessinerDomaineMyMz(resolu, resultat);
+  } catch (e) {
+    afficherErreur(e instanceof FormError ? e.message : String(e));
+    zoneDiagramme.innerHTML = dernierDiagramme;
   }
 }
 
@@ -852,6 +950,14 @@ document.addEventListener('click', (evenement) => {
     // seul, et l'attente doit etre visible.
     if (zoneResultat) zoneResultat.innerHTML = `<p class="attente">Calcul en cours…</p>${dernierResultat}`;
     window.setTimeout(() => recalculer('proportional'), 0);
+  } else if (action === 'tracer-domaine') {
+    // Meme patron que ci-dessus, pour la meme raison : le trace coute de 77 a
+    // 380 ms, synchrones. Le differer d'un tour de boucle laisse le navigateur
+    // peindre l'attente au lieu de figer sans rien dire.
+    if (zoneDiagramme) {
+      zoneDiagramme.innerHTML = `<p class="attente">Trace du domaine en cours…</p>${dernierDiagramme}`;
+    }
+    window.setTimeout(tracerDomaine, 0);
   }
 });
 
