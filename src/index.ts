@@ -36,12 +36,15 @@ export { verifyBiaxial } from './solvers/uls-biaxial';
 export type {
   SectionModel, NormModel, ConcreteModel, SteelModel, ActionModel, PointModel,
   GeometryModel, ReinforcementModel, BarSpecModel, RowFaceModel,
+  ServiceActionModel, ServiceActionsModel,
 } from './persistence/model-format';
-export { FORMAT_VERSION, ENGINE_VERSION } from './persistence/model-format';
+export {
+  FORMAT_VERSION, ENGINE_VERSION, SUPPORTED_FORMAT_VERSIONS,
+} from './persistence/model-format';
 
 export { parseModel, serializeModel, ModelParseError } from './persistence/parse';
 
-export type { ResolvedModel } from './persistence/resolve';
+export type { ResolvedModel, ResolvedServiceActions } from './persistence/resolve';
 export { resolveModel } from './persistence/resolve';
 
 export type { MomentPoint, AxialMomentPoint, DiagramPointNM } from './domains/interaction';

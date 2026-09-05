@@ -15,6 +15,13 @@ import type { DiagramPointNM } from '../src/index';
 import { verifyServiceUniaxial, crackedProperties } from '../src/index';
 import { verifyCrackWidth, effectiveTensionArea } from '../src/index';
 import { sectionCurvature, uncrackedProperties } from '../src/index';
+import { SUPPORTED_FORMAT_VERSIONS } from '../src/index';
+import type {
+  SectionModel,
+  ServiceActionModel,
+  ServiceActionsModel,
+  ResolvedServiceActions,
+} from '../src/index';
 
 describe('API publique du noyau', () => {
   it("permet de verifier une section rectangulaire de bout en bout via l'entree publique", () => {
@@ -210,5 +217,49 @@ describe('API publique — courbure', () => {
     expect(r.converged).toBe(true);
     expect(r.curvature).toBeGreaterThan(0);
     expect(typeof uncrackedProperties).toBe('function');
+  });
+});
+
+describe('API publique — format v2 et sollicitations de service', () => {
+  it('expose les types et la liste des versions lues, et resout le service de bout en bout', () => {
+    const modele: SectionModel = {
+      formatVersion: FORMAT_VERSION,
+      engineVersion: '0.1.0',
+      norm: { name: 'EC2_recommended', gammaC: 1.5, gammaS: 1.15, alphaCc: 1, nBands: 200 },
+      concrete: { fck: 25 },
+      steel: { fyk: 500, Es: 200000 },
+      geometry: { kind: 'rectangle', width: 300, height: 500 },
+      reinforcement: {
+        kind: 'rectangular-layout',
+        cover: 30,
+        stirrupDiameter: 8,
+        rows: [{ face: 'bottom', bars: { count: 3, diameter: 20 } }],
+      },
+      action: { N: 0, My: 150, Mz: 0 },
+      serviceActions: {
+        characteristic: { N: 0, M: 110 },
+        quasiPermanent: { N: 0, M: 80 },
+      },
+    };
+
+    // Les types sont bien exportes et nommables depuis l'entree publique.
+    const caract: ServiceActionModel | undefined = modele.serviceActions?.characteristic;
+    const toutes: ServiceActionsModel | undefined = modele.serviceActions;
+    expect(caract).toEqual({ N: 0, M: 110 });
+    expect(toutes?.quasiPermanent).toEqual({ N: 0, M: 80 });
+
+    expect([...SUPPORTED_FORMAT_VERSIONS]).toContain(FORMAT_VERSION);
+    expect([...SUPPORTED_FORMAT_VERSIONS]).toContain(1);
+
+    const resolu = resolveModel(parseModel(serializeModel(modele)));
+    const service: ResolvedServiceActions | undefined = resolu.serviceActions;
+    const qp = service?.quasiPermanent;
+    if (qp === undefined) throw new Error('sollicitation quasi-permanente attendue');
+
+    // Aucune conversion a la charge de l'appelant : la forme rendue est
+    // celle que prennent les trois modules de service.
+    expect(verifyServiceUniaxial(resolu.section, qp).converged).toBe(true);
+    expect(sectionCurvature(resolu.section, qp).converged).toBe(true);
+    expect(verifyCrackWidth(resolu.section, qp).wk).toBeGreaterThan(0);
   });
 });
