@@ -177,3 +177,237 @@ export function resultatsEnCsv(blocs: BlocService[]): string {
 
   return BOM + lignes.join(FIN_DE_LIGNE) + FIN_DE_LIGNE;
 }
+
+// --- Note de calcul ----------------------------------------------------------
+
+/**
+ * L avertissement porte par l en-tete de l application, reconduit sur la note.
+ *
+ * La note est le document qui SORT et circule : c est sur lui, plus encore que
+ * sur l ecran, que la portee de l outil doit etre lisible.
+ */
+export const AVERTISSEMENT_RESPONSABILITE =
+  'Outil d aide au calcul : la verification finale et la responsabilite incombent a ' +
+  'l ingenieur du projet. Cette note est un COMPTE RENDU de calcul, non une justification ' +
+  'reglementaire signee.';
+
+/**
+ * La feuille de style de la note, embarquee dans le document.
+ *
+ * Elle reprend les regles du trace — la note contient les memes dessins — et y
+ * ajoute la mise en page du texte et l impression : sauts de page entre
+ * parties, dessins jamais coupes, fond blanc.
+ */
+export const STYLES_NOTE = `${STYLES_TRACE}
+
+body {
+  margin: 0 auto;
+  padding: 1.5rem;
+  max-width: 60rem;
+  background: #fff;
+  color: var(--encre);
+  font: 13px/1.55 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+header { border-bottom: 2px solid var(--encre); padding-bottom: 0.6rem; }
+h1 { margin: 0; font-size: 1.3rem; }
+.date { margin: 0.2rem 0 0.5rem; color: #4a4842; }
+.avertissement {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.6rem;
+  border-left: 3px solid var(--attention);
+  background: #fdf6e3;
+  color: #6b5400;
+  font-size: 0.85rem;
+}
+
+.partie { margin-top: 1.6rem; }
+.partie > h2 {
+  margin: 0 0 0.6rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid var(--trait);
+  font-size: 1rem;
+}
+
+.bloc { margin: 0 0 1rem; padding-left: 0.6rem; border-left: 2px solid var(--appui); }
+.bloc > h3 {
+  margin: 0 0 0.3rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6a6862;
+}
+
+table.lignes { width: 100%; border-collapse: collapse; }
+table.lignes th {
+  width: 55%;
+  padding: 0.2rem 0.4rem 0.2rem 0;
+  border-bottom: 1px solid #eceae4;
+  font-weight: normal;
+  text-align: left;
+  color: #4a4842;
+}
+table.lignes td {
+  padding: 0.2rem 0;
+  border-bottom: 1px solid #eceae4;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict {
+  margin: 0.4rem 0 0;
+  padding: 0.35rem 0.55rem;
+  border-radius: 3px;
+  font-weight: 600;
+}
+.verdict.ok { background: #eaf4ee; color: var(--ok); }
+.verdict.non-ok { background: #f8ecec; color: var(--non-ok); }
+
+.note { margin: 0.4rem 0 0; font-size: 0.85rem; color: #4a4842; }
+.motif {
+  margin: 0.4rem 0 0;
+  padding: 0.4rem 0.55rem;
+  border-left: 3px solid var(--non-ok);
+  background: #f8ecec;
+  font-size: 0.85rem;
+  color: var(--non-ok);
+}
+
+figure { margin: 0 0 1rem; }
+figure svg { width: 100%; max-width: 32rem; height: auto; border: 1px solid var(--trait); }
+
+@media print {
+  @page { margin: 15mm; }
+  body { max-width: none; padding: 0; background: #fff; }
+  /* Une partie commence sur sa page ; un bloc ou un dessin ne se coupe pas. */
+  .partie { break-before: page; page-break-before: always; }
+  .partie:first-of-type { break-before: auto; page-break-before: auto; }
+  .bloc, figure { break-inside: avoid; page-break-inside: avoid; }
+}`;
+
+/** Ce qu il faut pour composer une note : des blocs deja mis en forme. */
+export interface NoteDeCalcul {
+  titre: string;
+  date: string;
+  /** Geometrie, materiaux, armatures, sollicitations. */
+  entrees: BlocService[];
+  /** SVG deja produits par `dessiner()` et `plotSvg()` — jamais redessines. */
+  dessins: string[];
+  verifications: BlocService[];
+  hypotheses: string[];
+}
+
+/**
+ * Echappement HTML, identique a celui du cablage.
+ *
+ * Recopie plutot qu importe : ce module ne doit RIEN devoir a `main.ts`, qui
+ * touche au document. Quatre remplacements sans etat, dont la duplication
+ * coute moins que le couplage.
+ */
+function echapperHtml(texte: string): string {
+  return texte
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Un bloc de la note.
+ *
+ * La note du bloc devient un MOTIF — cadre rouge — quand elle explique une
+ * absence : bloc sans ligne ni verdict, ou verdict defavorable. Partout
+ * ailleurs c est une precision. Deux lectures qui n appellent pas la meme
+ * reaction, et la note doit les distinguer aussi nettement que l ecran.
+ */
+function blocEnHtml(bloc: BlocService): string {
+  const lignes =
+    bloc.lignes.length === 0
+      ? ''
+      : `<table class="lignes"><tbody>${bloc.lignes
+          .map(
+            (l) =>
+              `<tr><th scope="row">${echapperHtml(l.libelle)}</th>` +
+              `<td>${echapperHtml(l.valeur)}</td></tr>`
+          )
+          .join('')}</tbody></table>`;
+
+  const verdict =
+    bloc.verdict === null
+      ? ''
+      : `<p class="verdict ${bloc.verdict.ok ? 'ok' : 'non-ok'}">` +
+        `${echapperHtml(bloc.verdict.texte)}</p>`;
+
+  const estUneAbsence =
+    (bloc.verdict !== null && !bloc.verdict.ok) ||
+    (bloc.verdict === null && bloc.lignes.length === 0);
+  const note =
+    bloc.note === null
+      ? ''
+      : `<p class="${estUneAbsence ? 'motif' : 'note'}">${echapperHtml(bloc.note)}</p>`;
+
+  return `<section class="bloc"><h3>${echapperHtml(bloc.titre)}</h3>${lignes}${verdict}${note}</section>`;
+}
+
+function partie(titre: string, contenu: string): string {
+  return `<section class="partie"><h2>${echapperHtml(titre)}</h2>${contenu}</section>`;
+}
+
+/**
+ * La note de calcul, document HTML AUTONOME.
+ *
+ * Destine a etre ouvert dans un onglet et imprime en PDF par le navigateur :
+ * aucune ressource externe, aucun script, aucune dependance. L ordre est celui
+ * d une note d ingenieur — identification, donnees d entree, dessins,
+ * verifications avec leurs valeurs intermediaires, hypotheses et limites.
+ *
+ * DEUX INTERDITS TENUS ICI :
+ *
+ * 1. la note NE CONCLUT PAS. Elle rapporte les verdicts des modules, un pour
+ *    un, et n en ajoute aucun de synthese : la conclusion appartient a
+ *    l ingenieur, pas au document qui lui sert a la former ;
+ * 2. elle NE MASQUE AUCUNE verification. Un module hors domaine y figure avec
+ *    son motif. Une section qui disparait sans explication fait croire au
+ *    lecteur qu elle a ete verifiee — pire qu une section incomplete assumee.
+ */
+export function noteDeCalculHtml(note: NoteDeCalcul, styles: string): string {
+  const dessins =
+    note.dessins.length === 0
+      ? ''
+      : partie(
+          'Section et diagrammes',
+          note.dessins.map((svg) => `<figure>${svg}</figure>`).join('')
+        );
+
+  const hypotheses =
+    note.hypotheses.length === 0
+      ? ''
+      : partie(
+          'Hypotheses et limites',
+          `<ul>${note.hypotheses.map((h) => `<li>${echapperHtml(h)}</li>`).join('')}</ul>`
+        );
+
+  return `<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${echapperHtml(note.titre)} — note de calcul</title>
+<style>
+${styles}
+</style>
+</head>
+<body>
+<header>
+<h1>${echapperHtml(note.titre)} — note de calcul</h1>
+<p class="date">Etablie le ${echapperHtml(note.date)} — section-uls, EN 1992-1-1</p>
+<p class="avertissement">${echapperHtml(AVERTISSEMENT_RESPONSABILITE)}</p>
+</header>
+${partie('Donnees d entree', note.entrees.map(blocEnHtml).join(''))}
+${dessins}
+${partie('Verifications', note.verifications.map(blocEnHtml).join(''))}
+${hypotheses}
+</body>
+</html>
+`;
+}

@@ -3,7 +3,13 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 
-import { svgAutonome, resultatsEnCsv, PALETTE, STYLES_TRACE } from '../../app/src/export';
+import {
+  svgAutonome,
+  resultatsEnCsv,
+  noteDeCalculHtml,
+  PALETTE,
+  STYLES_TRACE,
+} from '../../app/src/export';
 import type { BlocService } from '../../app/src/service-view';
 import { sansCalcul } from '../../app/src/service-view';
 
@@ -211,5 +217,164 @@ describe('resultatsEnCsv', () => {
     const lignes = lignesDe(resultatsEnCsv([muet]));
 
     expect(lignes.some((l) => l.startsWith('Bloc muet;'))).toBe(true);
+  });
+});
+
+// --- Note de calcul ----------------------------------------------------------
+
+const ENTREES: BlocService[] = [
+  {
+    titre: 'Geometrie',
+    lignes: [
+      { libelle: 'Forme', valeur: 'rectangle 400 × 400 mm' },
+      { libelle: 'Aire de beton', valeur: '160000 mm²' },
+    ],
+    verdict: null,
+    note: null,
+  },
+  {
+    titre: 'Sollicitation ELU',
+    lignes: [{ libelle: 'N', valeur: '500,0 kN' }],
+    verdict: null,
+    note: null,
+  },
+];
+
+const VERIFICATIONS: BlocService[] = [
+  {
+    titre: 'Effort tranchant (§6.2)',
+    lignes: [
+      { libelle: 'V_Rd,c (sans armature d ame)', valeur: '82,4 kN' },
+      { libelle: 'Taux V_Ed / V_Rd', valeur: '0,73' },
+    ],
+    verdict: { ok: true, texte: 'Effort tranchant verifie' },
+    note: null,
+  },
+  BLOC_CONTRAINTES,
+  sansCalcul(
+    'Ouverture de fissures (§7.3)',
+    'Geometrie non rectangulaire. Les formules du §7.3.4 supposent une zone tendue rectangulaire.'
+  ),
+];
+
+const NOTE = {
+  titre: 'Poteau P1',
+  date: '2026-09-05',
+  entrees: ENTREES,
+  dessins: [SVG_SECTION],
+  verifications: VERIFICATIONS,
+  hypotheses: [
+    'Profil normatif : valeurs recommandees de l EN 1992-1-1, hors annexe nationale.',
+    'Le tranchant et la fissuration ne sont calcules que sur des sections rectangulaires.',
+  ],
+};
+
+const STYLES_ESSAI = ':root { --encre: #1a1a1a; } @media print { body { background: #fff; } }';
+
+function analyserNote(html: string): Document {
+  return new JSDOM(html).window.document;
+}
+
+describe('noteDeCalculHtml', () => {
+  it('porte l identification et la date', () => {
+    const doc = analyserNote(noteDeCalculHtml(NOTE, STYLES_ESSAI));
+
+    expect(doc.querySelector('h1')?.textContent).toContain('Poteau P1');
+    expect(doc.body.textContent).toContain('2026-09-05');
+  });
+
+  it('rend les donnees d entree', () => {
+    const texte = analyserNote(noteDeCalculHtml(NOTE, STYLES_ESSAI)).body.textContent ?? '';
+
+    expect(texte).toContain('Geometrie');
+    expect(texte).toContain('rectangle 400 × 400 mm');
+    expect(texte).toContain('Sollicitation ELU');
+    expect(texte).toContain('500,0 kN');
+  });
+
+  it('reprend les dessins deja produits, sans les redessiner', () => {
+    const doc = analyserNote(noteDeCalculHtml(NOTE, STYLES_ESSAI));
+
+    expect(doc.querySelector('svg')).not.toBeNull();
+    expect(doc.querySelector('svg .contour')).not.toBeNull();
+  });
+
+  it('rend chaque verification AVEC ses valeurs intermediaires', () => {
+    // Un V_Rd,c sans son detail n est pas verifiable par un tiers, et une note
+    // de calcul sert precisement a etre verifiee par un tiers.
+    const texte = analyserNote(noteDeCalculHtml(NOTE, STYLES_ESSAI)).body.textContent ?? '';
+
+    expect(texte).toContain('V_Rd,c (sans armature d ame)');
+    expect(texte).toContain('82,4 kN');
+    expect(texte).toContain('Taux V_Ed / V_Rd');
+    expect(texte).toContain('Effort tranchant verifie');
+  });
+
+  it('fait FIGURER un module hors domaine, avec son motif', () => {
+    // Une section qui disparait sans explication fait croire au lecteur
+    // qu elle a ete verifiee : c est pire qu une section incomplete assumee.
+    const texte = analyserNote(noteDeCalculHtml(NOTE, STYLES_ESSAI)).body.textContent ?? '';
+
+    expect(texte).toContain('Ouverture de fissures (§7.3)');
+    expect(texte).toContain('Geometrie non rectangulaire');
+  });
+
+  it('ne conclut RIEN a la place de l ingenieur', () => {
+    // La note rapporte les verdicts des modules, un pour un. Elle n en ajoute
+    // aucun de synthese.
+    const doc = analyserNote(noteDeCalculHtml(NOTE, STYLES_ESSAI));
+    const attendus = VERIFICATIONS.filter((b) => b.verdict !== null).length;
+
+    expect(doc.querySelectorAll('.verdict')).toHaveLength(attendus);
+  });
+
+  it('porte l avertissement de responsabilite', () => {
+    const texte = analyserNote(noteDeCalculHtml(NOTE, STYLES_ESSAI)).body.textContent ?? '';
+
+    expect(texte).toMatch(/aide au calcul/i);
+    expect(texte).toMatch(/responsabilite incombent a l ingenieur/i);
+  });
+
+  it('rend les hypotheses et limites', () => {
+    const texte = analyserNote(noteDeCalculHtml(NOTE, STYLES_ESSAI)).body.textContent ?? '';
+
+    expect(texte).toContain('valeurs recommandees de l EN 1992-1-1');
+    expect(texte).toContain('sections rectangulaires');
+  });
+
+  it('n affiche AUCUN NaN', () => {
+    expect(noteDeCalculHtml(NOTE, STYLES_ESSAI)).not.toContain('NaN');
+  });
+
+  it('est AUTONOME : aucune ressource externe', () => {
+    // La note est destinee a etre archivee et transmise. Une feuille de style
+    // liee la rendrait illisible partout ailleurs que sur la machine d origine.
+    const html = noteDeCalculHtml(NOTE, STYLES_ESSAI);
+
+    expect(html).not.toMatch(/<link\b/i);
+    expect(html).not.toMatch(/<script\b/i);
+    expect(html).not.toContain('@import');
+    expect(analyserNote(html).querySelector('style')?.textContent).toContain('--encre');
+  });
+
+  it('embarque une feuille de style d impression', () => {
+    const css = analyserNote(noteDeCalculHtml(NOTE, STYLES_ESSAI)).querySelector('style');
+    expect(css?.textContent).toContain('@media print');
+  });
+
+  it('echappe le balisage present dans les libelles', () => {
+    const piege = {
+      ...NOTE,
+      titre: 'Poutre <script>alert(1)</script>',
+      verifications: [
+        { titre: 'A_s < A_s,min', lignes: [], verdict: null, note: 'sigma < 0 & rho > 1' },
+      ],
+    };
+
+    const html = noteDeCalculHtml(piege, STYLES_ESSAI);
+
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;');
+    expect(analyserNote(html).body.textContent).toContain('sigma < 0 & rho > 1');
   });
 });
