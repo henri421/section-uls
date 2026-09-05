@@ -72,6 +72,23 @@ Le minimum d'armature d'âme **ne s'applique ni aux dalles ni aux poteaux** : le
 
 Le module rend la **liste** des règles enfreintes, pas un motif unique : une section peut être à la fois sur-armée et dépourvue d'armature d'âme. Il **constate et ne prescrit pas** — aucun ferraillage n'est proposé — et **ne modifie pas le verdict de flexion** : une section peut résister et rester irrégulière au §9, ce qui est une information et non une contradiction. Les valeurs sont celles **recommandées** par l'EN 1992-1-1 ; une annexe nationale peut les modifier.
 
+**Fissuration sous déformation gênée — le « Zwang » des éléments massifs (§7.3.2)** : `minimumRestraintArea` rend l'armature minimale de maîtrise de la fissuration, éq. (7.1) `A_s,min·σ_s = k_c·k·f_ct,eff·A_ct`.
+
+**À ne pas confondre avec le minimum de résistance du §9.2.1.1**, qui répond à une autre question. Celui-ci garantit que l'acier ne plastifie pas à l'instant où le béton fissure, donc que la fissuration se répartit en plusieurs fissures fines plutôt qu'en une seule large. Sur un voile ou un radier massif, c'est lui qui gouverne, et de loin — la résistance n'y est jamais le problème.
+
+Le caractère **massif** entre par le facteur `k` : `1,00` jusqu'à 300 mm d'épaisseur, `0,65` à partir de 800 mm, interpolé entre les deux. Ce n'est pas une pénalité mais un facteur réducteur : dans une pièce épaisse, les contraintes d'auto-équilibre réduisent l'effort qui traverse réellement la section au moment de la fissuration.
+
+Deux natures de gêne : **centrée** (`k_c = 1`, retrait ou refroidissement empêchés par un radier déjà durci, une reprise de bétonnage — toute la section est tendue) et **de flexion** (`k_c = 0,4`, gradient thermique cœur-parement, avec l'éq. 7.2 dès qu'un effort normal accompagne).
+
+Deux paramètres décident du résultat et sont laissés à l'ingénieur :
+
+- **`f_ct,eff`**, la résistance à la traction *à l'instant de la fissuration*. Le défaut est `f_ctm` à 28 jours, c'est-à-dire le cas défavorable. Or le Zwang des pièces massives naît de la chaleur d'hydratation et fissure à quelques jours : retenir la valeur à 28 jours surestime l'acier. Le §7.3.2(2) demande explicitement de l'estimer à l'âge attendu de la fissuration.
+- **`σ_s`**, la contrainte admise dans l'acier. Le texte autorise `f_yk`, mais une valeur plus faible est souvent nécessaire pour respecter une ouverture visée (tableaux 7.2N et 7.3N, qui lient diamètre et espacement maximaux à cette contrainte).
+
+**Option `effectiveZoneOnly`** : calculer sur la seule zone de béton tendu efficace au lieu de toute la zone tendue. Ce n'est **pas** le texte de l'EN 1992-1-1, qui écrit l'éq. 7.1 sur `A_ct` entière ; c'est le raffinement retenu par la pratique allemande pour les pièces épaisses, où seule une peau participe réellement à la maîtrise de l'ouverture. L'écart est considérable — sur un voile de 1 m, 3334 mm²/m contre 834. Le défaut reste le texte européen, qui est enveloppe.
+
+Sections rectangulaires uniquement.
+
 **Vérification et domaine d'interaction** : `verifySection` conclut — taux d'exploitation, verdict, et le motif de l'échec quand il y en a un. Deux chemins de chargement sont proposés : « N constant, moment majoré », qui correspond à l'usage en poteau, et proportionnel. Les diagrammes `N`–`M` et `My`–`Mz` sont rendus comme des listes de points, prêtes à tracer — le noyau ne dessine pas.
 
 `interactionCurveNM` balaye la profondeur d'axe neutre depuis la fibre supérieure : elle ne décrit donc **qu'une seule branche**, celle des moments d'un seul signe. `interactionDiagramNM` rend le diagramme **complet**, ses deux sens de flexion : la branche opposée s'obtient en balayant la section tournée de π, ce qui envoie `(y, z)` sur `(−y, −z)` et donc `M` sur `−M`, l'effort normal restant inchangé. Aucune approximation. Sur une section symétriquement armée les deux branches sont miroir et l'omission ne se voit pas ; sur une dalle à deux nappes inégales, une section en T, un voile dissymétrique, elles diffèrent et n'en tracer qu'une cache la moitié du domaine.
