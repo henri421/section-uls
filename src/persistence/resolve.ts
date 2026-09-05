@@ -4,6 +4,11 @@ import type { NormProfile } from '../model/norm-profile';
 import type { ConcreteMaterial } from '../model/concrete';
 import type { SteelMaterial } from '../model/steel';
 import type { BiaxialAction } from '../solvers/uls-biaxial';
+import type { ShearAction } from '../shear/verify-shear';
+import type { ShearReinforcement } from '../shear/shear-with-links';
+import type { ElementType } from '../detailing/longitudinal';
+import type { RestraintType, RestraintOptions } from '../detailing/restraint';
+import type { MeyerParams } from '../detailing/meyer-restraint';
 import { createConcrete } from '../model/concrete';
 import { createSteel } from '../model/steel';
 import { rectangularSection } from '../geometry/rectangle';
@@ -26,6 +31,39 @@ export interface ResolvedServiceActions {
   quasiPermanent?: Action;
 }
 
+/**
+ * Effort tranchant resolu, decoupe selon la signature de `verifyShear` :
+ *
+ *     verifyShear(r.section, r.shear.action, r.norm, r.shear.options)
+ *
+ * `action.N_Ed` vient de l'effort normal de l'ELU, `model.action.N` : la
+ * verification du §6.2 est une verification a l'ELU, et le modele ne porte
+ * volontairement pas un second effort normal qui pourrait le contredire.
+ */
+export interface ResolvedShear {
+  action: ShearAction;
+  options: {
+    /** Cadres declares ; absents, la verification se limite au §6.2.2. */
+    links?: ShearReinforcement;
+    /** Absent : le defaut du §6.2.3(2) applique par `shearWithLinks`, soit 2,5. */
+    cotTheta?: number;
+  };
+}
+
+/**
+ * Deformation genee resolue, decoupee selon la signature de
+ * `minimumRestraintArea(section, type, options)`.
+ *
+ * `options.NEd` n'est JAMAIS renseigne, deliberement : le §7.3.2 se verifie
+ * sous la seule deformation genee, et y injecter l'effort normal de l'ELU
+ * reduirait `k_c` — donc l'armature exigee — au titre d'une compression qui
+ * n'est pas concomitante de la fissuration au jeune age.
+ */
+export interface ResolvedRestraint {
+  type: RestraintType;
+  options: RestraintOptions;
+}
+
 export interface ResolvedModel {
   section: Section;
   action: BiaxialAction;
@@ -36,6 +74,14 @@ export interface ResolvedModel {
   steel: SteelMaterial;
   /** Absentes du modele, absentes ici : `resolveModel` ne les invente pas. */
   serviceActions?: ResolvedServiceActions;
+  /** Type d'element du §9, tel quel : `verifyDetailing` le prend ainsi. */
+  elementType?: ElementType;
+  /** Voir `ResolvedShear`. */
+  shear?: ResolvedShear;
+  /** Voir `ResolvedRestraint`. */
+  restraint?: ResolvedRestraint;
+  /** Parametres de la methode Meyer, prets pour `meyerRestraintReinforcement`. */
+  meyer?: MeyerParams;
 }
 
 /**
@@ -151,6 +197,58 @@ export function resolveModel(model: SectionModel): ResolvedModel {
             : {}),
         };
 
+  // Blocs de la version 3. Chacun est rendu dans le type qu'attend son module
+  // de calcul, pour qu'aucune conversion ne reste a la charge de l'appelant —
+  // c'est la meme regle que pour les sollicitations de service. Absent du
+  // modele, absent ici : rien n'est complete par un defaut.
+  const shear: ResolvedShear | undefined =
+    model.shear === undefined
+      ? undefined
+      : {
+          action: { V_Ed: model.shear.V_Ed, N_Ed: model.action.N },
+          options: {
+            ...(model.shear.links !== undefined
+              ? {
+                  links: {
+                    Asw: model.shear.links.Asw,
+                    s: model.shear.links.s,
+                    fywk: model.shear.links.fywk,
+                  },
+                }
+              : {}),
+            ...(model.shear.cotTheta !== undefined ? { cotTheta: model.shear.cotTheta } : {}),
+          },
+        };
+
+  const restraint: ResolvedRestraint | undefined =
+    model.restraint === undefined
+      ? undefined
+      : {
+          type: model.restraint.type,
+          options: {
+            ...(model.restraint.fctEff !== undefined ? { fctEff: model.restraint.fctEff } : {}),
+            ...(model.restraint.sigmaS !== undefined ? { sigmaS: model.restraint.sigmaS } : {}),
+            ...(model.restraint.effectiveZoneOnly !== undefined
+              ? { effectiveZoneOnly: model.restraint.effectiveZoneOnly }
+              : {}),
+          },
+        };
+
+  const meyer: MeyerParams | undefined =
+    model.meyer === undefined
+      ? undefined
+      : {
+          h: model.meyer.h,
+          d1: model.meyer.d1,
+          ds: model.meyer.ds,
+          wk: model.meyer.wk,
+          fctm: model.meyer.fctm,
+          kzt: model.meyer.kzt,
+          cas: model.meyer.cas,
+          bridage: model.meyer.bridage,
+          ...(model.meyer.kmode !== undefined ? { kmode: model.meyer.kmode } : {}),
+        };
+
   return {
     section,
     action: { N: model.action.N, My: model.action.My, Mz: model.action.Mz },
@@ -158,5 +256,9 @@ export function resolveModel(model: SectionModel): ResolvedModel {
     concrete,
     steel,
     ...(serviceActions !== undefined ? { serviceActions } : {}),
+    ...(model.elementType !== undefined ? { elementType: model.elementType } : {}),
+    ...(shear !== undefined ? { shear } : {}),
+    ...(restraint !== undefined ? { restraint } : {}),
+    ...(meyer !== undefined ? { meyer } : {}),
   };
 }
