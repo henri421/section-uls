@@ -40,6 +40,18 @@ Les autres coefficients (`k1`, `k2`, `k3`, `kt`…) restent à leurs valeurs rec
 - une section **entièrement comprimée** n'a ni zone tendue ni fissure : les §7.2 et §7.3 affichent alors le motif du module plutôt qu'un chiffre issu d'une hypothèse fausse ;
 - la **courbure n'est pas une flèche**, et son bloc le rappelle systématiquement. Une flèche exige la portée, les appuis et la répartition des charges, qui sont du niveau élément.
 
+### Effort tranchant, dispositions constructives et déformation gênée
+
+Le panneau porte, **après le service et séparément de lui**, trois familles de plus, chacune concluant **pour elle-même** — aucune ne modifie le verdict de flexion, et une section peut parfaitement résister tout en restant irrégulière au §9 :
+
+- l'**effort tranchant** (§6.2) : `V_Rd,c` sans armature d'âme, puis `V_Rd,s` et `V_Rd,max` dès que des cadres sont déclarés. `cot θ` est une **entrée** bornée à `[1 ; 2,5]`, pas une constante. Les trois modes d'échec se distinguent à l'écran, et cette distinction est tout l'enjeu : « bielles écrasées » veut dire **section trop petite**, pas « il manque des cadres » ;
+- les **dispositions constructives** (§9.2, §9.3, §9.5) : `A_s` en place entre `A_s,min` et `A_s,max`, plus le taux d'armature d'âme du §9.2.2(5). Le **type d'élément est déclaré**, jamais deviné — un 300×500 est une poutre ou un poteau selon son rôle. Une dalle est dispensée du minimum d'âme (§6.2.1(4)) et cela n'est **pas** compté comme un échec ;
+- l'**armature minimale sous déformation gênée** (§7.3.2), qui gouverne les voiles et radiers massifs. Elle **ne rend aucun verdict** : elle donne une aire exigée, elle ne la compare à rien.
+
+**⚠ Ces saisies ne sont pas encore enregistrées dans le modèle** — le format de fichier ne les porte pas. L'effort tranchant, les cadres, le type d'élément et les paramètres de déformation gênée reprennent leurs valeurs de départ à chaque chargement, et « Enregistrer » ne les conserve pas. La page l'écrit à côté des champs concernés.
+
+**Autres limites, écrites dans la page autant qu'ici :** effort tranchant et déformation gênée sur **sections rectangulaires** seulement — une autre géométrie affiche le motif sans effacer le reste ; ni précontrainte, ni torsion, ni bielles inclinées, ni vérification au droit de l'appui. Les valeurs du §9 sont celles **recommandées** par l'EN 1992-1-1, qu'une annexe nationale peut modifier.
+
 La sortie construite est committée dans `docs/` : **toute modification de l'interface exige de relancer `npm run build` avant de pousser**, sans quoi la page en ligne diverge de la source.
 
 ## Capacités actuelles
