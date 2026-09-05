@@ -24,7 +24,7 @@ describe('temoin de format', () => {
     expect(m.action.N).toBe(1200);
   });
 
-  it('est ecrit en version 1 du format et reste lisible apres la montee en version 2', () => {
+  it('est ecrit en version 1 du format et reste lisible a chaque montee de version', () => {
     // Ce test est la preuve de la retrocompatibilite, et il ne vaut que
     // parce que le fichier n'est PAS regenere : il porte la version 1, celle
     // de tous les modeles deja enregistres par l'utilisateur. Le jour ou
@@ -34,6 +34,18 @@ describe('temoin de format', () => {
     expect(m.formatVersion).toBe(1);
     expect(FORMAT_VERSION).toBeGreaterThan(m.formatVersion);
     expect(m.serviceActions).toBeUndefined();
+  });
+
+  it('ne se voit inventer aucun des blocs apparus apres lui', () => {
+    // Un fichier de version 1 ne porte ni type d'element, ni tranchant, ni
+    // gene, ni saisie Meyer. Les completer par un defaut ferait afficher des
+    // verifications que l'utilisateur n'a jamais demandees, sur des valeurs
+    // que personne n'a saisies.
+    const m = parseModel(json);
+    expect(m.elementType).toBeUndefined();
+    expect(m.shear).toBeUndefined();
+    expect(m.restraint).toBeUndefined();
+    expect(m.meyer).toBeUndefined();
   });
 
   it('produit toujours le meme moment resistant', () => {

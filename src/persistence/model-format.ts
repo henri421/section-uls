@@ -31,9 +31,10 @@
  * champ ; la lecture, elle, ne suit pas — voir SUPPORTED_FORMAT_VERSIONS.
  *
  * Historique : 1 = format initial (session 5) ; 2 = ajout des
- * sollicitations de service (session 10).
+ * sollicitations de service (session 10) ; 3 = type d'element, effort
+ * tranchant, deformation genee du §7.3.2 et methode Meyer (session 14).
  */
-export const FORMAT_VERSION = 2;
+export const FORMAT_VERSION = 3;
 
 /**
  * Versions ACCEPTEES a la lecture, de la plus ancienne a la courante.
@@ -50,7 +51,7 @@ export const FORMAT_VERSION = 2;
  * Ne retirer une version d'ici que le jour ou on assume de refuser les
  * fichiers qui la portent, et alors avec un message qui le dise.
  */
-export const SUPPORTED_FORMAT_VERSIONS: readonly number[] = [1, 2];
+export const SUPPORTED_FORMAT_VERSIONS: readonly number[] = [1, 2, 3];
 
 /**
  * Version du moteur ayant produit le fichier. Trace de provenance, JAMAIS
@@ -120,6 +121,105 @@ export interface ServiceActionsModel {
   quasiPermanent?: ServiceActionModel;
 }
 
+/**
+ * Type d'element au sens du §9 (version 3 du format).
+ *
+ * Les memes valeurs que l'`ElementType` du noyau, en anglais, et NON
+ * traduites : le fichier est un format d'echange, pas une interface. Le
+ * traduire ici imposerait une table de correspondance a chaque lecture et
+ * ferait diverger le fichier des valeurs que consomment `checkLongitudinal`
+ * et `verifyDetailing`.
+ */
+export type ElementTypeModel = 'beam' | 'slab' | 'column';
+
+/** Cadres d'effort tranchant : la forme de `ShearReinforcement` du §6.2.3. */
+export interface ShearLinksModel {
+  /** Aire totale des brins d'un cours de cadres (mm²). */
+  Asw: number;
+  /** Espacement des cours (mm). */
+  s: number;
+  /** Limite elastique caracteristique des cadres (MPa). */
+  fywk: number;
+}
+
+/**
+ * Effort tranchant et son ferraillage d'ame (version 3 du format).
+ *
+ * `V_Ed` seul suffit : le §6.2.2 rend deja un verdict sans cadres, et un
+ * effort tranchant se saisit avant d'avoir choisi les cadres. Son signe est
+ * indifferent — `verifyShear` n'en retient que le module — mais il est
+ * conserve tel quel : reecrire une valeur saisie serait la corriger en
+ * silence.
+ *
+ * L'effort normal concomitant ne figure PAS ici : c'est celui de l'ELU,
+ * `action.N`, et le dupliquer ouvrirait la porte a un fichier ou les deux se
+ * contredisent.
+ */
+export interface ShearModel {
+  /** Effort tranchant sollicitant (kN). */
+  V_Ed: number;
+  /** Cadres declares. Absents : verification du §6.2.2 seule. */
+  links?: ShearLinksModel;
+  /**
+   * `cot theta` du §6.2.3(2). Absent, c'est le defaut de `shearWithLinks`
+   * qui s'applique, soit 2,5 — le parseur n'inscrit rien de lui-meme.
+   *
+   * C'est le CAS LIMITE assume de la frontiere du format : `cot theta` est un
+   * choix d'ingenieur, donc une hypothese de verification, mais il
+   * conditionne le ferraillage retenu et doit voyager avec lui.
+   */
+  cotTheta?: number;
+}
+
+/**
+ * Deformation genee (« Zwang ») au sens de l'EN 1992-1-1 §7.3.2 (version 3).
+ *
+ * A ne pas confondre avec `MeyerModel`, qui repond a la meme question par la
+ * methode allemande. Les deux blocs coexistent dans un modele.
+ */
+export interface RestraintModel {
+  /** Nature de la gene : centree ou de flexion. */
+  type: 'central' | 'bending';
+  /** `f_ct,eff` (MPa). Absent : `f_ctm` a 28 jours, le cas defavorable. */
+  fctEff?: number;
+  /** Contrainte d'acier admise (MPa). Absente : `f_yk`. */
+  sigmaS?: number;
+  /** Calcul sur la seule zone efficace (pratique allemande). Absent : `false`. */
+  effectiveZoneOnly?: boolean;
+}
+
+/**
+ * Saisie de la methode Meyer / DIN 1045 (version 3 du format).
+ *
+ * Elle porte sa PROPRE geometrie (`h`, `d1`) et sa propre resistance en
+ * traction (`fctm`), independantes de `geometry` et de `concrete` : la
+ * methode s'emploie couramment en pre-dimensionnement, sur une epaisseur
+ * qu'on fait varier avant meme d'avoir arrete la section. Les lier
+ * interdirait cet usage.
+ *
+ * `Es` et `b` ne sont pas du modele : ce sont les defauts de
+ * `meyerRestraintReinforcement` (200000 MPa, 1000 mm), et les aires sortent
+ * par metre de largeur.
+ */
+export interface MeyerModel {
+  /** Epaisseur de l'element (mm). */
+  h: number;
+  /** Enrobage A L'AXE des barres (mm). */
+  d1: number;
+  /** Diametre des barres (mm). */
+  ds: number;
+  /** Ouverture de fissure visee (mm). */
+  wk: number;
+  /** Resistance moyenne en traction a 28 jours (MPa). */
+  fctm: number;
+  /** Facteur d'age `f_ct,eff / f_ctm`. */
+  kzt: number;
+  cas: 'traction' | 'flexion';
+  bridage: 'exterieur' | 'interieur';
+  /** Interpolation du facteur `k`. Absent : `lineaire`. */
+  kmode?: 'lineaire' | 'parabolique';
+}
+
 export type GeometryModel =
   | { kind: 'rectangle'; width: number; height: number }
   | { kind: 'polygon'; vertices: PointModel[] }
@@ -173,4 +273,33 @@ export interface SectionModel {
    * aucune, ou une seule. Absentes, elles ne sont pas inventees.
    */
   serviceActions?: ServiceActionsModel;
+  /**
+   * Type d'element au sens du §9 (version 3). OPTIONNEL : absent d'un fichier
+   * anterieur, et absent d'un modele dont on ne verifie que la flexion.
+   */
+  elementType?: ElementTypeModel;
+  /** Effort tranchant et cadres (version 3). Voir `ShearModel`. */
+  shear?: ShearModel;
+  /** Deformation genee, §7.3.2 (version 3). Voir `RestraintModel`. */
+  restraint?: RestraintModel;
+  /** Saisie de la methode Meyer (version 3). Voir `MeyerModel`. */
+  meyer?: MeyerModel;
 }
+
+/**
+ * LA FRONTIERE DU FORMAT, etablie en session 10 et tenue depuis :
+ *
+ *   ce qui decrit la STRUCTURE et son CHARGEMENT se sauvegarde ;
+ *   ce qui decrit une HYPOTHESE DE VERIFICATION se re-choisit.
+ *
+ * C'est pourquoi le coefficient d'equivalence `n`, l'ouverture admissible
+ * `w_max` et le coefficient `beta` du service n'entrent pas dans le modele :
+ * ils ne disent rien de l'ouvrage, seulement de la maniere dont on l'examine
+ * ce jour-la. Un fichier qui les porterait figerait une hypothese de travail
+ * dans une donnee d'ouvrage, et la ferait ressortir des mois plus tard sans
+ * que personne se souvienne de l'avoir choisie.
+ *
+ * `cot theta` est le cas limite, tranche dans l'autre sens et assume : c'est
+ * un choix d'ingenieur, mais il conditionne le ferraillage retenu et n'a plus
+ * de sens separe de lui.
+ */

@@ -13,6 +13,11 @@ import {
   type ReinforcementModel,
   type BarSpecModel,
   type RowFaceModel,
+  type ElementTypeModel,
+  type ShearModel,
+  type ShearLinksModel,
+  type RestraintModel,
+  type MeyerModel,
 } from './model-format';
 
 /**
@@ -101,6 +106,30 @@ function entierPositifOuNul(v: unknown, chemin: string): number {
 function chaine(v: unknown, chemin: string): string {
   if (typeof v !== 'string') echec(chemin, `chaine attendue, recu ${rendre(v)}`);
   return v;
+}
+
+function booleen(v: unknown, chemin: string): boolean {
+  if (typeof v !== 'boolean') echec(chemin, `booleen attendu, recu ${rendre(v)}`);
+  return v;
+}
+
+/**
+ * Lit une valeur d'ENUMERATION, en nommant a la fois celle qui a ete lue et
+ * celles qui etaient admises. C'est l'erreur que produit un fichier edite a
+ * la main — un `elementType` ecrit « poutre » plutot que `beam` — et rendre
+ * la seule liste des valeurs admises obligerait a la comparer soi-meme.
+ *
+ * Rendue par `find` sur la liste des valeurs, comme `face` le fait deja : le
+ * retrecissement de type survit ainsi a la fusion par spread, ce qu'une
+ * comparaison en ligne ne garantit pas (voir `endpointsOptionnel`).
+ */
+function enumere<T extends string>(v: unknown, chemin: string, valeurs: readonly T[]): T {
+  const s = chaine(v, chemin);
+  const trouvee = valeurs.find((x) => x === s);
+  if (trouvee === undefined) {
+    echec(chemin, `valeur inconnue ${JSON.stringify(s)} (attendu ${valeurs.join(', ')})`);
+  }
+  return trouvee;
 }
 
 function optionnel<T>(v: unknown, chemin: string, lire: (v: unknown, c: string) => T): T | undefined {
@@ -309,6 +338,78 @@ function sollicitationsService(v: unknown, chemin: string): ServiceActionsModel 
   };
 }
 
+const TYPES_D_ELEMENT: readonly ElementTypeModel[] = ['beam', 'slab', 'column'];
+const TYPES_DE_GENE: readonly RestraintModel['type'][] = ['central', 'bending'];
+const CAS_MEYER: readonly MeyerModel['cas'][] = ['traction', 'flexion'];
+const BRIDAGES_MEYER: readonly MeyerModel['bridage'][] = ['exterieur', 'interieur'];
+const MODES_K_MEYER: readonly NonNullable<MeyerModel['kmode']>[] = ['lineaire', 'parabolique'];
+
+function cadres(v: unknown, chemin: string): ShearLinksModel {
+  const o = objet(v, chemin);
+  return {
+    Asw: positif(o.Asw, `${chemin}.Asw`),
+    s: positif(o.s, `${chemin}.s`),
+    fywk: positif(o.fywk, `${chemin}.fywk`),
+  };
+}
+
+/**
+ * Lit le bloc d'effort tranchant. `V_Ed` est un nombre QUELCONQUE : son signe
+ * depend de la convention de l'appui considere et `verifyShear` n'en retient
+ * que le module. `cotTheta` n'est ici que verifie positif — c'est le §6.2.3(2)
+ * qui en fixe le domaine, et `shearWithLinks` qui refuse d'en sortir. Deux
+ * endroits pour la meme regle normative en feraient deux regles.
+ */
+function tranchant(v: unknown, chemin: string): ShearModel {
+  const o = objet(v, chemin);
+  const links = optionnel(o.links, `${chemin}.links`, cadres);
+  const cotTheta = optionnel(o.cotTheta, `${chemin}.cotTheta`, positif);
+  return {
+    V_Ed: nombre(o.V_Ed, `${chemin}.V_Ed`),
+    ...(links !== undefined ? { links } : {}),
+    ...(cotTheta !== undefined ? { cotTheta } : {}),
+  };
+}
+
+function gene(v: unknown, chemin: string): RestraintModel {
+  const o = objet(v, chemin);
+  const fctEff = optionnel(o.fctEff, `${chemin}.fctEff`, positif);
+  const sigmaS = optionnel(o.sigmaS, `${chemin}.sigmaS`, positif);
+  const effectiveZoneOnly = optionnel(
+    o.effectiveZoneOnly,
+    `${chemin}.effectiveZoneOnly`,
+    booleen
+  );
+  return {
+    type: enumere(o.type, `${chemin}.type`, TYPES_DE_GENE),
+    ...(fctEff !== undefined ? { fctEff } : {}),
+    ...(sigmaS !== undefined ? { sigmaS } : {}),
+    ...(effectiveZoneOnly !== undefined ? { effectiveZoneOnly } : {}),
+  };
+}
+
+/**
+ * Lit la saisie Meyer. Les six grandeurs sont strictement positives, comme
+ * `meyerRestraintReinforcement` l'exige lui-meme : un `k_zt` nul annulerait
+ * `f_ct,eff` et une epaisseur nulle n'a pas de sens. Les refuser ici les
+ * nomme par leur chemin, ce que l'erreur du module de calcul ne fait pas.
+ */
+function meyer(v: unknown, chemin: string): MeyerModel {
+  const o = objet(v, chemin);
+  const kmode = optionnel(o.kmode, `${chemin}.kmode`, (x, c) => enumere(x, c, MODES_K_MEYER));
+  return {
+    h: positif(o.h, `${chemin}.h`),
+    d1: positif(o.d1, `${chemin}.d1`),
+    ds: positif(o.ds, `${chemin}.ds`),
+    wk: positif(o.wk, `${chemin}.wk`),
+    fctm: positif(o.fctm, `${chemin}.fctm`),
+    kzt: positif(o.kzt, `${chemin}.kzt`),
+    cas: enumere(o.cas, `${chemin}.cas`, CAS_MEYER),
+    bridage: enumere(o.bridage, `${chemin}.bridage`, BRIDAGES_MEYER),
+    ...(kmode !== undefined ? { kmode } : {}),
+  };
+}
+
 /**
  * Lit un modele depuis sa representation JSON, en validant tout. Un fichier
  * s'edite au bloc-notes, se tronque a la copie, se produit par un autre
@@ -361,6 +462,18 @@ export function parseModel(json: string): SectionModel {
   // n'est pas encore saisi.
   const serviceActions = optionnel(o.serviceActions, 'serviceActions', sollicitationsService);
 
+  // Blocs de la version 3, INDEPENDAMMENT optionnels, exactement comme
+  // `serviceActions` l'est depuis la version 2 : un fichier plus ancien n'en
+  // porte aucun, un fichier de version 3 peut n'en porter qu'un seul, et
+  // aucun n'est complete par un defaut. Une gene inventee ferait afficher une
+  // armature minimale que personne n'a demandee.
+  const elementType = optionnel(o.elementType, 'elementType', (v, c) =>
+    enumere(v, c, TYPES_D_ELEMENT)
+  );
+  const shear = optionnel(o.shear, 'shear', tranchant);
+  const restraint = optionnel(o.restraint, 'restraint', gene);
+  const meyerLu = optionnel(o.meyer, 'meyer', meyer);
+
   return {
     formatVersion,
     engineVersion: chaine(o.engineVersion, 'engineVersion'),
@@ -372,6 +485,10 @@ export function parseModel(json: string): SectionModel {
     reinforcement,
     action: sollicitation(o.action, 'action'),
     ...(serviceActions !== undefined ? { serviceActions } : {}),
+    ...(elementType !== undefined ? { elementType } : {}),
+    ...(shear !== undefined ? { shear } : {}),
+    ...(restraint !== undefined ? { restraint } : {}),
+    ...(meyerLu !== undefined ? { meyer: meyerLu } : {}),
   };
 }
 

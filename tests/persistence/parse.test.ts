@@ -192,7 +192,7 @@ describe('parseModel', () => {
   });
 });
 
-describe('parseModel : les deux versions du format', () => {
+describe('parseModel : les versions du format', () => {
   it('lit la version 1, ou les sollicitations de service n existent pas', () => {
     // C'est la garantie de retrocompatibilite : tout fichier deja enregistre
     // par l'utilisateur porte formatVersion 1. Une egalite stricte avec
@@ -206,9 +206,9 @@ describe('parseModel : les deux versions du format', () => {
     expect(lu.serviceActions).toBeUndefined();
   });
 
-  it('la version courante est 2 et les deux versions sont lues', () => {
-    expect(FORMAT_VERSION).toBe(2);
-    expect([...SUPPORTED_FORMAT_VERSIONS]).toEqual([1, 2]);
+  it('la version courante est 3 et les trois versions sont lues', () => {
+    expect(FORMAT_VERSION).toBe(3);
+    expect([...SUPPORTED_FORMAT_VERSIONS]).toEqual([1, 2, 3]);
   });
 
   it('lit les deux combinaisons de service', () => {
@@ -243,13 +243,13 @@ describe('parseModel : les deux versions du format', () => {
     expect(seuleQp.serviceActions?.characteristic).toBeUndefined();
   });
 
-  it('refuse une version 3, en nommant les versions qu il sait lire', () => {
+  it('refuse une version 4, en nommant les versions qu il sait lire', () => {
     const json = avecAlteration((m) => {
-      m.formatVersion = 3;
+      m.formatVersion = 4;
     });
     expect(() => parseModel(json)).toThrow(/formatVersion/);
-    expect(() => parseModel(json)).toThrow(/3/);
-    expect(() => parseModel(json)).toThrow(/1, 2/);
+    expect(() => parseModel(json)).toThrow(/4/);
+    expect(() => parseModel(json)).toThrow(/1, 2, 3/);
   });
 
   it('refuse un serviceActions mal forme en nommant le champ fautif', () => {
@@ -298,6 +298,151 @@ describe('parseModel : les deux versions du format', () => {
       })
     );
     expect(lu.serviceActions?.quasiPermanent).toEqual({ N: -45, M: 0 });
+  });
+});
+
+/**
+ * Blocs de la version 3 : type d'element, effort tranchant, deformation genee
+ * (§7.3.2) et methode Meyer. Tous OPTIONNELS et INDEPENDANTS les uns des
+ * autres — c'est le mecanisme meme qui a permis a la version 2 de ne rendre
+ * illisible aucun fichier deja enregistre.
+ */
+describe('parseModel : les blocs de la version 3', () => {
+  const blocsComplets = {
+    elementType: 'beam',
+    shear: { V_Ed: 180, links: { Asw: 100.5, s: 200, fywk: 500 }, cotTheta: 2.0 },
+    restraint: { type: 'central', fctEff: 1.8, sigmaS: 320, effectiveZoneOnly: true },
+    meyer: {
+      h: 800, d1: 50, ds: 16, wk: 0.2, fctm: 2.9, kzt: 0.5,
+      cas: 'traction', bridage: 'exterieur', kmode: 'parabolique',
+    },
+  };
+
+  it('lit un fichier de version 2 : aucun des quatre blocs n est invente', () => {
+    const json = avecAlteration((m) => {
+      m.formatVersion = 2;
+      m.serviceActions = { quasiPermanent: { N: -90, M: 60 } };
+    });
+    const lu = parseModel(json);
+    expect(lu.formatVersion).toBe(2);
+    expect(lu.serviceActions).toEqual({ quasiPermanent: { N: -90, M: 60 } });
+    expect(lu.elementType).toBeUndefined();
+    expect(lu.shear).toBeUndefined();
+    expect(lu.restraint).toBeUndefined();
+    expect(lu.meyer).toBeUndefined();
+  });
+
+  it('lit les quatre blocs d une version 3 complete', () => {
+    const lu = parseModel(avecAlteration((m) => Object.assign(m, blocsComplets)));
+    expect(lu.elementType).toBe('beam');
+    expect(lu.shear).toEqual({
+      V_Ed: 180,
+      links: { Asw: 100.5, s: 200, fywk: 500 },
+      cotTheta: 2.0,
+    });
+    expect(lu.restraint).toEqual({
+      type: 'central',
+      fctEff: 1.8,
+      sigmaS: 320,
+      effectiveZoneOnly: true,
+    });
+    expect(lu.meyer).toEqual({
+      h: 800, d1: 50, ds: 16, wk: 0.2, fctm: 2.9, kzt: 0.5,
+      cas: 'traction', bridage: 'exterieur', kmode: 'parabolique',
+    });
+  });
+
+  it('accepte chaque bloc isolement : les quatre sont independamment optionnels', () => {
+    for (const [nom, valeur] of Object.entries(blocsComplets)) {
+      const lu = parseModel(avecAlteration((m) => { m[nom] = valeur; })) as unknown as Record<
+        string,
+        unknown
+      >;
+      expect(lu[nom]).not.toBeUndefined();
+      for (const autre of Object.keys(blocsComplets)) {
+        if (autre !== nom) expect(lu[autre]).toBeUndefined();
+      }
+    }
+  });
+
+  it('accepte un tranchant sans cadres et sans cot theta : seul V_Ed est exige', () => {
+    // Un effort tranchant se saisit avant d'avoir choisi les cadres, et le
+    // §6.2.2 rend deja un verdict sans eux. Exiger `links` interdirait
+    // d'enregistrer un cas en cours d'etude.
+    const lu = parseModel(avecAlteration((m) => { m.shear = { V_Ed: 120 }; }));
+    expect(lu.shear).toEqual({ V_Ed: 120 });
+    expect(lu.shear?.links).toBeUndefined();
+    expect(lu.shear?.cotTheta).toBeUndefined();
+  });
+
+  it('accepte un V_Ed nul ou negatif : seul son module est confronte', () => {
+    expect(parseModel(avecAlteration((m) => { m.shear = { V_Ed: 0 }; })).shear).toEqual({ V_Ed: 0 });
+    expect(parseModel(avecAlteration((m) => { m.shear = { V_Ed: -180 }; })).shear).toEqual({
+      V_Ed: -180,
+    });
+  });
+
+  it('accepte une gene et une saisie Meyer reduites a leurs champs obligatoires', () => {
+    const lu = parseModel(
+      avecAlteration((m) => {
+        m.restraint = { type: 'bending' };
+        m.meyer = {
+          h: 500, d1: 40, ds: 12, wk: 0.3, fctm: 2.6, kzt: 1.0,
+          cas: 'flexion', bridage: 'interieur',
+        };
+      })
+    );
+    expect(lu.restraint).toEqual({ type: 'bending' });
+    expect(lu.meyer?.kmode).toBeUndefined();
+  });
+
+  it('refuse un bloc mal forme en nommant le champ fautif', () => {
+    expect(() =>
+      parseModel(avecAlteration((m) => { m.shear = { links: { Asw: 100, s: 200, fywk: 500 } }; }))
+    ).toThrow(/shear\.V_Ed/);
+
+    expect(() =>
+      parseModel(avecAlteration((m) => { m.shear = { V_Ed: 180, links: { Asw: 100, s: 0, fywk: 500 } }; }))
+    ).toThrow(/shear\.links\.s/);
+
+    expect(() =>
+      parseModel(avecAlteration((m) => { m.meyer = { ...blocsComplets.meyer, kzt: undefined }; }))
+    ).toThrow(/meyer\.kzt/);
+
+    expect(() =>
+      parseModel(avecAlteration((m) => { m.restraint = { type: 'central', fctEff: -1 }; }))
+    ).toThrow(/restraint\.fctEff/);
+
+    expect(() =>
+      parseModel(avecAlteration((m) => { m.restraint = { type: 'central', effectiveZoneOnly: 'oui' }; }))
+    ).toThrow(/restraint\.effectiveZoneOnly/);
+
+    expect(() => parseModel(avecAlteration((m) => { m.shear = 180; }))).toThrow(/shear/);
+  });
+
+  it('refuse une valeur d enumeration inconnue, en nommant celle qui a ete lue', () => {
+    // L'erreur qu'un fichier edite a la main produira : le type d'element
+    // ecrit en francais, alors que le modele attend les valeurs du noyau.
+    const francais = avecAlteration((m) => { m.elementType = 'poutre'; });
+    expect(() => parseModel(francais)).toThrow(/elementType/);
+    expect(() => parseModel(francais)).toThrow(/poutre/);
+    expect(() => parseModel(francais)).toThrow(/beam/);
+
+    expect(() =>
+      parseModel(avecAlteration((m) => { m.meyer = { ...blocsComplets.meyer, cas: 'cisaillement' }; }))
+    ).toThrow(/meyer\.cas/);
+
+    expect(() =>
+      parseModel(avecAlteration((m) => { m.meyer = { ...blocsComplets.meyer, bridage: 'externe' }; }))
+    ).toThrow(/meyer\.bridage/);
+
+    expect(() =>
+      parseModel(avecAlteration((m) => { m.meyer = { ...blocsComplets.meyer, kmode: 'quadratique' }; }))
+    ).toThrow(/meyer\.kmode/);
+
+    expect(() =>
+      parseModel(avecAlteration((m) => { m.restraint = { type: 'centree' }; }))
+    ).toThrow(/restraint\.type/);
   });
 });
 
