@@ -443,3 +443,95 @@ label.large > input {
   background: var(--appui);
   font-size: 0.85rem;
 }
+
+/* --- Diagrammes d'interaction --- */
+
+/*
+ * Le diagramme occupe la colonne centrale, sous le dessin de la section :
+ * c'est la meme section vue autrement, les deux se lisent ensemble. En une
+ * seule colonne, il reprend toute la largeur.
+ */
+#diagramme {
+  grid-column: 2;
+}
+
+#diagramme h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* Separe le second graphe du premier quand le domaine My-Mz est trace. */
+#diagramme > * + h2 {
+  margin-top: 1.25rem;
+}
+
+.plot {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+  border: 1px solid var(--trait);
+  border-radius: 4px;
+}
+
+.plot-cadre {
+  fill: #fff;
+  stroke: var(--trait);
+  stroke-width: 1;
+}
+
+.plot-axe {
+  stroke: var(--trait);
+  stroke-width: 1;
+}
+
+.plot-graduation {
+  stroke: var(--trait);
+  stroke-width: 1;
+}
+
+.plot-etiquette-x,
+.plot-etiquette-y,
+.plot-libelle-x,
+.plot-libelle-y,
+.plot-marqueur-libelle {
+  fill: #4a4842;
+  font-size: 9px;
+}
+
+.plot-libelle-x,
+.plot-libelle-y {
+  fill: var(--encre);
+  font-size: 10px;
+}
+
+/* Le contour resistant : c'est la limite, elle se lit d'un trait ferme. */
+.plot-domaine {
+  stroke: var(--compression);
+  stroke-width: 1.6;
+}
+
+/*
+ * Le point sollicitant. Il est trace MEME hors domaine — c'est precisement
+ * quand la section ne passe pas qu'on veut voir de combien, et dans quelle
+ * direction.
+ */
+.plot-sollicitation {
+  fill: var(--traction);
+  stroke: #fff;
+  stroke-width: 1;
+}
+
+/* Lecture geometrique du taux d'exploitation : origine -> point -> contour. */
+.plot-rayon {
+  stroke: var(--traction);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+@media (max-width: 60rem) {
+  #diagramme {
+    grid-column: 1 / -1;
+  }
+}

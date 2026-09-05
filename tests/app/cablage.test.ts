@@ -156,3 +156,61 @@ describe('le mode proportionnel ne part jamais tout seul', () => {
     expect(dom.window.document.querySelector('select[data-champ="mode"]')).toBeNull();
   });
 });
+
+/**
+ * Le diagramme d'interaction N-M, trace en continu avec le reste.
+ *
+ * Il peut l'etre parce qu'il ne coute rien : `interactionDiagramNM` ne resout
+ * RIEN — chaque profondeur d'axe neutre donne son couple (N, M) par une simple
+ * integration. Mesure le 2026-09-04 : 3 a 9 ms pour 72 a 200 points, contre 25
+ * a 120 ms pour le recalcul complet deja en place.
+ */
+describe('diagramme N-M', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function diagramme(dom: JSDOM): HTMLElement {
+    const element = dom.window.document.querySelector('#diagramme');
+    if (element === null) throw new Error('la zone #diagramme est absente de la page');
+    return element as HTMLElement;
+  }
+
+  it('est trace des le chargement, sans aucun clic', async () => {
+    const dom = await monterApplication();
+    expect(diagramme(dom).querySelector('svg')).not.toBeNull();
+  });
+
+  it('ne contient jamais NaN', async () => {
+    // Un NaN dans un attribut SVG ne leve rien : il efface silencieusement le
+    // trace. Aucune assertion de forme ne le verrait, celle-ci si.
+    const dom = await monterApplication();
+    expect(diagramme(dom).innerHTML).not.toContain('NaN');
+  });
+
+  it('deplace le point sollicitant quand le moment change', async () => {
+    const dom = await monterApplication();
+
+    saisir(dom, 'My', '100');
+    vi.advanceTimersByTime(500);
+    const premier = diagramme(dom).innerHTML;
+
+    saisir(dom, 'My', '250');
+    vi.advanceTimersByTime(500);
+
+    expect(diagramme(dom).innerHTML).not.toBe(premier);
+    expect(diagramme(dom).innerHTML).not.toContain('NaN');
+  });
+
+  it('avertit que le point sort du plan du graphe en flexion deviee', async () => {
+    // Le modele par defaut porte Mz = 40 : le point sollicitant n'appartient
+    // PAS au plan (N, My). Le graphe reste exact, mais il ne dit plus rien du
+    // verdict — il faut l'ecrire plutot que de laisser croire le contraire.
+    const dom = await monterApplication();
+    expect(diagramme(dom).textContent).toMatch(/deviee/i);
+
+    saisir(dom, 'Mz', '0');
+    vi.advanceTimersByTime(500);
+
+    expect(diagramme(dom).textContent).not.toMatch(/deviee/i);
+  });
+});

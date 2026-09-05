@@ -10,7 +10,9 @@ import type { SectionModel, VerificationResult, ResolvedModel, NeutralAxisState 
 import { formToModel, modelToForm, FormError } from './form';
 import { rectangularRebarLayout, rebarRow, formatRow } from '../../src/index';
 import type { FormState, RowInput, FreeRowInput } from './form';
+import { interactionDiagramNM } from '../../src/index';
 import { outlineOf, boundingBox, neutralAxisSegment, barRadius, splitByLine, zetaOf } from './draw';
+import { plotSvg } from './plot';
 import { effectiveDepth, simplifiedLeverArm } from './lever-arm';
 import { formatNumber, formatAngleDegrees, formatUtilization } from './format';
 import {
@@ -402,6 +404,54 @@ function dessiner(
   return `${svg}<p class="legende"><span class="c">zone comprimee</span><span class="t">zone tendue</span><span class="n">axe neutre</span><span>cercles : resultantes, reliees par le bras de levier</span><span>origine du repere au centroide, y vers la droite, z vers le bas</span></p>`;
 }
 
+// --- Diagrammes d'interaction ----------------------------------------------
+
+/**
+ * Diagramme N-M, trace avec le reste a chaque recalcul.
+ *
+ * Il peut l'etre parce qu'il ne coute rien : `interactionDiagramNM` ne resout
+ * RIEN — chaque profondeur d'axe neutre donne son couple (N, M) par une simple
+ * integration. Mesure le 2026-09-04 : 3 a 9 ms pour 72 a 200 points, contre 25
+ * a 120 ms pour le recalcul complet. On retient 120 points, ou la courbe est
+ * lisse pour moins de 10 ms.
+ *
+ * A ne pas confondre avec le domaine My-Mz ci-dessous, qui coute deux ordres
+ * de grandeur de plus et ne part JAMAIS tout seul.
+ */
+function dessinerDiagrammeNM(resolu: ResolvedModel): string {
+  const points = interactionDiagramNM(resolu.section, resolu.norm, { steps: 120 });
+  const N = resolu.action.N;
+  const My = resolu.action.My;
+  const Mz = resolu.action.Mz;
+
+  const svg = plotSvg([{ points: points.map((p) => ({ x: p.N, y: p.M })), classe: 'plot-domaine' }], {
+    xLabel: 'N (kN, positif en compression)',
+    yLabel: 'My (kN.m)',
+    markers: [{ point: { x: N, y: My }, classe: 'plot-sollicitation', libelle: 'sollicitation' }],
+  });
+
+  // Le contour n'est pas ferme du cote traction, et ce n'est pas un oubli :
+  // le noyau ne parcourt que la branche du pivot beton, il n'atteint jamais la
+  // traction pure. Le dire, plutot que de dessiner un domaine non calcule.
+  const limites =
+    '<p class="legende">' +
+    '<span>contour OUVERT du cote traction : seule la branche du pivot beton est parcourue</span>' +
+    '<span>graphe de la flexion droite autour de y</span>' +
+    '</p>';
+
+  // Flexion deviee : le point sollicitant n'appartient plus au plan de ce
+  // graphe. Le trace reste exact mais ne dit plus rien du verdict. L'ecrire,
+  // plutot que d'afficher un point trompeusement rassurant — ou l'inverse.
+  const avertissement =
+    Mz !== 0
+      ? `<p class="note"><strong>Flexion deviee</strong> (Mz = ${formatNumber(Mz, 1)} kN.m) :
+         le point sollicitant ne se trouve pas dans le plan de ce graphe, qui ne peut donc
+         pas rendre le verdict. C'est le domaine My-Mz ci-dessous qui fait foi.</p>`
+      : '';
+
+  return `<h2>Diagramme d'interaction N-My</h2>${svg}${limites}${avertissement}`;
+}
+
 // --- Resultat ---------------------------------------------------------------
 
 function ligne(libelle: string, valeur: string): string {
@@ -577,6 +627,7 @@ function htmlResultat(
 
 const zoneSaisie = document.querySelector<HTMLElement>('#saisie');
 const zoneSection = document.querySelector<HTMLElement>('#section');
+const zoneDiagramme = document.querySelector<HTMLElement>('#diagramme');
 const zoneResultat = document.querySelector<HTMLElement>('#resultat');
 
 function afficherErreur(message: string): void {
@@ -620,6 +671,8 @@ function recalculer(mode?: 'proportional'): void {
     dernierDessin = dessiner(resolu, resultat, etatAxe);
     zoneResultat.innerHTML = dernierResultat;
     zoneSection.innerHTML = dernierDessin;
+
+    if (zoneDiagramme) zoneDiagramme.innerHTML = dessinerDiagrammeNM(resolu);
 
     const derives = document.querySelector('#derives');
     if (derives) {
