@@ -94,8 +94,12 @@ export type Issue<T> = { resultat: T } | { motif: string };
  * Ce qui n a pas ete calcule s affiche comme le reste : un titre, un motif,
  * et rien qui ressemble a un chiffre. Surtout pas les `NaN` que les modules
  * rendent sur leur chemin d echec.
+ *
+ * Exporte parce que `checks-view.ts` en a exactement le meme besoin : un
+ * module qui ne s applique pas — geometrie hors domaine, entree manquante —
+ * doit s afficher partout de la meme facon.
  */
-function sansCalcul(titre: string, note: string): BlocService {
+export function sansCalcul(titre: string, note: string): BlocService {
   return { titre, lignes: [], verdict: null, note };
 }
 
