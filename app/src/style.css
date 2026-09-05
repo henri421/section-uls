@@ -556,19 +556,51 @@ label.large > input {
   font-weight: 600;
 }
 
-.groupe.service {
+.groupe.bloc {
   padding-left: 0.6rem;
   border-left: 2px solid var(--appui);
 }
 
 /*
- * Verdict de service : la meme grammaire de couleurs que celui de l'ELU,
+ * Verdict d'un bloc : la meme grammaire de couleurs que celui de l'ELU,
  * mais en retrait — il conclut un bloc, pas la page.
  */
-.verdict.service {
+.verdict.bloc {
   margin: 0.4rem 0 0;
   padding: 0.35rem 0.55rem;
   font-size: 0.85rem;
+}
+
+/* --- Tranchant, dispositions et deformation genee --- */
+
+/*
+ * Troisieme famille de verifications du panneau, apres la flexion et le
+ * service. Elle en est separee comme le service l'est de l'ELU : ces blocs
+ * concluent chacun POUR EUX-MEMES, et aucun ne modifie le verdict de flexion.
+ */
+#verifications {
+  margin-top: 1.1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--trait);
+}
+
+#verifications h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/*
+ * L'avertissement de non-persistance : il doit se voir sans crier. Meme
+ * couleur d'attention que la flexion deviee — c'est une limite connue, pas
+ * un echec de calcul.
+ */
+.note-volatile {
+  margin: 0 0 0.6rem;
+  padding: 0.45rem 0.55rem;
+  border-left: 3px solid var(--attention);
+  background: #fdf6e3;
+  color: #6b5400;
 }
 
 /*

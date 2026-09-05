@@ -3,7 +3,7 @@ import type {
   GeometryModel, ReinforcementModel,
   ServiceActionModel, ServiceActionsModel,
 } from '../../src/index';
-import type { LoadingMode } from '../../src/index';
+import type { LoadingMode, ElementType, RestraintType, ShearReinforcement } from '../../src/index';
 import { ec2Recommended, FORMAT_VERSION, ENGINE_VERSION } from '../../src/index';
 import { evaluateExpression, ExpressionError } from './expression';
 
@@ -78,12 +78,53 @@ export interface FormState {
    * a leurs valeurs recommandees.
    */
   serviceN: string; crackWMax: string; curvatureBeta: string;
+
+  /**
+   * Effort tranchant (§6.2), dispositions constructives (§9) et deformation
+   * genee (§7.3.2).
+   *
+   * ⚠ AUCUN DE CES CHAMPS N'EST ENREGISTRE DANS LE MODELE. Le format n'a pas
+   * de version qui les porte, et c'est un choix de vitesse assume : ils
+   * reprennent donc leur valeur de depart a chaque chargement, exactement
+   * comme les trois parametres de service assumes. La limite est ECRITE a
+   * l'ecran a cote de la saisie — un utilisateur qui enregistre son modele et
+   * retrouve ses cadres effaces sans avertissement perdrait confiance dans
+   * tout le reste.
+   *
+   * `elementType` est une SAISIE, jamais une deduction : un 300x500 est une
+   * poutre ou un poteau selon son role, et les regles du §9 different.
+   */
+  elementType: ElementType;
+  V_Ed: string;
+  Asw: string; sCadres: string; fywk: string;
+  cotTheta: string;
+
+  restraintType: RestraintType;
+  fctEff: string; sigmaSZwang: string;
+  zoneEfficace: boolean;
 }
 
 /** Valeurs de depart des trois parametres assumes, telles qu'elles s'affichent. */
 export const SERVICE_N_PAR_DEFAUT = '15';
 export const CRACK_WMAX_PAR_DEFAUT = '0,3';
 export const CURVATURE_BETA_PAR_DEFAUT = '0,5';
+
+/**
+ * Valeurs de depart des verifications de la session 11.
+ *
+ * `V_Ed` part de zero et les cadres partent VIDES : ce sont une charge et un
+ * ferraillage, et la page n'en invente aucun — la meme regle que pour les
+ * sollicitations de service. Les resistances (`V_Rd,c`, `A_s,min`) restent
+ * calculees et affichees, ce qui est deja l'essentiel de l'information.
+ *
+ * `cot theta = 2,5` est le defaut de l'EC2 : il minimise les cadres et
+ * sollicite le plus les bielles.
+ */
+export const ELEMENT_TYPE_PAR_DEFAUT: ElementType = 'column';
+export const V_ED_PAR_DEFAUT = '0';
+export const FYWK_PAR_DEFAUT = '500';
+export const COT_THETA_PAR_DEFAUT = '2,5';
+export const RESTRAINT_TYPE_PAR_DEFAUT: RestraintType = 'central';
 
 export class FormError extends Error {}
 
@@ -169,6 +210,81 @@ export function parametresDeService(form: FormState): ParametresService {
     n: nombreRequis(form.serviceN, 'coefficient d equivalence n'),
     wMax: nombreRequis(form.crackWMax, 'ouverture limite w_max'),
     beta: nombreRequis(form.curvatureBeta, 'duree de chargement beta'),
+  };
+}
+
+// --- Parametres des verifications de tranchant, dispositions et Zwang ---
+
+/**
+ * Ce que la saisie apporte aux trois modules de la session 11, une fois
+ * evaluee.
+ *
+ * `cotTheta` n'est PAS borne ici : le noyau refuse lui-meme toute valeur hors
+ * de `[1 ; 2,5]` (§6.2.3(2)) avec un message qui nomme l'article, et son refus
+ * n'atteint que le bloc du tranchant. Le dupliquer ici transformerait un
+ * resultat d'un seul module en erreur de formulaire, qui bloquerait toute la
+ * page.
+ */
+export interface ParametresVerifications {
+  elementType: ElementType;
+  /** Effort tranchant sollicitant (kN). */
+  VEd: number;
+  /** Cadres declares, ou `undefined` : il n'y en a pas. */
+  cadres: ShearReinforcement | undefined;
+  cotTheta: number;
+  restraintType: RestraintType;
+  /** `undefined` : le module retient `f_ctm` a 28 jours. */
+  fctEff: number | undefined;
+  /** `undefined` : le module retient `f_yk`. */
+  sigmaS: number | undefined;
+  zoneEfficace: boolean;
+}
+
+const LIBELLE_CADRES = 'Armatures d effort tranchant';
+
+/**
+ * Les cadres se saisissent entierement ou pas du tout.
+ *
+ * Une aire sans espacement — ou l'inverse — est REFUSEE plutot que completee.
+ * Meme raison que pour les combinaisons de service : un `V_Rd,s` calcule sur
+ * un espacement que personne n'a donne s'afficherait comme les autres
+ * chiffres, et personne ne songerait a le mettre en doute.
+ */
+function cadresSaisis(form: FormState): ShearReinforcement | undefined {
+  const sansAire = form.Asw.trim() === '';
+  const sansEspacement = form.sCadres.trim() === '';
+
+  if (sansAire && sansEspacement) return undefined;
+  if (sansAire) {
+    throw new FormError(
+      `${LIBELLE_CADRES} : l aire A_sw est vide alors que l espacement est renseigne. ` +
+        'Les cadres se saisissent entierement, ou pas du tout.'
+    );
+  }
+  if (sansEspacement) {
+    throw new FormError(
+      `${LIBELLE_CADRES} : l espacement est vide alors que l aire A_sw est renseignee. ` +
+        'Les cadres se saisissent entierement, ou pas du tout.'
+    );
+  }
+
+  return {
+    Asw: nombreRequis(form.Asw, `${LIBELLE_CADRES} : aire A_sw`),
+    s: nombreRequis(form.sCadres, `${LIBELLE_CADRES} : espacement`),
+    fywk: nombreRequis(form.fywk, `${LIBELLE_CADRES} : f_ywk`),
+  };
+}
+
+export function parametresDeVerification(form: FormState): ParametresVerifications {
+  return {
+    elementType: form.elementType,
+    VEd: nombreRequis(form.V_Ed, 'effort tranchant V_Ed'),
+    cadres: cadresSaisis(form),
+    cotTheta: nombreRequis(form.cotTheta, 'cot theta'),
+    restraintType: form.restraintType,
+    fctEff: nombreOptionnel(form.fctEff, 'f_ct,eff'),
+    sigmaS: nombreOptionnel(form.sigmaSZwang, 'sigma_s de la deformation genee'),
+    zoneEfficace: form.zoneEfficace,
   };
 }
 
@@ -427,6 +543,17 @@ export function modelToForm(model: SectionModel): FormState {
     serviceN: SERVICE_N_PAR_DEFAUT,
     crackWMax: CRACK_WMAX_PAR_DEFAUT,
     curvatureBeta: CURVATURE_BETA_PAR_DEFAUT,
+
+    // Idem, et pour une raison de plus : le format ne les porte pas encore.
+    // Un fichier charge revient donc a ces valeurs de depart, ce que
+    // l'interface annonce a cote de la saisie.
+    elementType: ELEMENT_TYPE_PAR_DEFAUT,
+    V_Ed: V_ED_PAR_DEFAUT,
+    Asw: '', sCadres: '', fywk: FYWK_PAR_DEFAUT,
+    cotTheta: COT_THETA_PAR_DEFAUT,
+    restraintType: RESTRAINT_TYPE_PAR_DEFAUT,
+    fctEff: '', sigmaSZwang: '',
+    zoneEfficace: false,
   };
 
   switch (model.geometry.kind) {

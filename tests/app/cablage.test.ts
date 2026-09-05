@@ -60,6 +60,14 @@ function choisir(dom: JSDOM, nom: string, valeur: string): void {
   select.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 }
 
+function cocher(dom: JSDOM, nom: string, valeur: boolean): void {
+  const element = dom.window.document.querySelector(`input[type="checkbox"][data-champ="${nom}"]`);
+  if (element === null) throw new Error(`case a cocher "${nom}" absente du formulaire`);
+  const input = element as HTMLInputElement;
+  input.checked = valeur;
+  input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+}
+
 function resultat(dom: JSDOM): string {
   return dom.window.document.querySelector('#resultat')?.textContent ?? '';
 }
@@ -450,5 +458,216 @@ describe('verifications de service', () => {
 
     expect(service(dom).querySelector('.note-deviee')).toBeNull();
     expect(lignes(dom, 'contraintes')).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Les trois familles de verifications de la session 11 dans la page :
+ * effort tranchant (§6.2), dispositions constructives (§9) et armature
+ * minimale sous deformation genee (§7.3.2).
+ *
+ * Meme histoire que le service aux sessions 6 a 8 : les modules etaient
+ * livres et testes, mais appeles nulle part dans `app/`. L utilisateur, qui
+ * se sert de la page publiee, ne voyait que la flexion.
+ *
+ * Ces trois modules LEVENT hors du rectangle. Le garde-fou teste ici est
+ * celui de la session 10 : une exception qui remonterait au `try` global du
+ * recalcul effacerait tout le resultat de flexion parce qu un module
+ * OPTIONNEL n a pas pu s appliquer.
+ */
+describe('verifications de section : tranchant, dispositions, deformation genee', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function verifications(dom: JSDOM): Element {
+    const element = dom.window.document.querySelector('#resultat #verifications');
+    if (element === null) {
+      throw new Error('la section des verifications est absente du panneau de resultats');
+    }
+    return element;
+  }
+
+  function bloc(dom: JSDOM, nom: string): Element {
+    const element = verifications(dom).querySelector(`[data-bloc="${nom}"]`);
+    if (element === null) throw new Error(`le bloc "${nom}" est absent`);
+    return element;
+  }
+
+  function lignes(dom: JSDOM, nom: string): number {
+    return bloc(dom, nom).querySelectorAll('.ligne').length;
+  }
+
+  /** Valeur affichee en face d un libelle, telle qu elle est lue a l ecran. */
+  function valeur(dom: JSDOM, nomDuBloc: string, libelle: string): string {
+    for (const l of bloc(dom, nomDuBloc).querySelectorAll('.ligne')) {
+      if (l.querySelector('span')?.textContent === libelle) {
+        return l.querySelector('strong')?.textContent ?? '';
+      }
+    }
+    throw new Error(`aucune ligne "${libelle}" dans le bloc "${nomDuBloc}"`);
+  }
+
+  /** Nombre lu a l ecran, virgule decimale comprise. */
+  function nombre(texte: string): number {
+    const trouve = /-?[\d\s]+(?:,\d+)?/.exec(texte);
+    if (trouve === null) throw new Error(`aucun nombre dans "${texte}"`);
+    return Number(trouve[0].replace(/\s/g, '').replace(',', '.'));
+  }
+
+  function verdictElu(dom: JSDOM): string {
+    return dom.window.document.querySelector('#resultat > .verdict')?.textContent ?? '';
+  }
+
+  it('les trois blocs sont calcules des le chargement, sans aucun clic', async () => {
+    const dom = await monterApplication();
+
+    expect(bloc(dom, 'tranchant').textContent).toMatch(/6\.2/);
+    expect(bloc(dom, 'dispositions').textContent).toMatch(/§9/);
+    expect(bloc(dom, 'zwang').textContent).toMatch(/7\.3\.2/);
+
+    expect(lignes(dom, 'tranchant')).toBeGreaterThan(0);
+    expect(lignes(dom, 'dispositions')).toBeGreaterThan(0);
+    expect(lignes(dom, 'zwang')).toBeGreaterThan(0);
+
+    expect(verifications(dom).innerHTML).not.toContain('NaN');
+  });
+
+  it('la page ECRIT que ces saisies ne sont pas enregistrees dans le modele', async () => {
+    // Un utilisateur qui enregistre son modele et perd ses cadres sans
+    // avertissement perd confiance dans tout le reste.
+    const dom = await monterApplication();
+    const saisie = dom.window.document.querySelector('#saisie')?.textContent ?? '';
+    expect(saisie).toMatch(/pas (encore )?(enregistr|conserv)/i);
+  });
+
+  it('REGRESSION : une geometrie circulaire n efface PAS le resultat', async () => {
+    // `verifyShear` et `minimumRestraintArea` LEVENT hors du rectangle.
+    // Laisser l exception remonter au `try` global remplacerait tout le
+    // resultat de flexion par un message d erreur.
+    const dom = await monterApplication();
+    choisir(dom, 'geometryKind', 'circle');
+    vi.advanceTimersByTime(500);
+
+    expect(verdictElu(dom)).toMatch(/taux/i);
+
+    // Aucune exception brute n a fuite : le nom d une fonction du noyau ne
+    // doit jamais atteindre l ecran.
+    for (const nom of ['shearGeometry', 'verifyShear', 'minimumRestraintArea']) {
+      expect(resultat(dom)).not.toContain(nom);
+    }
+
+    expect(lignes(dom, 'tranchant')).toBe(0);
+    expect(bloc(dom, 'tranchant').textContent).toMatch(/rectangulaire/i);
+    expect(lignes(dom, 'zwang')).toBe(0);
+    expect(bloc(dom, 'zwang').textContent).toMatch(/rectangulaire/i);
+    expect(verifications(dom).innerHTML).not.toContain('NaN');
+
+    // Les dispositions d un POTEAU, elles, restent calculables sur un cercle :
+    // le §9.5.2 ne demande que l aire de beton. Sur une poutre en revanche,
+    // le b_t du §9.2.1.1 n a pas de definition, et le bloc le dit.
+    expect(lignes(dom, 'dispositions')).toBeGreaterThan(0);
+
+    choisir(dom, 'elementType', 'beam');
+    vi.advanceTimersByTime(500);
+    expect(lignes(dom, 'dispositions')).toBe(0);
+    expect(bloc(dom, 'dispositions').textContent).toMatch(/rectangulaire/i);
+    expect(verdictElu(dom)).toMatch(/taux/i);
+  });
+
+  it('changer V_Ed change le tranchant, PAS le verdict de flexion', async () => {
+    const dom = await monterApplication();
+    const eluAvant = verdictElu(dom);
+
+    saisir(dom, 'V_Ed', '90');
+    vi.advanceTimersByTime(500);
+    const premier = valeur(dom, 'tranchant', 'V_Ed');
+    expect(nombre(premier)).toBeCloseTo(90, 1);
+
+    saisir(dom, 'V_Ed', '260');
+    vi.advanceTimersByTime(500);
+
+    expect(nombre(valeur(dom, 'tranchant', 'V_Ed'))).toBeCloseTo(260, 1);
+    expect(verdictElu(dom)).toBe(eluAvant);
+  });
+
+  it('declarer des cadres fait apparaitre V_Rd,s et V_Rd,max', async () => {
+    const dom = await monterApplication();
+    expect(bloc(dom, 'tranchant').textContent).not.toContain('V_Rd,s');
+
+    saisir(dom, 'Asw', '100');
+    saisir(dom, 'sCadres', '200');
+    vi.advanceTimersByTime(500);
+
+    expect(bloc(dom, 'tranchant').textContent).toContain('V_Rd,s');
+    expect(bloc(dom, 'tranchant').textContent).toContain('V_Rd,max');
+    expect(verifications(dom).innerHTML).not.toContain('NaN');
+  });
+
+  it('un cot theta hors du §6.2.3(2) n efface que le bloc tranchant', async () => {
+    // Le noyau REFUSE la valeur plutot que de l ecreter en silence. Ce refus
+    // est un resultat du seul module concerne, pas une panne de la page.
+    const dom = await monterApplication();
+
+    saisir(dom, 'Asw', '100');
+    saisir(dom, 'sCadres', '200');
+    saisir(dom, 'cotTheta', '3');
+    vi.advanceTimersByTime(500);
+
+    expect(lignes(dom, 'tranchant')).toBe(0);
+    expect(bloc(dom, 'tranchant').textContent).toMatch(/6\.2\.3/);
+    expect(verdictElu(dom)).toMatch(/taux/i);
+    expect(lignes(dom, 'dispositions')).toBeGreaterThan(0);
+  });
+
+  it('passer de poutre a dalle fait disparaitre l exigence d armature d ame', async () => {
+    // Le §6.2.1(4) dispense les dalles du minimum d ame. L exiger
+    // declarerait non conformes toutes les dalles courantes.
+    const dom = await monterApplication();
+
+    choisir(dom, 'elementType', 'beam');
+    vi.advanceTimersByTime(500);
+    expect(bloc(dom, 'dispositions').textContent).toContain('rho_w');
+
+    choisir(dom, 'elementType', 'slab');
+    vi.advanceTimersByTime(500);
+    expect(bloc(dom, 'dispositions').textContent).not.toContain('rho_w');
+    expect(bloc(dom, 'dispositions').textContent).toMatch(/sans objet/i);
+    expect(verifications(dom).innerHTML).not.toContain('NaN');
+  });
+
+  it('cocher la zone efficace REDUIT l armature exigee sous deformation genee', async () => {
+    // Ecart assume au texte de l EN 1992-1-1, retenu par la pratique pour
+    // les pieces epaisses : l ecart est considerable, il doit se voir.
+    const dom = await monterApplication();
+    const avant = nombre(valeur(dom, 'zwang', 'A_s,min'));
+
+    cocher(dom, 'zoneEfficace', true);
+    vi.advanceTimersByTime(500);
+
+    const apres = nombre(valeur(dom, 'zwang', 'A_s,min'));
+    expect(apres).toBeLessThan(avant);
+    expect(bloc(dom, 'zwang').textContent).toMatch(/efficace/i);
+  });
+
+  it('un poteau n explose pas : le N de l ELU sert d effort normal du §9.5.2', async () => {
+    // `minimumLongitudinalArea` LEVE sur un poteau dont `N_Ed` est absent.
+    // La sollicitation ELU deja saisie le fournit — il n y a pas d autre
+    // effort normal a l ELU que celui-la.
+    const dom = await monterApplication();
+
+    choisir(dom, 'elementType', 'column');
+    vi.advanceTimersByTime(500);
+
+    expect(lignes(dom, 'dispositions')).toBeGreaterThan(0);
+    expect(resultat(dom)).not.toMatch(/minimumLongitudinalArea/);
+    const avec500 = nombre(valeur(dom, 'dispositions', 'A_s,min'));
+
+    // Le minimum du §9.5.2 vaut max(0,10·N_Ed/f_yd ; 0,002·A_c) : un effort
+    // normal dix fois plus grand doit le faire croitre. S il ne bougeait pas,
+    // c est que le N de l ELU ne serait pas celui du §9.5.2.
+    saisir(dom, 'N', '5000');
+    vi.advanceTimersByTime(500);
+
+    expect(nombre(valeur(dom, 'dispositions', 'A_s,min'))).toBeGreaterThan(avec500);
   });
 });

@@ -1,9 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { blocTranchant, blocDispositions, blocZwang } from '../../app/src/checks-view';
+import {
+  blocTranchant,
+  blocDispositions,
+  blocZwang,
+  obstacleTranchant,
+  obstacleDispositions,
+  obstacleZwang,
+} from '../../app/src/checks-view';
 import type { BlocService } from '../../app/src/service-view';
 import type { ShearResult, DetailingResult, RestraintResult } from '../../src/index';
 import {
   rectangularSection,
+  circularSection,
   createConcrete,
   createSteel,
   ec2Recommended,
@@ -298,5 +306,54 @@ describe('bloc de l armature minimale sous deformation genee', () => {
     expect(bloc.lignes).toHaveLength(0);
     expect(bloc.verdict).toBeNull();
     expect(bloc.note).toMatch(/geometrie non rectangulaire/);
+  });
+});
+
+// --- Gardes de domaine -------------------------------------------------------
+
+/**
+ * Les gardes sont interroges AVANT l appel, comme `obstacleFissuration` pour
+ * le service.
+ *
+ * Deux raisons, et la seconde est la plus importante : les messages du noyau
+ * commencent par le nom de la fonction qui leve (« shearGeometry : … »), ce
+ * qui n a aucun sens pour l utilisateur de la page publiee ; et le garde sait
+ * dire ce qui, malgre tout, reste calculable.
+ */
+describe('gardes de domaine', () => {
+  function pieu() {
+    return circularSection({
+      diameter: 600,
+      concrete: beton,
+      rebars: [{ y: 0, z: 200, area: 500, steel: acier }],
+    });
+  }
+
+  it('le rectangle ne rencontre aucun obstacle', () => {
+    expect(obstacleTranchant(poutre())).toBeNull();
+    expect(obstacleZwang(poutre())).toBeNull();
+    expect(obstacleDispositions(poutre(), 'beam')).toBeNull();
+    expect(obstacleDispositions(dalle(), 'slab')).toBeNull();
+  });
+
+  it('hors du rectangle, le motif est ecrit SANS le nom de la fonction du noyau', () => {
+    const motifs = [
+      obstacleTranchant(pieu()),
+      obstacleZwang(pieu()),
+      obstacleDispositions(pieu(), 'beam'),
+    ];
+
+    for (const motif of motifs) {
+      expect(motif).not.toBeNull();
+      expect(motif).toMatch(/rectangulaire/i);
+      expect(motif).not.toMatch(/shearGeometry|minimumLongitudinalArea|minimumRestraintArea/);
+    }
+  });
+
+  it('les dispositions d un POTEAU restent calculables hors du rectangle', () => {
+    // Le §9.5.2 ne demande que l aire de beton et l effort normal : ni b_t ni
+    // hauteur utile. Refuser le calcul la aussi priverait d un resultat qui
+    // existe.
+    expect(obstacleDispositions(pieu(), 'column')).toBeNull();
   });
 });

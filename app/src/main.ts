@@ -6,16 +6,28 @@ import {
   verifyServiceUniaxial,
   verifyCrackWidth,
   sectionCurvature,
+  verifyShear,
+  verifyDetailing,
+  minimumRestraintArea,
   FORMAT_VERSION,
   ENGINE_VERSION,
 } from '../../src/index';
 import type {
   SectionModel, VerificationResult, ResolvedModel, NeutralAxisState,
   Section, Action, ServiceResult, CrackResult, CurvatureResult,
+  ShearResult, DetailingResult, RestraintResult,
 } from '../../src/index';
-import { formToModel, modelToForm, parametresDeService, FormError } from './form';
+import {
+  formToModel,
+  modelToForm,
+  parametresDeService,
+  parametresDeVerification,
+  FormError,
+} from './form';
 import { rectangularRebarLayout, rebarRow, formatRow } from '../../src/index';
-import type { FormState, RowInput, FreeRowInput, ParametresService } from './form';
+import type {
+  FormState, RowInput, FreeRowInput, ParametresService, ParametresVerifications,
+} from './form';
 import {
   noteFlexionDeviee,
   obstacleFissuration,
@@ -24,6 +36,14 @@ import {
   blocCourbure,
 } from './service-view';
 import type { BlocService, Issue } from './service-view';
+import {
+  blocTranchant,
+  blocDispositions,
+  blocZwang,
+  obstacleTranchant,
+  obstacleDispositions,
+  obstacleZwang,
+} from './checks-view';
 import { interactionDiagramNM, interactionCurveAtN } from '../../src/index';
 import { outlineOf, boundingBox, neutralAxisSegment, barRadius, splitByLine, zetaOf } from './draw';
 import { plotSvg } from './plot';
@@ -98,6 +118,10 @@ function echapper(texte: string): string {
 
 function champTexte(champ: keyof FormState, libelle: string, valeur: string): string {
   return `<label><span>${libelle}</span><input type="text" inputmode="decimal" data-champ="${champ}" value="${echapper(valeur)}" /></label>`;
+}
+
+function champCase(champ: keyof FormState, libelle: string, coche: boolean): string {
+  return `<label class="case"><input type="checkbox" data-champ="${champ}"${coche ? ' checked' : ''} /><span>${libelle}</span></label>`;
 }
 
 function champZone(champ: keyof FormState, libelle: string, valeur: string, lignes: number): string {
@@ -213,6 +237,21 @@ function blocFerraillage(): string {
   return champZone('bars', 'Barres, une par ligne : y ; z ; aire', etat.bars, 8);
 }
 
+/**
+ * L'avertissement qui accompagne les saisies de la session 11.
+ *
+ * Le format du modele ne porte PAS encore ces champs — choix de vitesse
+ * assume. Le taire serait le pire des scenarios : un utilisateur enregistre
+ * son modele, le recharge, ne retrouve ni son effort tranchant ni ses cadres,
+ * et cesse alors de croire ce que la page affiche par ailleurs. On l'ecrit
+ * donc a cote de la saisie concernee, pas dans une documentation.
+ */
+const NON_ENREGISTRE =
+  `<p class="note note-volatile"><strong>Ces champs ne sont pas enregistres dans le modele.</strong>
+   Le format de fichier ne les porte pas encore : ils reprennent leurs valeurs de depart a chaque
+   chargement, et « Enregistrer » ne les conserve pas. La geometrie, le ferraillage et les
+   sollicitations, eux, sont bien enregistres.</p>`;
+
 function htmlFormulaire(): string {
   return `
   <fieldset>
@@ -260,6 +299,29 @@ function htmlFormulaire(): string {
   </fieldset>
 
   <fieldset>
+    <legend>Effort tranchant et dispositions (§6.2, §9)</legend>
+    ${NON_ENREGISTRE}
+    ${champChoix('elementType', 'Type d element', etat.elementType, [
+      ['beam', 'Poutre'],
+      ['slab', 'Dalle'],
+      ['column', 'Poteau'],
+    ])}
+    <p class="note">Le type d element est <strong>declare</strong>, jamais devine : un 300&times;500
+      est une poutre ou un poteau selon son role, et les regles du §9 different.</p>
+    ${champTexte('V_Ed', 'V_Ed (kN)', etat.V_Ed)}
+    <p class="sous-titre">Armatures d ame (vides = aucun cadre declare)</p>
+    ${champTexte('Asw', 'A_sw, aire d un cours (mm²)', etat.Asw)}
+    ${champTexte('sCadres', 'Espacement des cours s (mm)', etat.sCadres)}
+    ${champTexte('fywk', 'f_ywk des cadres (MPa)', etat.fywk)}
+    ${champTexte('cotTheta', 'cot theta (1 a 2,5)', etat.cotTheta)}
+    <p class="note"><em>cot theta</em> est un <strong>arbitrage</strong>, pas une constante :
+      2,5 minimise les cadres et sollicite le plus les bielles, 1 fait l inverse. Sections
+      <strong>rectangulaires</strong> seulement ; ni precontrainte, ni torsion, ni bielles
+      inclinees, ni verification au droit de l appui. Les valeurs du §9 sont celles
+      <strong>recommandees</strong> par l EN 1992-1-1 : une annexe nationale peut les modifier.</p>
+  </fieldset>
+
+  <fieldset>
     <legend>Sollicitations de service (ELS)</legend>
     <p class="note">Combinaisons EN 1990 <strong>differentes de l ELU</strong> et differentes entre
       elles : reprendre le moment de l ELU serait faux d un facteur 1,35 a 1,5. Flexion droite
@@ -284,6 +346,24 @@ function htmlFormulaire(): string {
       <em>w_max</em> depend de la classe d exposition (tableau 7.1N : 0,4 / 0,3 / 0,2 mm) ;
       <em>beta</em> vaut 0,5 en charge de longue duree ou repetee, 1,0 en charge courte.
       Les autres coefficients (k1, k2, k3, kt…) restent a leurs valeurs recommandees.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Deformation genee — Zwang (§7.3.2)</legend>
+    ${NON_ENREGISTRE}
+    ${champChoix('restraintType', 'Nature de la gene', etat.restraintType, [
+      ['central', 'Centree (retrait ou refroidissement empeches)'],
+      ['bending', 'De flexion (gradient thermique au jeune age)'],
+    ])}
+    ${champTexte('fctEff', 'f_ct,eff (MPa, vide = f_ctm a 28 jours)', etat.fctEff)}
+    ${champTexte('sigmaSZwang', 'sigma_s (MPa, vide = f_yk)', etat.sigmaSZwang)}
+    ${champCase('zoneEfficace', 'Calculer sur la seule zone tendue efficace', etat.zoneEfficace)}
+    <p class="note">Le defaut de <em>f_ct,eff</em> est le cas <strong>defavorable</strong> : la
+      fissuration des pieces massives survient a quelques jours, quand le beton n a pas atteint
+      sa resistance a 28 jours. La <strong>zone efficace</strong> n est pas le texte de
+      l EN 1992-1-1, qui ecrit l eq. 7.1 sur toute la zone tendue ; c est le raffinement retenu
+      par la pratique pour les pieces epaisses, et l ecart atteint un facteur plusieurs sur un
+      voile d un metre.</p>
   </fieldset>
 
   <fieldset>
@@ -801,13 +881,19 @@ function issueFissuration(
   );
 }
 
+/**
+ * Rendu d'un `BlocService`, quelle que soit la famille de verification :
+ * service (§7.2, §7.3, §7.4.3) ou session 11 (§6.2, §9, §7.3.2). D'ou la
+ * classe `bloc` et non `service` — le patron est celui du service, le
+ * perimetre ne l'est plus.
+ */
 function htmlBlocService(bloc: BlocService, cle: string): string {
   const lignes = bloc.lignes.map((l) => ligne(echapper(l.libelle), echapper(l.valeur))).join('');
 
   const verdict =
     bloc.verdict === null
       ? ''
-      : `<p class="verdict service ${bloc.verdict.ok ? 'ok' : 'non-ok'}">${echapper(bloc.verdict.texte)}</p>`;
+      : `<p class="verdict bloc ${bloc.verdict.ok ? 'ok' : 'non-ok'}">${echapper(bloc.verdict.texte)}</p>`;
 
   // Une note qui accompagne un verdict DEFAVORABLE est le motif de l'echec ;
   // partout ailleurs c'est une precision — l'avertissement « pas une fleche »
@@ -816,7 +902,7 @@ function htmlBlocService(bloc: BlocService, cle: string): string {
   const classeNote = bloc.verdict !== null && !bloc.verdict.ok ? 'motif' : 'note';
   const note = bloc.note === null ? '' : `<p class="${classeNote}">${echapper(bloc.note)}</p>`;
 
-  return `<div class="groupe service" data-bloc="${cle}"><h3>${echapper(bloc.titre)}</h3>${lignes}${verdict}${note}</div>`;
+  return `<div class="groupe bloc" data-bloc="${cle}"><h3>${echapper(bloc.titre)}</h3>${lignes}${verdict}${note}</div>`;
 }
 
 function htmlService(
@@ -851,6 +937,101 @@ function htmlService(
     htmlBlocService(blocContraintes(contraintes), 'contraintes') +
     htmlBlocService(blocFissuration(issueFissuration(section, quasiPermanent, parametres)), 'fissuration') +
     htmlBlocService(blocCourbure(courbure), 'courbure') +
+    '</div>'
+  );
+}
+
+// --- Tranchant, dispositions et deformation genee ---------------------------
+
+/**
+ * Les trois familles de verifications livrees en session 11.
+ *
+ * TOUTES LES EXCEPTIONS SONT ATTRAPEES ICI, une par une. `verifyShear`,
+ * `verifyDetailing` et `minimumRestraintArea` LEVENT hors du rectangle, et
+ * `verifyDetailing` leve aussi sur un poteau prive de `N_Ed`. En laisser une
+ * seule remonter au `try` global de `recalculer()` effacerait tout le resultat
+ * de flexion parce qu'un module OPTIONNEL n'a pas pu s'appliquer — la
+ * regression que la session 10 avait deja evitee pour la fissuration.
+ *
+ * Aucun calcul ici : les modules sont appeles, `checks-view.ts` met en forme.
+ */
+function htmlVerifications(
+  resolu: ResolvedModel,
+  parametres: Issue<ParametresVerifications>
+): string {
+  const section = resolu.section;
+
+  let tranchant: Issue<ShearResult>;
+  let dispositions: Issue<DetailingResult>;
+  let zwang: Issue<RestraintResult>;
+  let VEd = 0;
+
+  if (!('resultat' in parametres)) {
+    // Une saisie fautive dans ce cadre-la n'invalide que ce cadre-la.
+    tranchant = { motif: parametres.motif };
+    dispositions = { motif: parametres.motif };
+    zwang = { motif: parametres.motif };
+  } else {
+    const p = parametres.resultat;
+    VEd = p.VEd;
+
+    // Les gardes sont interroges AVANT l'appel : le message du noyau nomme la
+    // fonction qui leve, ce qui n'a aucun sens a l'ecran, et il ne dit pas ce
+    // qui reste calculable par ailleurs.
+    const horsTranchant = obstacleTranchant(section);
+    const horsDispositions = obstacleDispositions(section, p.elementType);
+    const horsZwang = obstacleZwang(section);
+
+    // L'effort normal du §6.2 et celui du §9.5.2 sont celui de l'ELU deja
+    // saisi : il n'y en a pas d'autre a cet etat-limite, et le redemander
+    // ouvrirait la porte a deux valeurs contradictoires.
+    tranchant =
+      horsTranchant !== null
+        ? { motif: horsTranchant }
+        : tenter(() =>
+            verifyShear(section, { V_Ed: p.VEd, N_Ed: resolu.action.N }, resolu.norm, {
+              ...(p.cadres !== undefined ? { links: p.cadres } : {}),
+              cotTheta: p.cotTheta,
+            })
+          );
+
+    dispositions =
+      horsDispositions !== null
+        ? { motif: horsDispositions }
+        : tenter(() =>
+            verifyDetailing(section, p.elementType, {
+              longitudinal: { NEd: resolu.action.N },
+              // Les deux modules decrivent les memes cadres sous deux noms de
+              // champ : `Asw` pour le §6.2, `asw` pour le §9.2.2. La saisie
+              // est unique, la traduction se fait ici et nulle part ailleurs.
+              ...(p.cadres !== undefined
+                ? { web: { asw: p.cadres.Asw, s: p.cadres.s, fywk: p.cadres.fywk } }
+                : {}),
+            })
+          );
+
+    // Aucun `NEd` transmis au §7.3.2, DELIBEREMENT : c'est une verification de
+    // service, et y injecter l'effort normal de l'ELU serait faux d'un facteur
+    // 1,35 a 1,5 — la meme erreur que reprendre le moment de l'ELU pour le
+    // §7.2. En gene centree `k_c` vaut 1 par definition ; en gene de flexion,
+    // l'eq. 7.2 redonne 0,4 en l'absence d'effort normal.
+    zwang =
+      horsZwang !== null
+        ? { motif: horsZwang }
+        : tenter(() =>
+            minimumRestraintArea(section, p.restraintType, {
+              ...(p.fctEff !== undefined ? { fctEff: p.fctEff } : {}),
+              ...(p.sigmaS !== undefined ? { sigmaS: p.sigmaS } : {}),
+              effectiveZoneOnly: p.zoneEfficace,
+            })
+          );
+  }
+
+  return (
+    '<div id="verifications"><h2>Effort tranchant, dispositions et deformation genee</h2>' +
+    htmlBlocService(blocTranchant(tranchant, VEd), 'tranchant') +
+    htmlBlocService(blocDispositions(dispositions), 'dispositions') +
+    htmlBlocService(blocZwang(zwang), 'zwang') +
     '</div>'
   );
 }
@@ -901,9 +1082,15 @@ function recalculer(mode?: 'proportional'): void {
         ? null
         : capacityAtAngle(resolu.section, resultat.neutralAxis.angle, resolu.action.N, resolu.norm);
 
+    // Les parametres de la session 11 sont evalues DANS le `tenter` : une
+    // saisie en cours de frappe dans ce cadre ne doit pas priver l'ecran du
+    // resultat de flexion, deja calcule.
+    const parametresVerifications = tenter(() => parametresDeVerification(etat));
+
     dernierResultat =
       htmlResultat(resolu, resultat, etatAxe) +
-      htmlService(resolu, resolu.action.Mz, parametres);
+      htmlService(resolu, resolu.action.Mz, parametres) +
+      htmlVerifications(resolu, parametresVerifications);
     dernierDessin = dessiner(resolu, resultat, etatAxe);
     zoneResultat.innerHTML = dernierResultat;
     zoneSection.innerHTML = dernierDessin;

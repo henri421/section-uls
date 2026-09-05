@@ -1,4 +1,10 @@
-import type { ElementType, ShearResult, DetailingResult, RestraintResult } from '../../src/index';
+import type {
+  Section,
+  ElementType,
+  ShearResult,
+  DetailingResult,
+  RestraintResult,
+} from '../../src/index';
 import type { BlocService, Issue, LigneAffichee } from './service-view';
 import { sansCalcul } from './service-view';
 import { formatNumber, formatUtilization } from './format';
@@ -30,6 +36,57 @@ const NOM_ELEMENT: Record<ElementType, string> = {
   slab: 'dalle',
   column: 'poteau',
 };
+
+// --- Gardes de domaine -------------------------------------------------------
+
+/**
+ * Les trois gardes sont interroges AVANT l appel, sur le modele exact
+ * d `obstacleFissuration` — et pour deux raisons.
+ *
+ * D abord parce que les messages du noyau commencent par le nom de la
+ * fonction qui leve (« shearGeometry : … ») : c est ce qu il faut a un
+ * developpeur devant une pile d appels, ce n est pas ce qu il faut a un
+ * ingenieur devant la page publiee. Ensuite parce que le garde sait dire ce
+ * qui, malgre tout, reste calculable — information que l exception n a aucune
+ * raison de porter.
+ *
+ * Le `tenter()` du cablage reste en place derriere eux : un garde couvre le
+ * cas connu, il ne remplace pas le filet.
+ */
+export function obstacleTranchant(section: Section): string | null {
+  if (section.geometry.kind === 'rectangle') return null;
+
+  return (
+    'Geometrie non rectangulaire. La largeur d ame b_w et la hauteur utile d du §6.2 n ont pas ' +
+    'de definition non ambigue hors du rectangle, et l EN 1992-1-1 ne la donne pas : le calcul ' +
+    'est refuse plutot qu approxime.'
+  );
+}
+
+export function obstacleZwang(section: Section): string | null {
+  if (section.geometry.kind === 'rectangle') return null;
+
+  return (
+    'Geometrie non rectangulaire. L aire de beton tendu A_ct du §7.3.2 suppose une largeur ' +
+    'constante et n est pas transposable telle quelle.'
+  );
+}
+
+/**
+ * Les dispositions d un POTEAU restent calculables hors du rectangle : le
+ * §9.5.2 ne demande que l aire de beton et l effort normal. Seuls le minimum
+ * de poutre et de dalle reclament `b_t` et la hauteur utile, que l EN 1992-1-1
+ * ne definit pas sur un contour quelconque.
+ */
+export function obstacleDispositions(section: Section, elementType: ElementType): string | null {
+  if (section.geometry.kind === 'rectangle' || elementType === 'column') return null;
+
+  return (
+    'Geometrie non rectangulaire. La largeur moyenne de la zone tendue b_t du §9.2.1.1 n a pas ' +
+    'de definition normative hors du rectangle. Le minimum de POTEAU (§9.5.2), lui, ne demande ' +
+    'que l aire de beton et resterait calculable.'
+  );
+}
 
 // --- Effort tranchant (§6.2) -------------------------------------------------
 
