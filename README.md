@@ -101,6 +101,18 @@ Deux paramètres décident du résultat et sont laissés à l'ingénieur :
 
 Sections rectangulaires uniquement.
 
+**Méthode Meyer (DIN 1045) pour les éléments massifs** : `meyerRestraintReinforcement` rend l'armature de peau maîtrisant l'ouverture de fissure sous déformation gênée, d'après G. et R. Meyer, *Rissbreitenbeschränkung nach DIN 1045*.
+
+**Elle ne remplace pas le §7.3.2 ci-dessus, elle coexiste avec lui.** Les deux répondent à la même question par deux chemins qu'il ne faut pas mélanger : l'EN 1992-1-1 écrit `A_s,min·σ_s = k_c·k·f_ct,eff·A_ct`, **linéaire** en aire d'acier, avec `k` de 1,00 à 0,65 et l'ouverture de fissure gouvernée ailleurs (tableaux 7.2N/7.3N) ; Meyer sort `A_s` d'une **racine**, avec `k` de 0,80 à 0,50 et l'ouverture visée `w_k` explicitement dans la formule. Les deux `k` portent le même nom et la même idée sans recouvrir la même grandeur : ne jamais les échanger.
+
+Trois régimes, choisis et non mélangés : **bridage intérieur** (contraintes propres de peau — le résultat est alors quasi indépendant de l'épaisseur), **bridage extérieur en fissure unique** (`h < h_grenz`), et **bridage extérieur en fissuration achevée**, qui est le cas des éléments massifs courants puisque `h_grenz` vaut typiquement 30 à 50 cm en traction.
+
+`choixDeBarres` propose ensuite une répartition par mètre, arrondie **vers le haut** pour que l'acier fourni couvre toujours l'acier requis.
+
+**Statut de validation, tel que le donne la source** : la famille traction / bridage extérieur est validée contre un diagramme de l'ouvrage à environ 3 % près sur toute la plage `h` = 40 à 160 cm. Les familles flexion et bridage intérieur découlent de la même dérivation et sont cohérentes, mais **n'ont pas été confrontées à leur diagramme** — à vérifier avant emploi en production. Le plafond d'épaisseur efficace que l'ouvrage applique au-delà d'environ 1,20 m n'est pas implémenté : le résultat en bridage extérieur peut y être conservateur. Le bridage continu de rive (voile sur radier existant) relève de l'EN 1992-3 / CIRIA C660 et n'est pas couvert.
+
+**Cadre réglementaire, à ne pas taire** : la méthode est allemande. En Belgique et au Luxembourg, la justification réglementaire reste l'EN 1992-1-1 et ses annexes nationales (NBN / ILNAS). Elle sert au **pré-dimensionnement** et au contrôle d'ordre de grandeur.
+
 **Vérification et domaine d'interaction** : `verifySection` conclut — taux d'exploitation, verdict, et le motif de l'échec quand il y en a un. Deux chemins de chargement sont proposés : « N constant, moment majoré », qui correspond à l'usage en poteau, et proportionnel. Les diagrammes `N`–`M` et `My`–`Mz` sont rendus comme des listes de points, prêtes à tracer — le noyau ne dessine pas.
 
 `interactionCurveNM` balaye la profondeur d'axe neutre depuis la fibre supérieure : elle ne décrit donc **qu'une seule branche**, celle des moments d'un seul signe. `interactionDiagramNM` rend le diagramme **complet**, ses deux sens de flexion : la branche opposée s'obtient en balayant la section tournée de π, ce qui envoie `(y, z)` sur `(−y, −z)` et donc `M` sur `−M`, l'effort normal restant inchangé. Aucune approximation. Sur une section symétriquement armée les deux branches sont miroir et l'omission ne se voit pas ; sur une dalle à deux nappes inégales, une section en T, un voile dissymétrique, elles diffèrent et n'en tracer qu'une cache la moitié du domaine.
