@@ -241,21 +241,6 @@ function blocFerraillage(): string {
   return champZone('bars', 'Barres, une par ligne : y ; z ; aire', etat.bars, 8);
 }
 
-/**
- * L'avertissement qui accompagne les saisies de la session 11.
- *
- * Le format du modele ne porte PAS encore ces champs — choix de vitesse
- * assume. Le taire serait le pire des scenarios : un utilisateur enregistre
- * son modele, le recharge, ne retrouve ni son effort tranchant ni ses cadres,
- * et cesse alors de croire ce que la page affiche par ailleurs. On l'ecrit
- * donc a cote de la saisie concernee, pas dans une documentation.
- */
-const NON_ENREGISTRE =
-  `<p class="note note-volatile"><strong>Ces champs ne sont pas enregistres dans le modele.</strong>
-   Le format de fichier ne les porte pas encore : ils reprennent leurs valeurs de depart a chaque
-   chargement, et « Enregistrer » ne les conserve pas. La geometrie, le ferraillage et les
-   sollicitations, eux, sont bien enregistres.</p>`;
-
 function htmlFormulaire(): string {
   return `
   <fieldset>
@@ -304,7 +289,6 @@ function htmlFormulaire(): string {
 
   <fieldset>
     <legend>Effort tranchant et dispositions (§6.2, §9)</legend>
-    ${NON_ENREGISTRE}
     ${champChoix('elementType', 'Type d element', etat.elementType, [
       ['beam', 'Poutre'],
       ['slab', 'Dalle'],
@@ -354,7 +338,6 @@ function htmlFormulaire(): string {
 
   <fieldset>
     <legend>Deformation genee — Zwang (§7.3.2)</legend>
-    ${NON_ENREGISTRE}
     ${champChoix('restraintType', 'Nature de la gene', etat.restraintType, [
       ['central', 'Centree (retrait ou refroidissement empeches)'],
       ['bending', 'De flexion (gradient thermique au jeune age)'],
@@ -372,7 +355,6 @@ function htmlFormulaire(): string {
 
   <fieldset>
     <legend>Elements massifs, methode Meyer (DIN 1045)</legend>
-    ${NON_ENREGISTRE}
     <p class="note">Methode <strong>allemande</strong>, distincte du §7.3.2 ci-dessus et qui ne le
       remplace pas : elle sert au <strong>pre-dimensionnement</strong> et au controle d ordre de
       grandeur, la justification reglementaire restant l EN 1992-1-1 et ses annexes nationales.

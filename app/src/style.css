@@ -591,19 +591,6 @@ label.large > input {
 }
 
 /*
- * L'avertissement de non-persistance : il doit se voir sans crier. Meme
- * couleur d'attention que la flexion deviee — c'est une limite connue, pas
- * un echec de calcul.
- */
-.note-volatile {
-  margin: 0 0 0.6rem;
-  padding: 0.45rem 0.55rem;
-  border-left: 3px solid var(--attention);
-  background: #fdf6e3;
-  color: #6b5400;
-}
-
-/*
  * Le bloc Meyer se detache des trois qui le precedent, et c'est le point.
  *
  * Il repond a la meme question que le §7.3.2 affiche juste au-dessus, par une

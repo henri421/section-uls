@@ -17,9 +17,15 @@ import { JSDOM } from 'jsdom';
 
 const CHEMIN_HTML = fileURLToPath(new URL('../../app/index.html', import.meta.url));
 
-async function monterApplication(): Promise<JSDOM> {
+async function monterApplication(stockage?: Map<string, string>): Promise<JSDOM> {
   const html = readFileSync(CHEMIN_HTML, 'utf8');
   const dom = new JSDOM(html, { url: 'http://localhost/', pretendToBeVisual: true });
+
+  // Le stockage local est reinstalle AVANT l'import du module : c'est a son
+  // chargement que la page relit le modele en cours.
+  if (stockage !== undefined) {
+    for (const [cle, valeur] of stockage) dom.window.localStorage.setItem(cle, valeur);
+  }
 
   const g = globalThis as unknown as Record<string, unknown>;
   g.window = dom.window;
@@ -40,10 +46,47 @@ async function monterApplication(): Promise<JSDOM> {
   return dom;
 }
 
+/**
+ * Ce que la page a enregistre, tel qu'un rechargement de l'onglet le
+ * retrouverait. C'est le seul aller-retour qui compte : la page enregistre
+ * toute seule a chaque recalcul, et se relit toute seule au chargement.
+ */
+function stockageDe(dom: JSDOM): Map<string, string> {
+  const stockage = new Map<string, string>();
+  for (let i = 0; i < dom.window.localStorage.length; i += 1) {
+    const cle = dom.window.localStorage.key(i);
+    if (cle !== null) stockage.set(cle, dom.window.localStorage.getItem(cle) ?? '');
+  }
+  return stockage;
+}
+
 function champ(dom: JSDOM, nom: string): HTMLInputElement {
   const element = dom.window.document.querySelector(`input[data-champ="${nom}"]`);
   if (element === null) throw new Error(`champ "${nom}" absent du formulaire`);
   return element as HTMLInputElement;
+}
+
+function liste(dom: JSDOM, nom: string): HTMLSelectElement {
+  const element = dom.window.document.querySelector(`select[data-champ="${nom}"]`);
+  if (element === null) throw new Error(`liste "${nom}" absente du formulaire`);
+  return element as HTMLSelectElement;
+}
+
+function caseACocher(dom: JSDOM, nom: string): HTMLInputElement {
+  const element = dom.window.document.querySelector(`input[type="checkbox"][data-champ="${nom}"]`);
+  if (element === null) throw new Error(`case a cocher "${nom}" absente du formulaire`);
+  return element as HTMLInputElement;
+}
+
+/**
+ * Valeur d'un champ lue comme un nombre.
+ *
+ * La virgule decimale saisie ressort en point : le modele ne stocke que des
+ * nombres, et le formulaire les reaffiche tels quels. C'est la valeur qui
+ * doit survivre a l'aller-retour, pas sa graphie.
+ */
+function nombreDuChamp(dom: JSDOM, nom: string): number {
+  return Number(champ(dom, nom).value.replace(',', '.'));
 }
 
 function saisir(dom: JSDOM, nom: string, valeur: string): void {
@@ -53,17 +96,13 @@ function saisir(dom: JSDOM, nom: string, valeur: string): void {
 }
 
 function choisir(dom: JSDOM, nom: string, valeur: string): void {
-  const element = dom.window.document.querySelector(`select[data-champ="${nom}"]`);
-  if (element === null) throw new Error(`liste "${nom}" absente du formulaire`);
-  const select = element as HTMLSelectElement;
+  const select = liste(dom, nom);
   select.value = valeur;
   select.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 }
 
 function cocher(dom: JSDOM, nom: string, valeur: boolean): void {
-  const element = dom.window.document.querySelector(`input[type="checkbox"][data-champ="${nom}"]`);
-  if (element === null) throw new Error(`case a cocher "${nom}" absente du formulaire`);
-  const input = element as HTMLInputElement;
+  const input = caseACocher(dom, nom);
   input.checked = valeur;
   input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 }
@@ -532,12 +571,73 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
     expect(verifications(dom).innerHTML).not.toContain('NaN');
   });
 
-  it('la page ECRIT que ces saisies ne sont pas enregistrees dans le modele', async () => {
-    // Un utilisateur qui enregistre son modele et perd ses cadres sans
-    // avertissement perd confiance dans tout le reste.
+  it('TOUT ce qui se saisit survit a un enregistrement et a un rechargement', async () => {
+    // La garantie qui remplace l'avertissement « ces champs ne sont pas
+    // enregistres » que la page portait jusqu'a la version 3 du format. Elle
+    // se verifie de bout en bout, sur la vraie page : on saisit, la page
+    // enregistre d'elle-meme, on recharge l'onglet, et on relit les champs.
+    const premier = await monterApplication();
+
+    choisir(premier, 'elementType', 'beam');
+    saisir(premier, 'V_Ed', '260');
+    saisir(premier, 'Asw', '100');
+    saisir(premier, 'sCadres', '200');
+    saisir(premier, 'fywk', '435');
+    saisir(premier, 'cotTheta', '2');
+
+    choisir(premier, 'restraintType', 'bending');
+    saisir(premier, 'fctEff', '1,8');
+    saisir(premier, 'sigmaSZwang', '320');
+    cocher(premier, 'zoneEfficace', true);
+
+    saisir(premier, 'meyerH', '800');
+    saisir(premier, 'meyerD1', '50');
+    saisir(premier, 'meyerDs', '20');
+    saisir(premier, 'meyerWk', '0,2');
+    saisir(premier, 'meyerFctm', '2,9');
+    saisir(premier, 'meyerKzt', '0,6');
+    choisir(premier, 'meyerCas', 'flexion');
+    choisir(premier, 'meyerBridage', 'interieur');
+    choisir(premier, 'meyerKmode', 'parabolique');
+    vi.advanceTimersByTime(500);
+
+    const second = await monterApplication(stockageDe(premier));
+
+    expect(liste(second, 'elementType').value).toBe('beam');
+    expect(nombreDuChamp(second, 'V_Ed')).toBe(260);
+    expect(nombreDuChamp(second, 'Asw')).toBe(100);
+    expect(nombreDuChamp(second, 'sCadres')).toBe(200);
+    expect(nombreDuChamp(second, 'fywk')).toBe(435);
+    expect(nombreDuChamp(second, 'cotTheta')).toBe(2);
+
+    expect(liste(second, 'restraintType').value).toBe('bending');
+    expect(nombreDuChamp(second, 'fctEff')).toBe(1.8);
+    expect(nombreDuChamp(second, 'sigmaSZwang')).toBe(320);
+    expect(caseACocher(second, 'zoneEfficace').checked).toBe(true);
+
+    expect(nombreDuChamp(second, 'meyerH')).toBe(800);
+    expect(nombreDuChamp(second, 'meyerD1')).toBe(50);
+    expect(nombreDuChamp(second, 'meyerDs')).toBe(20);
+    expect(nombreDuChamp(second, 'meyerWk')).toBe(0.2);
+    expect(nombreDuChamp(second, 'meyerFctm')).toBe(2.9);
+    expect(nombreDuChamp(second, 'meyerKzt')).toBe(0.6);
+    expect(liste(second, 'meyerCas').value).toBe('flexion');
+    expect(liste(second, 'meyerBridage').value).toBe('interieur');
+    expect(liste(second, 'meyerKmode').value).toBe('parabolique');
+
+    // Et les blocs de resultat repartent des memes valeurs : un champ
+    // rempli qui n'alimenterait plus le calcul serait un aller-retour pour
+    // rien.
+    expect(nombre(valeur(second, 'tranchant', 'V_Ed'))).toBeCloseTo(260, 1);
+  });
+
+  it('la page n annonce plus nulle part que des champs ne sont pas enregistres', async () => {
+    // L'avertissement de la session 11 est devenu FAUX avec la version 3 du
+    // format. Le laisser serait pire que de n'avoir rien dit : il ferait
+    // ressaisir a chaque ouverture des champs deja conserves.
     const dom = await monterApplication();
     const saisie = dom.window.document.querySelector('#saisie')?.textContent ?? '';
-    expect(saisie).toMatch(/pas (encore )?(enregistr|conserv)/i);
+    expect(saisie).not.toMatch(/pas (encore )?(enregistr|conserv)/i);
   });
 
   it('REGRESSION : une geometrie circulaire n efface PAS le resultat', async () => {
