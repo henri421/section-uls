@@ -83,10 +83,13 @@ describe('conversion formulaire <-> modele', () => {
     expect(reconstruit.meyer?.h).toBe(600); // la hauteur de la section, pre-remplie
     expect(reconstruit.meyer?.kzt).toBe(0.5);
     // `V_Ed` part de « 0 » A L'ECRAN depuis la session 11, pour que V_Rd,c
-    // s'affiche des le chargement : ce zero est donc bien une valeur saisie,
-    // et il s'enregistre comme telle. C'est le champ VIDE qui laisse le bloc
-    // absent, pas le champ a zero.
-    expect(reconstruit.shear).toEqual({ V_Ed: 0, cotTheta: 2.5 });
+    // s'affiche des le chargement. Mais ce zero-la n'est PAS une saisie : rien
+    // n'a ete declare sur le tranchant, et le bloc reste donc absent du
+    // modele. L'ecrire ferait dire au fichier « l'ingenieur a verifie le
+    // tranchant sous effort nul », une affirmation la ou il n'y a qu'une
+    // absence. Des cadres declares, eux, sont une decision et se sauvegardent
+    // meme sous effort nul — c'est teste plus bas.
+    expect(reconstruit.shear).toBeUndefined();
   });
 
   it('le modele reconstruit passe la validation du noyau', () => {
@@ -467,5 +470,71 @@ describe('rechargement des champs de verification', () => {
   it('le modele reconstruit avec les quatre blocs passe la validation du noyau', () => {
     const reconstruit = formToModel(modelToForm(COMPLET));
     expect(() => parseModel(serializeModel(reconstruit))).not.toThrow();
+  });
+});
+
+describe('le tranchant non saisi ne devient pas une affirmation', () => {
+  it("n'ecrit PAS de bloc `shear` quand V_Ed vaut zero sans cadres declares", () => {
+    // Le champ V_Ed est pre-rempli a zero pour que V_Rd,c s'affiche des le
+    // chargement. Ecrire `shear` dans ce cas ferait dire au fichier que
+    // l'ingenieur a verifie le tranchant sous effort nul — une affirmation la
+    // ou il n'y a qu'une absence de saisie.
+    const etat = modelToForm(SEPT_FORMES[0]);
+    etat.V_Ed = '0';
+    etat.Asw = '';
+    etat.sCadres = '';
+
+    expect(formToModel(etat).shear).toBeUndefined();
+  });
+
+  it('ecrit le bloc des que des cadres sont declares, meme sous effort nul', () => {
+    // Des cadres sont un ferraillage, donc une decision : ils se sauvegardent.
+    const etat = modelToForm(SEPT_FORMES[0]);
+    etat.V_Ed = '0';
+    etat.Asw = '101';
+    etat.sCadres = '150';
+    etat.fywk = '500';
+
+    const shear = formToModel(etat).shear;
+    expect(shear).toBeDefined();
+    expect(shear?.links).toEqual({ Asw: 101, s: 150, fywk: 500 });
+  });
+
+  it('ecrit le bloc des que l effort est non nul', () => {
+    const etat = modelToForm(SEPT_FORMES[0]);
+    etat.V_Ed = '260';
+
+    expect(formToModel(etat).shear?.V_Ed).toBe(260);
+  });
+});
+
+describe('une sauvegarde locale illisible n est jamais perdue', () => {
+  it('met de cote le texte refuse par le format au lieu de le laisser ecraser', async () => {
+    // Le scenario reel : une seule valeur refusee par le format — un `h` de
+    // Meyer a zero suffit — rendait toute la sauvegarde illisible. La page
+    // repartait alors du modele par defaut, et le premier recalcul ECRASAIT
+    // le travail de l'utilisateur. Sans un mot.
+    const { JSDOM } = await import('jsdom');
+    const dom = new JSDOM('<!doctype html><html><body></body></html>', {
+      url: 'http://localhost/',
+    });
+    const g = globalThis as unknown as Record<string, unknown>;
+    const precedent = g.localStorage;
+    g.localStorage = dom.window.localStorage;
+
+    try {
+      const { chargerLocalement, sauvegardeIllisible } = await import('../../app/src/storage');
+
+      const travail = '{"formatVersion":3,"geometry":{"kind":"rectangle","width":0}}';
+      dom.window.localStorage.setItem('section-uls:modele-courant', travail);
+
+      expect(chargerLocalement()).toBeNull();
+      // Le texte n'a pas disparu : il est recuperable.
+      expect(sauvegardeIllisible()).toBe(travail);
+      // Et il ne reste pas sous la cle courante, ou il serait ecrase.
+      expect(dom.window.localStorage.getItem('section-uls:modele-courant')).toBeNull();
+    } finally {
+      g.localStorage = precedent;
+    }
   });
 });

@@ -409,8 +409,22 @@ function tranchantDuModele(form: FormState): ShearModel | undefined {
 
   const links = cadresDuModele(form);
   const cotTheta = nombreOptionnel(form.cotTheta, 'cot theta');
+  const VEd = nombreRequis(form.V_Ed, 'effort tranchant V_Ed');
+
+  // Effort nul ET aucun cadre declare : rien n'a ete saisi sur le tranchant.
+  //
+  // Le champ `V_Ed` est PRE-REMPLI a zero depuis la session 11, pour que
+  // `V_Rd,c` s'affiche des le chargement sans rien demander. Ecrire `shear`
+  // dans ce cas ferait dire au fichier « l'ingenieur a verifie le tranchant
+  // sous effort nul » — une AFFIRMATION la ou il n'y a qu'une absence de
+  // saisie, et c'est precisement ce qu'un modele ne doit jamais inventer.
+  //
+  // Des cadres declares changent tout : ils sont un ferraillage, donc une
+  // decision, et ils se sauvegardent meme sans effort applique.
+  if (VEd === 0 && links === undefined) return undefined;
+
   return {
-    V_Ed: nombreRequis(form.V_Ed, 'effort tranchant V_Ed'),
+    V_Ed: VEd,
     ...(links !== undefined ? { links } : {}),
     ...(cotTheta !== undefined ? { cotTheta } : {}),
   };
