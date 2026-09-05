@@ -438,6 +438,24 @@ function ferraillageOrdonne(r: ReinforcementModel) {
   }
 }
 
+/**
+ * Ecrit les sollicitations de service, avec l'ordre de cles stable du reste
+ * du format. Une combinaison absente n'est PAS ecrite : ni `null`, que la
+ * relecture refuserait, ni `{N: 0, M: 0}`, qui ferait passer une absence de
+ * sollicitation pour une sollicitation nulle — deux choses differentes, la
+ * seconde produisant un resultat de service affichable et faux.
+ */
+function serviceOrdonne(s: ServiceActionsModel) {
+  return {
+    ...(s.characteristic !== undefined
+      ? { characteristic: { N: s.characteristic.N, M: s.characteristic.M } }
+      : {}),
+    ...(s.quasiPermanent !== undefined
+      ? { quasiPermanent: { N: s.quasiPermanent.N, M: s.quasiPermanent.M } }
+      : {}),
+  };
+}
+
 export function serializeModel(model: SectionModel): string {
   const ordonne = {
     // La version ECRITE est toujours la courante, jamais celle que portait
@@ -458,6 +476,9 @@ export function serializeModel(model: SectionModel): string {
     geometry: geometrieOrdonnee(model.geometry),
     reinforcement: ferraillageOrdonne(model.reinforcement),
     action: { N: model.action.N, My: model.action.My, Mz: model.action.Mz },
+    ...(model.serviceActions !== undefined
+      ? { serviceActions: serviceOrdonne(model.serviceActions) }
+      : {}),
   };
 
   return `${JSON.stringify(ordonne, null, 2)}\n`;

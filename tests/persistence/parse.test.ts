@@ -387,6 +387,63 @@ describe('serializeModel', () => {
     expect(serializeModel(desordre)).toBe(serializeModel(normal));
   });
 
+  it('aller-retour avec les deux sollicitations de service', () => {
+    const m: SectionModel = {
+      ...modeleValide(),
+      serviceActions: {
+        characteristic: { N: -120, M: 85 },
+        quasiPermanent: { N: -90, M: 60.5 },
+      },
+    };
+    expect(parseModel(serializeModel(m))).toEqual(m);
+  });
+
+  it('aller-retour avec une seule des deux sollicitations de service', () => {
+    const caract: SectionModel = {
+      ...modeleValide(),
+      serviceActions: { characteristic: { N: 0, M: 120 } },
+    };
+    expect(parseModel(serializeModel(caract))).toEqual(caract);
+
+    const qp: SectionModel = {
+      ...modeleValide(),
+      serviceActions: { quasiPermanent: { N: 0, M: 90 } },
+    };
+    const reluQp = parseModel(serializeModel(qp));
+    expect(reluQp).toEqual(qp);
+    // La combinaison absente ne doit pas reapparaitre a l'ecriture, meme
+    // vide : une sollicitation de service {0, 0} n'est pas « pas de
+    // sollicitation », et ferait afficher un resultat de service invente.
+    expect(serializeModel(qp)).not.toContain('characteristic');
+  });
+
+  it('sans sollicitations de service, le champ n apparait pas dans le JSON', () => {
+    // Ni `"serviceActions": null` (que la relecture refuserait, un null
+    // n'etant pas un objet), ni `"serviceActions": {}` (qui mentirait sur
+    // l'intention : le modele n'en porte pas, il n'en porte pas de vides).
+    const texte = serializeModel(modeleValide());
+    expect(texte).not.toContain('serviceActions');
+    expect(parseModel(texte).serviceActions).toBeUndefined();
+  });
+
+  it('l ordre des cles reste stable pour les sollicitations de service', () => {
+    const normal: SectionModel = {
+      ...modeleValide(),
+      serviceActions: {
+        characteristic: { N: -120, M: 85 },
+        quasiPermanent: { N: -90, M: 60 },
+      },
+    };
+    const desordre: SectionModel = {
+      ...modeleValide(),
+      serviceActions: {
+        quasiPermanent: { M: 60, N: -90 },
+        characteristic: { M: 85, N: -120 },
+      },
+    };
+    expect(serializeModel(desordre)).toBe(serializeModel(normal));
+  });
+
   it('produit un JSON indente, lisible et versionne en tete', () => {
     const texte = serializeModel(modeleValide());
     expect(texte).toContain('\n  "formatVersion"');
