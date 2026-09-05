@@ -7,7 +7,20 @@ import {
   parametresDeService,
   FormError,
 } from '../../app/src/form';
-import { ELEMENT_TYPE_PAR_DEFAUT, RESTRAINT_TYPE_PAR_DEFAUT } from '../../app/src/form';
+import {
+  ELEMENT_TYPE_PAR_DEFAUT,
+  V_ED_PAR_DEFAUT,
+  FYWK_PAR_DEFAUT,
+  COT_THETA_PAR_DEFAUT,
+  RESTRAINT_TYPE_PAR_DEFAUT,
+  MEYER_D1_PAR_DEFAUT,
+  MEYER_DS_PAR_DEFAUT,
+  MEYER_WK_PAR_DEFAUT,
+  MEYER_KZT_PAR_DEFAUT,
+  MEYER_CAS_PAR_DEFAUT,
+  MEYER_BRIDAGE_PAR_DEFAUT,
+  MEYER_KMODE_PAR_DEFAUT,
+} from '../../app/src/form';
 import { parseModel, serializeModel, FORMAT_VERSION, ENGINE_VERSION } from '../../src/index';
 import type { SectionModel } from '../../src/index';
 
@@ -341,5 +354,118 @@ describe('champs de verification vers le modele', () => {
     expect(modele.shear?.V_Ed).toBe(260);
     expect(modele.shear?.links?.Asw).toBe(100);
     expect(modele.meyer?.h).toBe(800);
+  });
+});
+
+/**
+ * Le chemin inverse : un fichier de version 3 rouvert doit rendre a l'ecran
+ * exactement ce qui y etait, et un fichier anterieur doit rendre les valeurs
+ * de depart — jamais des zeros, qui ressembleraient a une saisie.
+ */
+describe('rechargement des champs de verification', () => {
+  const COMPLET: SectionModel = {
+    ...SEPT_FORMES[0],
+    elementType: 'beam',
+    shear: { V_Ed: 260, links: { Asw: 100, s: 200, fywk: 500 }, cotTheta: 2 },
+    restraint: { type: 'bending', fctEff: 1.8, sigmaS: 320, effectiveZoneOnly: true },
+    meyer: {
+      h: 800, d1: 50, ds: 20, wk: 0.2, fctm: 2.9, kzt: 0.6,
+      cas: 'flexion', bridage: 'interieur', kmode: 'parabolique',
+    },
+  };
+
+  it('aller-retour A L IDENTIQUE sur un modele de version 3 complet', () => {
+    // C'est ici, et seulement ici, que l'identite stricte a un sens : le
+    // modele porte tous les blocs que le formulaire sait afficher.
+    expect(formToModel(modelToForm(COMPLET))).toEqual(COMPLET);
+  });
+
+  it('chaque champ affiche ce que le modele portait', () => {
+    const form = modelToForm(COMPLET);
+
+    expect(form.elementType).toBe('beam');
+    expect(form.V_Ed).toBe('260');
+    expect(form.Asw).toBe('100');
+    expect(form.sCadres).toBe('200');
+    expect(form.fywk).toBe('500');
+    expect(form.cotTheta).toBe('2');
+
+    expect(form.restraintType).toBe('bending');
+    expect(form.fctEff).toBe('1.8');
+    expect(form.sigmaSZwang).toBe('320');
+    expect(form.zoneEfficace).toBe(true);
+
+    expect(form.meyerH).toBe('800');
+    expect(form.meyerD1).toBe('50');
+    expect(form.meyerDs).toBe('20');
+    expect(form.meyerWk).toBe('0.2');
+    expect(form.meyerFctm).toBe('2.9');
+    expect(form.meyerKzt).toBe('0.6');
+    expect(form.meyerCas).toBe('flexion');
+    expect(form.meyerBridage).toBe('interieur');
+    expect(form.meyerKmode).toBe('parabolique');
+  });
+
+  it('un modele anterieur a la version 3 rend les valeurs de depart, jamais des zeros', () => {
+    const form = modelToForm(SEPT_FORMES[0]);
+
+    expect(form.elementType).toBe(ELEMENT_TYPE_PAR_DEFAUT);
+    expect(form.V_Ed).toBe(V_ED_PAR_DEFAUT);
+    // Les cadres partent VIDES : c'est un ferraillage, la page n'en invente
+    // aucun. Un « 0 » afficherait un cours de cadres d'aire nulle.
+    expect(form.Asw).toBe('');
+    expect(form.sCadres).toBe('');
+    expect(form.fywk).toBe(FYWK_PAR_DEFAUT);
+    expect(form.cotTheta).toBe(COT_THETA_PAR_DEFAUT);
+
+    expect(form.restraintType).toBe(RESTRAINT_TYPE_PAR_DEFAUT);
+    expect(form.fctEff).toBe('');
+    expect(form.sigmaSZwang).toBe('');
+    expect(form.zoneEfficace).toBe(false);
+
+    expect(form.meyerH).toBe('600'); // pre-rempli avec la hauteur de la section
+    expect(form.meyerD1).toBe(MEYER_D1_PAR_DEFAUT);
+    expect(form.meyerDs).toBe(MEYER_DS_PAR_DEFAUT);
+    expect(form.meyerWk).toBe(MEYER_WK_PAR_DEFAUT);
+    expect(form.meyerKzt).toBe(MEYER_KZT_PAR_DEFAUT);
+    expect(form.meyerCas).toBe(MEYER_CAS_PAR_DEFAUT);
+    expect(form.meyerBridage).toBe(MEYER_BRIDAGE_PAR_DEFAUT);
+    expect(form.meyerKmode).toBe(MEYER_KMODE_PAR_DEFAUT);
+  });
+
+  it('un modele partiel ne perd rien de ce qu il porte', () => {
+    const partiel: SectionModel = {
+      ...SEPT_FORMES[0],
+      elementType: 'slab',
+      shear: { V_Ed: 90 },
+      restraint: { type: 'bending', sigmaS: 280 },
+    };
+    const form = modelToForm(partiel);
+
+    expect(form.elementType).toBe('slab');
+    expect(form.V_Ed).toBe('90');
+    expect(form.Asw).toBe(''); // aucun cadre au fichier, aucun a l'ecran
+    expect(form.sCadres).toBe('');
+    expect(form.restraintType).toBe('bending');
+    expect(form.sigmaSZwang).toBe('280');
+    expect(form.fctEff).toBe('');
+
+    const reconstruit = formToModel(form);
+    expect(reconstruit).toMatchObject(partiel);
+    expect(reconstruit.shear?.links).toBeUndefined();
+    expect(reconstruit.restraint).toEqual({ type: 'bending', sigmaS: 280 });
+  });
+
+  it('un modele sans bloc de tranchant rend le champ a sa valeur de depart', () => {
+    // Et surtout PAS a vide : le champ a « 0 » depuis la session 11, pour que
+    // V_Rd,c s'affiche des le chargement sans qu'on ait rien a saisir.
+    const form = modelToForm({ ...SEPT_FORMES[0], elementType: 'beam' });
+    expect(form.V_Ed).toBe(V_ED_PAR_DEFAUT);
+    expect(form.cotTheta).toBe(COT_THETA_PAR_DEFAUT);
+  });
+
+  it('le modele reconstruit avec les quatre blocs passe la validation du noyau', () => {
+    const reconstruit = formToModel(modelToForm(COMPLET));
+    expect(() => parseModel(serializeModel(reconstruit))).not.toThrow();
   });
 });

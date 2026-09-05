@@ -729,36 +729,58 @@ export function modelToForm(model: SectionModel): FormState {
     crackWMax: CRACK_WMAX_PAR_DEFAUT,
     curvatureBeta: CURVATURE_BETA_PAR_DEFAUT,
 
-    // Idem, et pour une raison de plus : le format ne les porte pas encore.
-    // Un fichier charge revient donc a ces valeurs de depart, ce que
-    // l'interface annonce a cote de la saisie.
-    elementType: ELEMENT_TYPE_PAR_DEFAUT,
-    V_Ed: V_ED_PAR_DEFAUT,
-    Asw: '', sCadres: '', fywk: FYWK_PAR_DEFAUT,
-    cotTheta: COT_THETA_PAR_DEFAUT,
-    restraintType: RESTRAINT_TYPE_PAR_DEFAUT,
-    fctEff: '', sigmaSZwang: '',
-    zoneEfficace: false,
+    // Les quatre blocs de la version 3, relus tels quels. Un bloc ABSENT —
+    // fichier de version 1 ou 2, ou modele qui ne verifiait que la flexion —
+    // laisse les champs a leur valeur de depart, et jamais a zero : un
+    // « V_Ed = 0 » ressemblerait a une saisie.
+    elementType: model.elementType ?? ELEMENT_TYPE_PAR_DEFAUT,
+    V_Ed: model.shear !== undefined ? texteDe(model.shear.V_Ed) : V_ED_PAR_DEFAUT,
+    // Les cadres restent VIDES quand le fichier n'en porte pas : c'est un
+    // ferraillage, et un « 0 » afficherait un cours d'aire nulle.
+    Asw: texteDe(model.shear?.links?.Asw),
+    sCadres: texteDe(model.shear?.links?.s),
+    fywk: model.shear?.links !== undefined ? texteDe(model.shear.links.fywk) : FYWK_PAR_DEFAUT,
+    // `cot theta` absent du fichier reprend la valeur de depart du champ, et
+    // non un vide : le champ est affiche en permanence et alimente le §6.2.3,
+    // qui refuserait une saisie vide. Le fichier relu n'en gagne donc pas
+    // moins que ce qu'il portait — il repartira avec le 2,5 qu'on voit a
+    // l'ecran, ce que « Enregistrer » a toujours fait des valeurs affichees.
+    cotTheta:
+      model.shear?.cotTheta !== undefined ? texteDe(model.shear.cotTheta) : COT_THETA_PAR_DEFAUT,
 
-    // `h` PRE-REMPLI avec la hauteur de la section quand elle est
-    // rectangulaire : c est le cas ou l epaisseur de l element massif et la
-    // hauteur de la section coincident. Hors du rectangle, aucune dimension
-    // ne s impose et le champ reste vide plutot que de proposer une
-    // epaisseur que personne n a donnee.
+    restraintType: model.restraint?.type ?? RESTRAINT_TYPE_PAR_DEFAUT,
+    fctEff: texteDe(model.restraint?.fctEff),
+    sigmaSZwang: texteDe(model.restraint?.sigmaS),
+    zoneEfficace: model.restraint?.effectiveZoneOnly ?? false,
+
+    // Bloc Meyer du fichier quand il existe. A defaut seulement, les
+    // pre-remplissages : `h` prend la hauteur de la section quand elle est
+    // rectangulaire — le cas ou l epaisseur de l element massif et la hauteur
+    // de la section coincident. Hors du rectangle, aucune dimension ne
+    // s impose et le champ reste vide plutot que de proposer une epaisseur
+    // que personne n a donnee.
     meyerH:
-      model.geometry.kind === 'rectangle' ? texteDe(model.geometry.height) : '',
-    meyerD1: MEYER_D1_PAR_DEFAUT,
-    meyerDs: MEYER_DS_PAR_DEFAUT,
-    meyerWk: MEYER_WK_PAR_DEFAUT,
-    // `f_ctm` DEDUIT du f_ck saisi (tableau 3.1), et non la valeur de table
-    // de l ouvrage : les deux concordent a moins de 2 % — 2,896 contre 2,9
-    // pour un C30/37 — et la valeur deduite suit le beton reellement saisi.
-    // L utilisateur reste libre de la remplacer par celle de la table.
-    meyerFctm: formatNumber(fctmDepuisFck(model.concrete.fck), 2),
-    meyerKzt: MEYER_KZT_PAR_DEFAUT,
-    meyerCas: MEYER_CAS_PAR_DEFAUT,
-    meyerBridage: MEYER_BRIDAGE_PAR_DEFAUT,
-    meyerKmode: MEYER_KMODE_PAR_DEFAUT,
+      model.meyer !== undefined
+        ? texteDe(model.meyer.h)
+        : model.geometry.kind === 'rectangle'
+          ? texteDe(model.geometry.height)
+          : '',
+    meyerD1: model.meyer !== undefined ? texteDe(model.meyer.d1) : MEYER_D1_PAR_DEFAUT,
+    meyerDs: model.meyer !== undefined ? texteDe(model.meyer.ds) : MEYER_DS_PAR_DEFAUT,
+    meyerWk: model.meyer !== undefined ? texteDe(model.meyer.wk) : MEYER_WK_PAR_DEFAUT,
+    // `f_ctm` DEDUIT du f_ck saisi (tableau 3.1) faute de mieux, et non la
+    // valeur de table de l ouvrage : les deux concordent a moins de 2 % —
+    // 2,896 contre 2,9 pour un C30/37 — et la valeur deduite suit le beton
+    // reellement saisi. Un fichier qui porte deja un `f_ctm` a la priorite :
+    // c est un choix de l utilisateur, pas une deduction.
+    meyerFctm:
+      model.meyer !== undefined
+        ? texteDe(model.meyer.fctm)
+        : formatNumber(fctmDepuisFck(model.concrete.fck), 2),
+    meyerKzt: model.meyer !== undefined ? texteDe(model.meyer.kzt) : MEYER_KZT_PAR_DEFAUT,
+    meyerCas: model.meyer?.cas ?? MEYER_CAS_PAR_DEFAUT,
+    meyerBridage: model.meyer?.bridage ?? MEYER_BRIDAGE_PAR_DEFAUT,
+    meyerKmode: model.meyer?.kmode ?? MEYER_KMODE_PAR_DEFAUT,
   };
 
   switch (model.geometry.kind) {
