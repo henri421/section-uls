@@ -19,6 +19,27 @@ Deux diagrammes d'interaction y sont tracés, et leurs coûts n'ont rien de comp
 - le **diagramme N–My**, avec le point sollicitant, est recalculé en continu — il ne demande aucune résolution, seulement une intégration par point. Son contour reste **ouvert du côté traction** : seule la branche du pivot béton est parcourue, et refermer dessinerait un domaine qui n'a pas été calculé. En flexion déviée, le point sollicitant sort du plan de ce graphe, qui l'annonce alors explicitement ;
 - le **domaine My–Mz** à effort normal constant part **sur bouton seulement** : il enchaîne une résolution par point. On y lit le taux d'exploitation géométriquement, comme le rapport entre le point sollicitant et le rayon du domaine dans sa direction.
 
+### Les vérifications de service dans la page
+
+Le panneau de résultats porte, **après l'ELU et séparément de lui**, les trois vérifications de service : limitation des contraintes (§7.2), ouverture de fissures (§7.3), courbure (§7.4.3). Elles sont calculées **au chargement et à chaque frappe**, sans bouton : 9 à 24 ms chacune, contre 25 à 120 ms pour le recalcul ELU.
+
+Elles se saisissent dans un cadre à part, parce qu'elles portent sur des **combinaisons EN 1990 différentes de l'ELU** et différentes entre elles — caractéristique pour le §7.2, quasi-permanente pour les §7.3 et §7.4.3. Reprendre le moment de l'ELU serait faux d'un facteur 1,35 à 1,5. Chacune des deux combinaisons est indépendamment optionnelle ; laisser ses deux champs vides la désactive, et une combinaison à demi remplie est refusée plutôt que complétée par un zéro.
+
+Trois paramètres sont exposés parce que ce sont des **choix**, pas des constantes normatives :
+
+- **`n`**, coefficient d'équivalence (défaut 15) — valeur conventionnelle de la pratique, intégrant forfaitairement le fluage, **non prescrite sous cette forme** par l'EN 1992-1-1 ;
+- **`w_max`** (défaut 0,3 mm) — dépend de la **classe d'exposition** (tableau 7.1N : 0,4 / 0,3 / 0,2 mm), que le module ne connaît pas ;
+- **`β`** (défaut 0,5) — durée de chargement : 0,5 en charge de longue durée ou répétée, 1,0 en charge courte.
+
+Les autres coefficients (`k1`, `k2`, `k3`, `kt`…) restent à leurs valeurs recommandées.
+
+**Limites, écrites dans la page autant qu'ici :**
+
+- le service est traité en **flexion droite seule** — la sollicitation saisie est uniaxiale par construction. Un `Mz` non nul à l'ELU donne une **précision** affichée au-dessus des blocs, jamais un refus de calculer : la combinaison quasi-permanente exclut le vent, qui apporte le plus souvent le moment transversal, et une section franchement déviée à l'ELU est très couramment droite en quasi-permanent ;
+- l'**ouverture de fissures ne vaut que sur les sections rectangulaires**. Sur toute autre géométrie, son bloc affiche le motif et **les deux autres vérifications restent calculées** — une géométrie circulaire n'efface ni le résultat ELU ni le reste du service ;
+- une section **entièrement comprimée** n'a ni zone tendue ni fissure : les §7.2 et §7.3 affichent alors le motif du module plutôt qu'un chiffre issu d'une hypothèse fausse ;
+- la **courbure n'est pas une flèche**, et son bloc le rappelle systématiquement. Une flèche exige la portée, les appuis et la répartition des charges, qui sont du niveau élément.
+
 La sortie construite est committée dans `docs/` : **toute modification de l'interface exige de relancer `npm run build` avant de pousser**, sans quoi la page en ligne diverge de la source.
 
 ## Capacités actuelles
