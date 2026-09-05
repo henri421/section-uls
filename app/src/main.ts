@@ -57,6 +57,14 @@ function modeleParDefaut(): SectionModel {
       ],
     },
     action: { N: 500, My: 80, Mz: 40 },
+    // Sollicitations de service PLAUSIBLES, dans le seul modele de
+    // demonstration : un panneau « Service » vide au premier chargement ne se
+    // ferait jamais decouvrir. Un fichier CHARGE sans service, lui, reste vide
+    // — on n'invente pas les charges de l'utilisateur.
+    serviceActions: {
+      characteristic: { N: 370, M: 59 },
+      quasiPermanent: { N: 300, M: 45 },
+    },
   };
 }
 
@@ -235,6 +243,33 @@ function htmlFormulaire(): string {
     <p class="note">Chemin de chargement : <strong>N constant</strong>, recalcule en continu.</p>
     <button type="button" data-action="calculer-proportionnel">Calculer en proportionnel (quelques secondes)</button>
     <button type="button" data-action="tracer-domaine">Tracer le domaine My-Mz (une fraction de seconde)</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>Sollicitations de service (ELS)</legend>
+    <p class="note">Combinaisons EN 1990 <strong>differentes de l ELU</strong> et differentes entre
+      elles : reprendre le moment de l ELU serait faux d un facteur 1,35 a 1,5. Flexion droite
+      uniquement — un seul moment M par combinaison. Laisser les deux champs d une combinaison
+      vides la desactive.</p>
+    ${champTexte('serviceCarN', 'N caracteristique (kN)', etat.serviceCarN)}
+    ${champTexte('serviceCarM', 'M caracteristique (kN.m)', etat.serviceCarM)}
+    ${champTexte('serviceQpN', 'N quasi-permanent (kN)', etat.serviceQpN)}
+    ${champTexte('serviceQpM', 'M quasi-permanent (kN.m)', etat.serviceQpM)}
+    <p class="note">La combinaison <strong>caracteristique</strong> gouverne la limitation des
+      contraintes (§7.2) ; la <strong>quasi-permanente</strong> gouverne l ouverture de fissures
+      (§7.3) et la courbure (§7.4.3).</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Parametres de service assumes</legend>
+    ${champTexte('serviceN', 'n, coefficient d equivalence', etat.serviceN)}
+    ${champTexte('crackWMax', 'w_max (mm)', etat.crackWMax)}
+    ${champTexte('curvatureBeta', 'beta, duree de chargement', etat.curvatureBeta)}
+    <p class="note">Ces trois-la sont des <strong>choix</strong>, pas des constantes normatives.
+      <em>n</em> = 15 est conventionnel et n est pas prescrit sous cette forme par l EN 1992-1-1 ;
+      <em>w_max</em> depend de la classe d exposition (tableau 7.1N : 0,4 / 0,3 / 0,2 mm) ;
+      <em>beta</em> vaut 0,5 en charge de longue duree ou repetee, 1,0 en charge courte.
+      Les autres coefficients (k1, k2, k3, kt…) restent a leurs valeurs recommandees.</p>
   </fieldset>
 
   <fieldset>

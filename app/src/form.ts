@@ -1,6 +1,7 @@
 import type {
   SectionModel, RowFaceModel, BarSpecModel, PointModel,
   GeometryModel, ReinforcementModel,
+  ServiceActionModel, ServiceActionsModel,
 } from '../../src/index';
 import type { LoadingMode } from '../../src/index';
 import { ec2Recommended, FORMAT_VERSION, ENGINE_VERSION } from '../../src/index';
@@ -53,7 +54,36 @@ export interface FormState {
 
   N: string; My: string; Mz: string;
   mode: LoadingMode;
+
+  /**
+   * Sollicitations de SERVICE, uniaxiales `{ N, M }` et saisies SEPAREMENT de
+   * l'ELU : les combinaisons EN 1990 ne sont pas les memes, et reutiliser le
+   * moment de l'ELU serait faux d'un facteur ~1,35 a 1,5.
+   *
+   * Deux combinaisons parce que les verifications n'ont pas la meme :
+   * caracteristique pour la limitation des contraintes (§7.2), quasi-permanente
+   * pour la fissuration (§7.3) et la courbure (§7.4.3).
+   */
+  serviceCarN: string; serviceCarM: string;
+  serviceQpN: string; serviceQpM: string;
+
+  /**
+   * Les trois parametres que l'ingenieur ASSUME plutot qu'il ne les subit.
+   *
+   * Chacun porte deja un avertissement explicite dans la documentation de son
+   * module, ce qui est le signe qu'il s'agit d'un CHOIX et non d'une constante :
+   * `n = 15` est conventionnel et non prescrit sous cette forme par la norme,
+   * `w_max` depend de la classe d'exposition que le module ignore, `beta` depend
+   * de la duree de chargement. Les autres coefficients (k1, k2, k3, kt…) restent
+   * a leurs valeurs recommandees.
+   */
+  serviceN: string; crackWMax: string; curvatureBeta: string;
 }
+
+/** Valeurs de depart des trois parametres assumes, telles qu'elles s'affichent. */
+export const SERVICE_N_PAR_DEFAUT = '15';
+export const CRACK_WMAX_PAR_DEFAUT = '0,3';
+export const CURVATURE_BETA_PAR_DEFAUT = '0,5';
 
 export class FormError extends Error {}
 
@@ -85,6 +115,61 @@ function nombreOptionnel(valeur: string, champ: string): number | undefined {
 /** Rendu texte d'un nombre, ou chaine vide pour un optionnel absent. */
 function texteDe(valeur: number | undefined): string {
   return valeur === undefined ? '' : String(valeur);
+}
+
+// --- Sollicitations de service ---
+
+/**
+ * Une combinaison de service : ses deux champs, ou aucun des deux.
+ *
+ * Une combinaison a demi remplie est REFUSEE plutot que completee par un zero.
+ * « N = 300, M vide » lu comme « M = 0 » produirait un resultat de service
+ * parfaitement calcule pour une sollicitation que personne n'a donnee — le
+ * genre de chiffre qu'on ne songe pas a mettre en doute puisqu'il s'affiche
+ * comme les autres.
+ */
+function sollicitationDeService(
+  N: string,
+  M: string,
+  libelle: string
+): ServiceActionModel | undefined {
+  const sansN = N.trim() === '';
+  const sansM = M.trim() === '';
+
+  if (sansN && sansM) return undefined;
+  if (sansN) {
+    throw new FormError(
+      `${libelle} : N est vide alors que M est renseigne. Une combinaison de service se saisit entierement, ou pas du tout.`
+    );
+  }
+  if (sansM) {
+    throw new FormError(
+      `${libelle} : M est vide alors que N est renseigne. Une combinaison de service se saisit entierement, ou pas du tout.`
+    );
+  }
+
+  return { N: nombreRequis(N, `${libelle} : N`), M: nombreRequis(M, `${libelle} : M`) };
+}
+
+const LIBELLE_CARACTERISTIQUE = 'Sollicitation de service caracteristique (§7.2)';
+const LIBELLE_QUASI_PERMANENT = 'Sollicitation de service quasi-permanente (§7.3, §7.4.3)';
+
+/** Les trois parametres assumes, evalues comme n'importe quel champ. */
+export interface ParametresService {
+  /** Coefficient d'equivalence. */
+  n: number;
+  /** Ouverture de fissure limite (mm). */
+  wMax: number;
+  /** Duree de chargement pour l'interpolation de courbure. */
+  beta: number;
+}
+
+export function parametresDeService(form: FormState): ParametresService {
+  return {
+    n: nombreRequis(form.serviceN, 'coefficient d equivalence n'),
+    wMax: nombreRequis(form.crackWMax, 'ouverture limite w_max'),
+    beta: nombreRequis(form.curvatureBeta, 'duree de chargement beta'),
+  };
 }
 
 // --- Points et lignes de texte (sommets, barres libres) ---
@@ -255,6 +340,27 @@ export function formToModel(form: FormState): SectionModel {
       break;
   }
 
+  // Les deux combinaisons sont INDEPENDANTES : saisir la seule
+  // quasi-permanente est un cas courant, la fissuration et la courbure etant
+  // les verifications les plus souvent demandees.
+  const characteristic = sollicitationDeService(
+    form.serviceCarN,
+    form.serviceCarM,
+    LIBELLE_CARACTERISTIQUE
+  );
+  const quasiPermanent = sollicitationDeService(
+    form.serviceQpN,
+    form.serviceQpM,
+    LIBELLE_QUASI_PERMANENT
+  );
+  const serviceActions: ServiceActionsModel | undefined =
+    characteristic === undefined && quasiPermanent === undefined
+      ? undefined
+      : {
+          ...(characteristic !== undefined ? { characteristic } : {}),
+          ...(quasiPermanent !== undefined ? { quasiPermanent } : {}),
+        };
+
   return {
     formatVersion: FORMAT_VERSION,
     engineVersion: ENGINE_VERSION,
@@ -272,6 +378,7 @@ export function formToModel(form: FormState): SectionModel {
       My: nombreRequis(form.My, 'My'),
       Mz: nombreRequis(form.Mz, 'Mz'),
     },
+    ...(serviceActions !== undefined ? { serviceActions } : {}),
   };
 }
 
@@ -305,6 +412,21 @@ export function modelToForm(model: SectionModel): FormState {
     My: texteDe(model.action.My),
     Mz: texteDe(model.action.Mz),
     mode: 'constant-N',
+
+    // Champ absent (fichier de format v1) = champs VIDES, et surtout pas des
+    // zeros qui ressembleraient a une saisie. On n'invente pas les charges de
+    // service de l'utilisateur.
+    serviceCarN: texteDe(model.serviceActions?.characteristic?.N),
+    serviceCarM: texteDe(model.serviceActions?.characteristic?.M),
+    serviceQpN: texteDe(model.serviceActions?.quasiPermanent?.N),
+    serviceQpM: texteDe(model.serviceActions?.quasiPermanent?.M),
+
+    // Les trois parametres assumes ne sont PAS dans le modele : ce sont des
+    // choix de verification, pas des donnees de la section. Ils reprennent
+    // donc leur valeur de depart a chaque chargement.
+    serviceN: SERVICE_N_PAR_DEFAUT,
+    crackWMax: CRACK_WMAX_PAR_DEFAUT,
+    curvatureBeta: CURVATURE_BETA_PAR_DEFAUT,
   };
 
   switch (model.geometry.kind) {
