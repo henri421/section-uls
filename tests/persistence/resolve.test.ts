@@ -3,6 +3,7 @@ import { resolveModel } from '../../src/persistence/resolve';
 import { FORMAT_VERSION, ENGINE_VERSION } from '../../src/persistence/model-format';
 import type { SectionModel } from '../../src/persistence/model-format';
 import { verifyBiaxial } from '../../src/solvers/uls-biaxial';
+import { sectionCurvature } from '../../src/service/curvature';
 import { rectangularSection } from '../../src/geometry/rectangle';
 import { polygonSection } from '../../src/geometry/polygon';
 import { circularSection, circularRebarCage } from '../../src/geometry/circle';
@@ -132,6 +133,54 @@ describe('resolveModel', () => {
     expect(verifyBiaxial(r.section, r.action, r.norm).M_Rd_magnitude).toBe(
       verifyBiaxial(aLaMain, { N: 0, My: 1, Mz: 1 }, profile).M_Rd_magnitude
     );
+  });
+
+  it('rend les sollicitations de service pretes a etre passees aux modules de service', () => {
+    // Forme `Action` du noyau — `{N, M}`, pas `{N, My, Mz}` — pour qu'aucune
+    // conversion ne reste a la charge de l'appelant : c'est exactement ce
+    // que prennent verifyServiceUniaxial, verifyCrackWidth et
+    // sectionCurvature.
+    const r = resolveModel({
+      ...base(),
+      geometry: { kind: 'rectangle', width: 400, height: 600 },
+      reinforcement: { kind: 'bars', bars: [{ y: 0, z: -250, area: 942 }] },
+      serviceActions: {
+        characteristic: { N: -120, M: 85 },
+        quasiPermanent: { N: -90, M: 60 },
+      },
+    });
+
+    expect(r.serviceActions).toEqual({
+      characteristic: { N: -120, M: 85 },
+      quasiPermanent: { N: -90, M: 60 },
+    });
+
+    // Preuve que la forme rendue se consomme telle quelle.
+    const qp = r.serviceActions?.quasiPermanent;
+    if (qp === undefined) throw new Error('sollicitation quasi-permanente attendue');
+    expect(() => sectionCurvature(r.section, qp)).not.toThrow();
+  });
+
+  it('n invente pas de sollicitations de service quand le modele n en porte pas', () => {
+    // Un {N: 0, M: 0} par defaut donnerait des contraintes et une courbure
+    // nulles, affichables et fausses : l'absence doit rester une absence.
+    const r = resolveModel({
+      ...base(),
+      geometry: { kind: 'rectangle', width: 400, height: 600 },
+      reinforcement: { kind: 'bars', bars: [{ y: 0, z: -250, area: 942 }] },
+    });
+    expect(r.serviceActions).toBeUndefined();
+  });
+
+  it('rend une seule des deux combinaisons quand une seule est donnee', () => {
+    const r = resolveModel({
+      ...base(),
+      geometry: { kind: 'rectangle', width: 400, height: 600 },
+      reinforcement: { kind: 'bars', bars: [{ y: 0, z: -250, area: 942 }] },
+      serviceActions: { quasiPermanent: { N: 0, M: 60 } },
+    });
+    expect(r.serviceActions).toEqual({ quasiPermanent: { N: 0, M: 60 } });
+    expect(r.serviceActions?.characteristic).toBeUndefined();
   });
 
   it('refuse un appariement geometrie/ferraillage incoherent, meme sans passer par parseModel', () => {

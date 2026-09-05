@@ -1,5 +1,5 @@
 import type { SectionModel } from './model-format';
-import type { Section, RebarLayer } from '../model/section';
+import type { Section, RebarLayer, Action } from '../model/section';
 import type { NormProfile } from '../model/norm-profile';
 import type { ConcreteMaterial } from '../model/concrete';
 import type { SteelMaterial } from '../model/steel';
@@ -11,6 +11,21 @@ import { polygonSection } from '../geometry/polygon';
 import { circularSection, circularRebarCage } from '../geometry/circle';
 import { rectangularRebarLayout, rebarRow } from '../geometry/rebar-layout';
 
+/**
+ * Sollicitations de service resolues, sous la forme `Action` (`{N, M}`) du
+ * noyau : elles se passent telles quelles a `verifyServiceUniaxial`,
+ * `verifyCrackWidth` et `sectionCurvature`, sans conversion a la charge de
+ * l'appelant. Chacune est optionnelle, et l'absence n'est pas remplacee par
+ * un zero : `{N: 0, M: 0}` donnerait des contraintes et une courbure nulles,
+ * affichables et fausses.
+ */
+export interface ResolvedServiceActions {
+  /** Combinaison caracteristique — limitation des contraintes (§7.2). */
+  characteristic?: Action;
+  /** Combinaison quasi-permanente — fissuration (§7.3) et courbure (§7.4.3). */
+  quasiPermanent?: Action;
+}
+
 export interface ResolvedModel {
   section: Section;
   action: BiaxialAction;
@@ -19,6 +34,8 @@ export interface ResolvedModel {
   concrete: ConcreteMaterial;
   /** Idem (fyd). */
   steel: SteelMaterial;
+  /** Absentes du modele, absentes ici : `resolveModel` ne les invente pas. */
+  serviceActions?: ResolvedServiceActions;
 }
 
 /**
@@ -121,11 +138,25 @@ export function resolveModel(model: SectionModel): ResolvedModel {
       break;
   }
 
+  const service = model.serviceActions;
+  const serviceActions: ResolvedServiceActions | undefined =
+    service === undefined
+      ? undefined
+      : {
+          ...(service.characteristic !== undefined
+            ? { characteristic: { N: service.characteristic.N, M: service.characteristic.M } }
+            : {}),
+          ...(service.quasiPermanent !== undefined
+            ? { quasiPermanent: { N: service.quasiPermanent.N, M: service.quasiPermanent.M } }
+            : {}),
+        };
+
   return {
     section,
     action: { N: model.action.N, My: model.action.My, Mz: model.action.Mz },
     norm,
     concrete,
     steel,
+    ...(serviceActions !== undefined ? { serviceActions } : {}),
   };
 }
