@@ -16,11 +16,20 @@ import { verifyServiceUniaxial, crackedProperties } from '../src/index';
 import { verifyCrackWidth, effectiveTensionArea } from '../src/index';
 import { sectionCurvature, uncrackedProperties } from '../src/index';
 import { SUPPORTED_FORMAT_VERSIONS } from '../src/index';
+import { verifyShear, verifyDetailing, minimumRestraintArea } from '../src/index';
+import { meyerRestraintReinforcement } from '../src/index';
 import type {
   SectionModel,
   ServiceActionModel,
   ServiceActionsModel,
   ResolvedServiceActions,
+  ElementTypeModel,
+  ShearModel,
+  ShearLinksModel,
+  RestraintModel,
+  MeyerModel,
+  ResolvedShear,
+  ResolvedRestraint,
 } from '../src/index';
 
 describe('API publique du noyau', () => {
@@ -261,5 +270,64 @@ describe('API publique — format v2 et sollicitations de service', () => {
     expect(verifyServiceUniaxial(resolu.section, qp).converged).toBe(true);
     expect(sectionCurvature(resolu.section, qp).converged).toBe(true);
     expect(verifyCrackWidth(resolu.section, qp).wk).toBeGreaterThan(0);
+  });
+});
+
+describe('API publique — format v3', () => {
+  it('expose les quatre blocs et les resout jusqu aux modules de calcul', () => {
+    const cadres: ShearLinksModel = { Asw: 100.5, s: 200, fywk: 500 };
+    const tranchant: ShearModel = { V_Ed: 180, links: cadres, cotTheta: 2.0 };
+    const gene: RestraintModel = { type: 'central', fctEff: 1.8, sigmaS: 320 };
+    const meyer: MeyerModel = {
+      h: 800, d1: 50, ds: 16, wk: 0.2, fctm: 2.9, kzt: 0.5,
+      cas: 'traction', bridage: 'exterieur',
+    };
+    const typeElement: ElementTypeModel = 'beam';
+
+    const modele: SectionModel = {
+      formatVersion: FORMAT_VERSION,
+      engineVersion: '0.1.0',
+      norm: { name: 'EC2_recommended', gammaC: 1.5, gammaS: 1.15, alphaCc: 1, nBands: 200 },
+      concrete: { fck: 30 },
+      steel: { fyk: 500, Es: 200000 },
+      geometry: { kind: 'rectangle', width: 300, height: 900 },
+      reinforcement: {
+        kind: 'rectangular-layout',
+        cover: 40,
+        stirrupDiameter: 8,
+        rows: [
+          { face: 'bottom', bars: { count: 4, diameter: 20 } },
+          { face: 'top', bars: { count: 2, diameter: 12 } },
+        ],
+      },
+      action: { N: 0, My: 250, Mz: 0 },
+      elementType: typeElement,
+      shear: tranchant,
+      restraint: gene,
+      meyer,
+    };
+
+    expect([...SUPPORTED_FORMAT_VERSIONS]).toEqual([1, 2, 3]);
+    expect(FORMAT_VERSION).toBe(3);
+
+    // Aller-retour complet par l'entree publique, puis consommation directe :
+    // c'est la preuve que rien de ce qui se saisit ne se perd en chemin.
+    const resolu = resolveModel(parseModel(serializeModel(modele)));
+
+    const s: ResolvedShear | undefined = resolu.shear;
+    if (s === undefined) throw new Error('bloc tranchant attendu');
+    expect(verifyShear(resolu.section, s.action, resolu.norm, s.options).withLinks?.cotTheta).toBe(
+      2.0
+    );
+
+    expect(verifyDetailing(resolu.section, resolu.elementType ?? 'beam').elementType).toBe('beam');
+
+    const g: ResolvedRestraint | undefined = resolu.restraint;
+    if (g === undefined) throw new Error('bloc de gene attendu');
+    expect(minimumRestraintArea(resolu.section, g.type, g.options).AsMin).toBeGreaterThan(0);
+
+    const m = resolu.meyer;
+    if (m === undefined) throw new Error('bloc Meyer attendu');
+    expect(meyerRestraintReinforcement(m).AsFace).toBeGreaterThan(0);
   });
 });
