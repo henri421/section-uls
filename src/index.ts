@@ -74,3 +74,47 @@ export { verifyCrackWidth } from './service/crack-width';
 export { uncrackedProperties } from './service/uncracked-section';
 export type { CurvatureOptions, CurvatureResult } from './service/curvature';
 export { sectionCurvature } from './service/curvature';
+
+// --- Effort tranchant (§6.2) — ELU, donc NormProfile et valeurs de calcul ---
+export type { ShearGeometry } from './shear/shear-geometry';
+export { shearGeometry } from './shear/shear-geometry';
+
+export type {
+  ShearWithoutLinksOptions,
+  ShearWithoutLinksResult,
+} from './shear/shear-without-links';
+export { shearWithoutLinks } from './shear/shear-without-links';
+
+export type {
+  ShearReinforcement,
+  ShearWithLinksOptions,
+  ShearWithLinksResult,
+} from './shear/shear-with-links';
+export { shearWithLinks } from './shear/shear-with-links';
+
+export type { ShearAction, ShearResult, ShearFailureMode } from './shear/verify-shear';
+export { verifyShear } from './shear/verify-shear';
+
+// --- Dispositions constructives (§9) ---
+export type {
+  ElementType,
+  LongitudinalOptions,
+  LongitudinalCheck,
+} from './detailing/longitudinal';
+export {
+  concreteArea,
+  providedLongitudinalArea,
+  minimumLongitudinalArea,
+  maximumLongitudinalArea,
+  checkLongitudinal,
+} from './detailing/longitudinal';
+
+export type { WebReinforcement, WebOptions, WebCheck } from './detailing/transverse';
+export {
+  webReinforcementRatio,
+  minimumWebRatio,
+  checkWebReinforcement,
+} from './detailing/transverse';
+
+export type { DetailingResult, WebCheckApplicable } from './detailing/verify-detailing';
+export { verifyDetailing } from './detailing/verify-detailing';
