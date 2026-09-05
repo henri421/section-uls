@@ -118,3 +118,7 @@ export {
 
 export type { DetailingResult, WebCheckApplicable } from './detailing/verify-detailing';
 export { verifyDetailing } from './detailing/verify-detailing';
+
+// --- Fissuration sous deformation genee (Zwang), §7.3.2 ---
+export type { RestraintType, RestraintOptions, RestraintResult } from './detailing/restraint';
+export { minimumRestraintArea, thicknessFactor } from './detailing/restraint';
