@@ -2,6 +2,7 @@ import type {
   SectionModel, RowFaceModel, BarSpecModel, PointModel,
   GeometryModel, ReinforcementModel,
   ServiceActionModel, ServiceActionsModel,
+  ShearModel, ShearLinksModel, RestraintModel, MeyerModel,
 } from '../../src/index';
 import type { LoadingMode, ElementType, RestraintType, ShearReinforcement } from '../../src/index';
 import type { MeyerCas, MeyerBridage, MeyerModeK } from '../../src/index';
@@ -85,13 +86,10 @@ export interface FormState {
    * Effort tranchant (§6.2), dispositions constructives (§9) et deformation
    * genee (§7.3.2).
    *
-   * ⚠ AUCUN DE CES CHAMPS N'EST ENREGISTRE DANS LE MODELE. Le format n'a pas
-   * de version qui les porte, et c'est un choix de vitesse assume : ils
-   * reprennent donc leur valeur de depart a chaque chargement, exactement
-   * comme les trois parametres de service assumes. La limite est ECRITE a
-   * l'ecran a cote de la saisie — un utilisateur qui enregistre son modele et
-   * retrouve ses cadres effaces sans avertissement perdrait confiance dans
-   * tout le reste.
+   * ENREGISTRES depuis la version 3 du format : ils decrivent l'ouvrage et
+   * son chargement, pas une hypothese de verification, et tombent donc du
+   * cote « se sauvegarde » de la frontiere du format. Un champ laisse VIDE
+   * laisse son bloc absent du modele, jamais rempli d'un zero.
    *
    * `elementType` est une SAISIE, jamais une deduction : un 300x500 est une
    * poutre ou un poteau selon son role, et les regles du §9 different.
@@ -108,9 +106,9 @@ export interface FormState {
   /**
    * Elements massifs sous deformation genee, methode Meyer (DIN 1045).
    *
-   * ⚠ MEME LIMITE que les champs ci-dessus : le format ne les porte pas, ils
-   * reprennent leur valeur de depart a chaque chargement, et la page l ecrit
-   * a cote de la saisie.
+   * ENREGISTRES eux aussi depuis la version 3 du format, et sous leur propre
+   * bloc : Meyer porte sa PROPRE epaisseur et son propre `f_ctm`, qu on fait
+   * varier en pre-dimensionnement avant meme d avoir arrete la section.
    *
    * Ces parametres sont ceux de la METHODE, pas ceux de la section : Meyer ne
    * lit ni la geometrie ni le ferraillage, et reste donc calculable sur un
@@ -370,6 +368,100 @@ export function parametresDeMeyer(form: FormState): ParametresMeyer {
   };
 }
 
+// --- Les quatre blocs de la version 3 du format, dans les deux sens ---
+
+/**
+ * Cadres tels qu'ils entrent DANS LE MODELE.
+ *
+ * Distinct de `cadresSaisis`, et pour une raison qui n'est pas cosmetique :
+ * `cadresSaisis` REFUSE une saisie a demi remplie, ce qui est juste devant un
+ * resultat affiche — un `V_Rd,s` calcule sur un espacement que personne n'a
+ * donne s'afficherait comme les autres chiffres. Ici, on ecrit un fichier a
+ * chaque frappe, et lever priverait la page de tout son resultat le temps que
+ * l'utilisateur finisse de taper les trois champs. Un cours incomplet n'est
+ * donc simplement PAS ecrit : rien n'est perdu, la saisie est encore a
+ * l'ecran, et le message de `cadresSaisis` continue de dire ce qui manque.
+ */
+function cadresDuModele(form: FormState): ShearLinksModel | undefined {
+  if (form.Asw.trim() === '' || form.sCadres.trim() === '' || form.fywk.trim() === '') {
+    return undefined;
+  }
+  return {
+    Asw: nombreRequis(form.Asw, `${LIBELLE_CADRES} : aire A_sw`),
+    s: nombreRequis(form.sCadres, `${LIBELLE_CADRES} : espacement`),
+    fywk: nombreRequis(form.fywk, `${LIBELLE_CADRES} : f_ywk`),
+  };
+}
+
+/**
+ * Bloc d'effort tranchant, ABSENT tant que `V_Ed` n'est pas saisi.
+ *
+ * Un `V_Ed: 0` ecrit a la place se relirait comme « l'ingenieur a verifie le
+ * tranchant sous effort nul » : une affirmation, la ou il n'y a qu'une
+ * absence. La meme regle que pour les sollicitations de service.
+ *
+ * `cotTheta` vide reste absent : son defaut de 2,5 vit dans `shearWithLinks`,
+ * et l'ecrire ici ferait passer un defaut du moteur pour un choix d'ingenieur
+ * fige dans le fichier.
+ */
+function tranchantDuModele(form: FormState): ShearModel | undefined {
+  if (form.V_Ed.trim() === '') return undefined;
+
+  const links = cadresDuModele(form);
+  const cotTheta = nombreOptionnel(form.cotTheta, 'cot theta');
+  return {
+    V_Ed: nombreRequis(form.V_Ed, 'effort tranchant V_Ed'),
+    ...(links !== undefined ? { links } : {}),
+    ...(cotTheta !== undefined ? { cotTheta } : {}),
+  };
+}
+
+/**
+ * Bloc de deformation genee. TOUJOURS ecrit : sa nature se choisit dans une
+ * liste, qui porte donc toujours une valeur. Ses trois autres champs sont
+ * optionnels et un champ vide reste absent — `f_ct,eff` absent veut dire
+ * « f_ctm a 28 jours », le cas defavorable, et surement pas zero, qui
+ * annulerait l'armature exigee.
+ */
+function geneDuModele(form: FormState): RestraintModel {
+  const fctEff = nombreOptionnel(form.fctEff, 'f_ct,eff');
+  const sigmaS = nombreOptionnel(form.sigmaSZwang, 'sigma_s de la deformation genee');
+  return {
+    type: form.restraintType,
+    ...(fctEff !== undefined ? { fctEff } : {}),
+    ...(sigmaS !== undefined ? { sigmaS } : {}),
+    // Ecrit seulement quand il est vrai : `false` est deja ce que veut dire
+    // son absence, et un fichier ne gagne rien a le repeter.
+    ...(form.zoneEfficace ? { effectiveZoneOnly: true } : {}),
+  };
+}
+
+const CHAMPS_MEYER_REQUIS = ['meyerH', 'meyerD1', 'meyerDs', 'meyerWk', 'meyerFctm', 'meyerKzt'] as const;
+
+/**
+ * Bloc de la methode Meyer, ABSENT des qu'une de ses six grandeurs manque.
+ *
+ * Le cas courant n'est pas theorique : hors du rectangle, aucune dimension ne
+ * s'impose comme epaisseur, `h` reste vide, et le bloc ne s'ecrit pas. Meyer
+ * ne se calcule pas non plus dans ce cas — le fichier dit donc exactement ce
+ * que l'ecran montre.
+ */
+function meyerDuModele(form: FormState): MeyerModel | undefined {
+  if (CHAMPS_MEYER_REQUIS.some((champ) => form[champ].trim() === '')) return undefined;
+
+  return {
+    h: nombreRequis(form.meyerH, 'Meyer : epaisseur h'),
+    d1: nombreRequis(form.meyerD1, 'Meyer : enrobage a l axe d1'),
+    ds: nombreRequis(form.meyerDs, 'Meyer : diametre des barres ds'),
+    wk: nombreRequis(form.meyerWk, 'Meyer : ouverture visee w_k'),
+    fctm: nombreRequis(form.meyerFctm, 'Meyer : f_ctm'),
+    kzt: nombreRequis(form.meyerKzt, 'Meyer : facteur d age k_zt'),
+    cas: form.meyerCas,
+    bridage: form.meyerBridage,
+    kmode: form.meyerKmode,
+  };
+}
+
 // --- Points et lignes de texte (sommets, barres libres) ---
 
 function parseLigneNombres(ligne: string, champ: string, numeroLigne: number, arite: number): number[] {
@@ -559,6 +651,13 @@ export function formToModel(form: FormState): SectionModel {
           ...(quasiPermanent !== undefined ? { quasiPermanent } : {}),
         };
 
+  // Les quatre blocs de la version 3. `elementType` et la nature de la gene
+  // se choisissent dans une liste, qui porte toujours une valeur : ils
+  // s'ecrivent toujours. Les deux autres blocs s'effacent des qu'un champ
+  // manque, plutot que de se completer d'un zero.
+  const shear = tranchantDuModele(form);
+  const meyer = meyerDuModele(form);
+
   return {
     formatVersion: FORMAT_VERSION,
     engineVersion: ENGINE_VERSION,
@@ -577,6 +676,10 @@ export function formToModel(form: FormState): SectionModel {
       Mz: nombreRequis(form.Mz, 'Mz'),
     },
     ...(serviceActions !== undefined ? { serviceActions } : {}),
+    elementType: form.elementType,
+    ...(shear !== undefined ? { shear } : {}),
+    restraint: geneDuModele(form),
+    ...(meyer !== undefined ? { meyer } : {}),
   };
 }
 

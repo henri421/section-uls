@@ -7,6 +7,7 @@ import {
   parametresDeService,
   FormError,
 } from '../../app/src/form';
+import { ELEMENT_TYPE_PAR_DEFAUT, RESTRAINT_TYPE_PAR_DEFAUT } from '../../app/src/form';
 import { parseModel, serializeModel, FORMAT_VERSION, ENGINE_VERSION } from '../../src/index';
 import type { SectionModel } from '../../src/index';
 
@@ -41,10 +42,38 @@ const SEPT_FORMES: SectionModel[] = [
 ];
 
 describe('conversion formulaire <-> modele', () => {
+  /**
+   * Le modele reconstruit CONSERVE tout ce que portait l'original.
+   *
+   * `toMatchObject` et non `toEqual` depuis la version 3 du format : le
+   * formulaire affiche en permanence un type d'element, une nature de gene et
+   * les parametres de Meyer, tous saisis, donc tous enregistres. Un modele
+   * anterieur qui ne les portait pas ressort donc avec ces blocs, remplis des
+   * valeurs que l'ecran montrait. Ce qui compte ici est qu'il ne PERDE rien —
+   * l'identite stricte est verifiee plus bas, sur un modele de version 3
+   * complet, ou elle a un sens.
+   */
   it('aller-retour sur toutes les formes de geometrie et de ferraillage', () => {
     for (const modele of SEPT_FORMES) {
-      expect(formToModel(modelToForm(modele))).toEqual(modele);
+      expect(formToModel(modelToForm(modele))).toMatchObject(modele);
     }
+  });
+
+  it('un modele anterieur a la version 3 ressort avec ce que le formulaire affiche', () => {
+    // La contrepartie explicite du `toMatchObject` ci-dessus : ce qui
+    // s'ajoute, et rien d'autre. Sans ce test, la souplesse du matcher
+    // couvrirait n'importe quel bloc parasite.
+    const reconstruit = formToModel(modelToForm(SEPT_FORMES[0]));
+
+    expect(reconstruit.elementType).toBe(ELEMENT_TYPE_PAR_DEFAUT);
+    expect(reconstruit.restraint).toEqual({ type: RESTRAINT_TYPE_PAR_DEFAUT });
+    expect(reconstruit.meyer?.h).toBe(600); // la hauteur de la section, pre-remplie
+    expect(reconstruit.meyer?.kzt).toBe(0.5);
+    // `V_Ed` part de « 0 » A L'ECRAN depuis la session 11, pour que V_Rd,c
+    // s'affiche des le chargement : ce zero est donc bien une valeur saisie,
+    // et il s'enregistre comme telle. C'est le champ VIDE qui laisse le bloc
+    // absent, pas le champ a zero.
+    expect(reconstruit.shear).toEqual({ V_Ed: 0, cotTheta: 2.5 });
   });
 
   it('le modele reconstruit passe la validation du noyau', () => {
@@ -110,8 +139,11 @@ describe('sollicitations de service dans le formulaire', () => {
     },
   };
 
+  // `toMatchObject` pour la meme raison que plus haut : ces modeles sont
+  // anterieurs a la version 3 et ressortent avec les blocs que le formulaire
+  // affiche. Les sollicitations de service, elles, doivent revenir exactes.
   it('aller-retour avec les deux combinaisons', () => {
-    expect(formToModel(modelToForm(AVEC_SERVICE))).toEqual(AVEC_SERVICE);
+    expect(formToModel(modelToForm(AVEC_SERVICE))).toMatchObject(AVEC_SERVICE);
   });
 
   it('aller-retour avec la seule combinaison quasi-permanente', () => {
@@ -119,7 +151,9 @@ describe('sollicitations de service dans le formulaire', () => {
       ...SEPT_FORMES[0],
       serviceActions: { quasiPermanent: { N: 300, M: 45 } },
     };
-    expect(formToModel(modelToForm(modele))).toEqual(modele);
+    const reconstruit = formToModel(modelToForm(modele));
+    expect(reconstruit).toMatchObject(modele);
+    expect(reconstruit.serviceActions).toEqual({ quasiPermanent: { N: 300, M: 45 } });
   });
 
   it('un modele sans service laisse les champs VIDES, jamais a zero', () => {
@@ -192,5 +226,120 @@ describe('parametres de service', () => {
     form.crackWMax = 'faible';
     expect(() => parametresDeService(form)).toThrow(FormError);
     expect(() => parametresDeService(form)).toThrow(/w_max/);
+  });
+});
+
+/**
+ * Les quatre blocs de la version 3 du format : type d element, effort
+ * tranchant, deformation genee et methode Meyer.
+ *
+ * Ils decrivent l OUVRAGE et son CHARGEMENT, pas une hypothese de
+ * verification : ils entrent donc dans le modele, du meme mouvement que les
+ * sollicitations de service en session 10. La frontiere n a pas bouge, c est
+ * la liste des champs saisis qui s est allongee.
+ */
+describe('champs de verification vers le modele', () => {
+  /** Un formulaire ou chacun des quatre blocs porte une valeur distinctive. */
+  function formulaireRempli() {
+    const form = modelToForm(SEPT_FORMES[0]);
+    form.elementType = 'beam';
+    form.V_Ed = '260';
+    form.Asw = '100';
+    form.sCadres = '200';
+    form.fywk = '500';
+    form.cotTheta = '2';
+    form.restraintType = 'bending';
+    form.fctEff = '1,8';
+    form.sigmaSZwang = '320';
+    form.zoneEfficace = true;
+    form.meyerH = '800';
+    form.meyerD1 = '50';
+    form.meyerDs = '20';
+    form.meyerWk = '0,2';
+    form.meyerFctm = '2,9';
+    form.meyerKzt = '0,6';
+    form.meyerCas = 'flexion';
+    form.meyerBridage = 'interieur';
+    form.meyerKmode = 'parabolique';
+    return form;
+  }
+
+  it('un formulaire complet produit les quatre blocs', () => {
+    const modele = formToModel(formulaireRempli());
+
+    expect(modele.elementType).toBe('beam');
+    expect(modele.shear).toEqual({
+      V_Ed: 260,
+      links: { Asw: 100, s: 200, fywk: 500 },
+      cotTheta: 2,
+    });
+    expect(modele.restraint).toEqual({
+      type: 'bending',
+      fctEff: 1.8,
+      sigmaS: 320,
+      effectiveZoneOnly: true,
+    });
+    expect(modele.meyer).toEqual({
+      h: 800, d1: 50, ds: 20, wk: 0.2, fctm: 2.9, kzt: 0.6,
+      cas: 'flexion', bridage: 'interieur', kmode: 'parabolique',
+    });
+  });
+
+  it('un effort tranchant vide laisse le bloc ABSENT, jamais un V_Ed nul', () => {
+    // « V_Ed = 0 » se relirait comme « l ingenieur a verifie le tranchant sous
+    // effort nul » : une affirmation, la ou il n y a qu une absence.
+    const form = formulaireRempli();
+    form.V_Ed = '';
+    expect(formToModel(form).shear).toBeUndefined();
+  });
+
+  it('une saisie partielle des cadres laisse links absent sans faire echouer le reste', () => {
+    // `formToModel` est appele a CHAQUE frappe par le recalcul : y lever
+    // remplacerait tout le resultat affiche par un message d erreur.
+    const form = formulaireRempli();
+    form.sCadres = '';
+
+    expect(() => formToModel(form)).not.toThrow();
+    const modele = formToModel(form);
+    expect(modele.shear?.V_Ed).toBe(260);
+    expect(modele.shear?.links).toBeUndefined();
+  });
+
+  it('un cot theta vide reste absent : son defaut vit dans shearWithLinks', () => {
+    const form = formulaireRempli();
+    form.cotTheta = '';
+    expect(formToModel(form).shear?.V_Ed).toBe(260);
+    expect(formToModel(form).shear?.cotTheta).toBeUndefined();
+  });
+
+  it('les optionnels de la gene laisses vides sont omis, jamais rendus a zero', () => {
+    const form = modelToForm(SEPT_FORMES[0]);
+    // `f_ct,eff` a zero annulerait l armature exigee ; « absent » veut dire
+    // « f_ctm a 28 jours », ce qui est le cas defavorable et non le cas nul.
+    expect(formToModel(form).restraint).toEqual({ type: RESTRAINT_TYPE_PAR_DEFAUT });
+  });
+
+  it('un parametre de Meyer vide laisse le bloc absent', () => {
+    const form = formulaireRempli();
+    form.meyerKzt = '';
+    expect(formToModel(form).meyer).toBeUndefined();
+  });
+
+  it('une section non rectangulaire ne pre-remplit pas h : le bloc Meyer reste absent', () => {
+    // SEPT_FORMES[1] est un cercle : aucune dimension ne s impose comme
+    // epaisseur, le champ reste vide, et rien n est invente dans le fichier.
+    expect(formToModel(modelToForm(SEPT_FORMES[1])).meyer).toBeUndefined();
+  });
+
+  it('les expressions arithmetiques valent dans ces champs comme dans les autres', () => {
+    const form = formulaireRempli();
+    form.V_Ed = '120+140';
+    form.Asw = '2*50';
+    form.meyerH = '400*2';
+
+    const modele = formToModel(form);
+    expect(modele.shear?.V_Ed).toBe(260);
+    expect(modele.shear?.links?.Asw).toBe(100);
+    expect(modele.meyer?.h).toBe(800);
   });
 });
