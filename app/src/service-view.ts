@@ -16,20 +16,34 @@ import { formatNumber } from './format';
  */
 
 /**
- * Ce qui empeche TOUTE verification de service, ou `null`.
+ * Precision a afficher quand la sollicitation ELU est deviee — jamais un
+ * refus de calculer, et c est tout le propos.
  *
- * `verifyServiceUniaxial`, `verifyCrackWidth` et `sectionCurvature` prennent
- * une `Action` UNIAXIALE `{ N, M }`. Un Mz non nul les met donc tous les
- * trois hors domaine. Le dire une fois, clairement, plutot que de projeter en
- * douce le moment sur un axe — ce qui serait un mensonge silencieux.
+ * Le Mz de l ELU ne gouverne PAS le service. Les verifications de service
+ * portent sur des combinaisons EN 1990 differentes de celle de l ELU —
+ * caracteristique pour le §7.2, quasi-permanente pour le §7.3 et le §7.4.3 —
+ * saisies separement et uniaxiales `{ N, M }` par construction. Il n y a donc
+ * aucun Mz de service a bloquer.
+ *
+ * Et l ecart est frequent plutot qu exceptionnel : la combinaison
+ * quasi-permanente exclut le vent (ψ₂ = 0, EN 1990 tableau A1.1), qui apporte
+ * le plus souvent le moment transversal. Un poteau franchement devie a l ELU
+ * est tres couramment en flexion droite en quasi-permanent.
+ *
+ * La note reste prudente sur le §7.2 : la combinaison caracteristique, elle,
+ * ne supprime pas le vent, et une section peut y demeurer reellement deviee.
+ * Raison de plus pour informer sans decider a la place de l ingenieur.
  */
-export function obstacleService(Mz: number): string | null {
-  if (Mz === 0) return null;
+export function noteFlexionDeviee(MzElu: number): string | null {
+  if (MzElu === 0) return null;
 
   return (
-    `Flexion deviee (Mz = ${formatNumber(Mz, 1)} kN·m). ` +
-    'Les verifications de service du §7.2, du §7.3 et du §7.4.3 supposent une flexion ' +
-    'droite et ne prennent qu un moment unique. Annuler Mz pour les obtenir.'
+    `Sollicitation ELU deviee (Mz = ${formatNumber(MzElu, 1)} kN·m), alors que les ` +
+    'verifications ci-dessous sont en flexion droite. Ce n est pas une incoherence : elles ' +
+    'portent sur des combinaisons DIFFERENTES de l ELU, saisies separement et uniaxiales. ' +
+    'La combinaison quasi-permanente (§7.3, §7.4.3) exclut d ailleurs le vent, qui apporte ' +
+    'le plus souvent le moment transversal. Verifier que la sollicitation de service saisie ' +
+    'decrit bien la flexion attendue.'
   );
 }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  obstacleService,
+  noteFlexionDeviee,
   obstacleFissuration,
   blocContraintes,
   blocFissuration,
@@ -56,24 +56,26 @@ function sectionEnTe() {
   });
 }
 
-describe('obstacles aux verifications de service', () => {
-  it('une flexion droite ne fait obstacle a rien', () => {
-    expect(obstacleService(0)).toBeNull();
+describe('note de flexion deviee', () => {
+  it('une sollicitation ELU droite n appelle aucune precision', () => {
+    expect(noteFlexionDeviee(0)).toBeNull();
   });
 
-  it('un Mz non nul met les TROIS verifications hors domaine', () => {
-    // Les trois modules prennent une Action uniaxiale {N, M} : projeter le
-    // moment sur un axe serait un mensonge silencieux.
-    const motif = obstacleService(12.5);
+  it('un Mz ELU non nul appelle une PRECISION, jamais un refus de calculer', () => {
+    // Le Mz de l ELU ne concerne pas le service : les combinaisons de service
+    // sont saisies separement et sont uniaxiales {N, M} par construction.
+    const note = noteFlexionDeviee(12.5);
 
-    expect(motif).not.toBeNull();
-    expect(motif).toMatch(/flexion deviee/i);
-    expect(motif).toContain('12,5');
+    expect(note).not.toBeNull();
+    expect(note).toMatch(/flexion deviee|deviee/i);
+    expect(note).toContain('12,5');
+    // Elle doit expliquer POURQUOI ce n est pas une incoherence.
+    expect(note).toMatch(/combinaison/i);
   });
 
   it('le signe du Mz est indifferent : seule compte sa presence', () => {
-    expect(obstacleService(-3)).not.toBeNull();
-    expect(obstacleService(-3)).toMatch(/flexion deviee/i);
+    expect(noteFlexionDeviee(-3)).not.toBeNull();
+    expect(noteFlexionDeviee(-3)).toMatch(/deviee/i);
   });
 
   it('une section rectangulaire ne fait pas obstacle a la fissuration', () => {
@@ -166,13 +168,24 @@ describe('bloc des contraintes en service', () => {
   });
 
   it('un obstacle amont donne un bloc sans lignes, portant le motif', () => {
-    const motif = obstacleService(12.5)!;
+    const motif = 'Sollicitation caracteristique de service non saisie.';
     const bloc = blocContraintes({ motif });
 
     expect(bloc.lignes).toEqual([]);
     expect(bloc.verdict).toBeNull();
     expect(bloc.note).toBe(motif);
     expect(bloc.titre).toContain('7.2');
+  });
+
+  it('un ELU devie n empeche EN RIEN le calcul de service', () => {
+    // Regression : le Mz de l ELU ne gouverne pas le service. La sollicitation
+    // de service est saisie separement et uniaxiale ; elle se calcule
+    // normalement, la deviation de l ELU ne donnant qu une note.
+    const bloc = blocContraintes({ resultat: verifyServiceUniaxial(poutre(), { N: 0, M: 120 }) });
+
+    expect(noteFlexionDeviee(12.5)).not.toBeNull();
+    expect(bloc.lignes).not.toEqual([]);
+    expect(bloc.verdict!.ok).toBe(true);
   });
 });
 
@@ -275,13 +288,14 @@ describe('bloc de la courbure', () => {
   it('la note dit TOUJOURS que ce n est pas une fleche', () => {
     // La confusion se joue a l ecran : une fleche exige portee, appuis et
     // chargement, du niveau element, que ce module de sections ignore.
+    const motif = 'Sollicitation quasi-permanente non saisie.';
     const calcule = blocCourbure({ resultat: sectionCurvature(poutre(), { N: 0, M: 120 }) });
-    const empeche = blocCourbure({ motif: obstacleService(12.5)! });
+    const empeche = blocCourbure({ motif });
 
     expect(calcule.note).toMatch(/fleche/i);
     expect(empeche.note).toMatch(/fleche/i);
     // Et le motif reste porte, en plus de l avertissement.
-    expect(empeche.note).toMatch(/flexion deviee/i);
+    expect(empeche.note).toContain(motif);
     expect(empeche.lignes).toEqual([]);
     expect(empeche.verdict).toBeNull();
   });
