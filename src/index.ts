@@ -2,7 +2,7 @@ export type { NormProfile } from './model/norm-profile';
 export { ec2Recommended } from './norms/ec2-recommended';
 
 export type { ConcreteMaterial, ConcreteLaw } from './model/concrete';
-export { createConcrete } from './model/concrete';
+export { createConcrete, fctmDepuisFck } from './model/concrete';
 export { concreteStress } from './constitutive/concrete-law';
 
 export type { SteelMaterial } from './model/steel';

@@ -9,24 +9,27 @@ import {
   verifyShear,
   verifyDetailing,
   minimumRestraintArea,
+  meyerRestraintReinforcement,
   FORMAT_VERSION,
   ENGINE_VERSION,
 } from '../../src/index';
 import type {
   SectionModel, VerificationResult, ResolvedModel, NeutralAxisState,
   Section, Action, ServiceResult, CrackResult, CurvatureResult,
-  ShearResult, DetailingResult, RestraintResult,
+  ShearResult, DetailingResult, RestraintResult, MeyerResult,
 } from '../../src/index';
 import {
   formToModel,
   modelToForm,
   parametresDeService,
   parametresDeVerification,
+  parametresDeMeyer,
   FormError,
 } from './form';
 import { rectangularRebarLayout, rebarRow, formatRow } from '../../src/index';
 import type {
   FormState, RowInput, FreeRowInput, ParametresService, ParametresVerifications,
+  ParametresMeyer,
 } from './form';
 import {
   noteFlexionDeviee,
@@ -44,6 +47,7 @@ import {
   obstacleDispositions,
   obstacleZwang,
 } from './checks-view';
+import { blocMeyer } from './meyer-view';
 import { interactionDiagramNM, interactionCurveAtN } from '../../src/index';
 import { outlineOf, boundingBox, neutralAxisSegment, barRadius, splitByLine, zetaOf } from './draw';
 import { plotSvg } from './plot';
@@ -364,6 +368,43 @@ function htmlFormulaire(): string {
       l EN 1992-1-1, qui ecrit l eq. 7.1 sur toute la zone tendue ; c est le raffinement retenu
       par la pratique pour les pieces epaisses, et l ecart atteint un facteur plusieurs sur un
       voile d un metre.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Elements massifs, methode Meyer (DIN 1045)</legend>
+    ${NON_ENREGISTRE}
+    <p class="note">Methode <strong>allemande</strong>, distincte du §7.3.2 ci-dessus et qui ne le
+      remplace pas : elle sert au <strong>pre-dimensionnement</strong> et au controle d ordre de
+      grandeur, la justification reglementaire restant l EN 1992-1-1 et ses annexes nationales.
+      Elle ne lit ni la geometrie ni le ferraillage — ses parametres sont les siens, et
+      <em>h</em> comme <em>f_ctm</em> sont seulement <strong>pre-remplis</strong> a partir de la
+      section au chargement.</p>
+    ${champTexte('meyerH', 'h, epaisseur de l element (mm)', etat.meyerH)}
+    ${champTexte('meyerD1', 'd1, enrobage a l AXE des barres (mm)', etat.meyerD1)}
+    ${champTexte('meyerDs', 'ds, diametre des barres (mm)', etat.meyerDs)}
+    ${champTexte('meyerWk', 'w_k visee (mm)', etat.meyerWk)}
+    ${champTexte('meyerFctm', 'f_ctm a 28 jours (MPa)', etat.meyerFctm)}
+    ${champTexte('meyerKzt', 'k_zt = f_ct,eff / f_ctm', etat.meyerKzt)}
+    <p class="note note-decisive"><em>k_zt</em> est le parametre <strong>decisif</strong> de la
+      methode. Le Zwang des pieces massives nait de la chaleur d <strong>hydratation</strong> et
+      fissure a quelques jours, quand le beton est loin de son f_ctm a 28 jours : <em>k_zt</em> =
+      1,0 correspond a 28 jours, donne l armature la plus forte, et <strong>n est pas le cas
+      courant</strong>. Valeurs usuelles : 0,4 / 0,5 / 0,6.</p>
+    ${champChoix('meyerCas', 'Sollicitation', etat.meyerCas, [
+      ['traction', 'Traction : gene centree, deux faces armees'],
+      ['flexion', 'Flexion : gene de flexion, une seule face tendue'],
+    ])}
+    ${champChoix('meyerBridage', 'Origine du bridage', etat.meyerBridage, [
+      ['exterieur', 'Exterieur : appuis, radier durci, reprise de betonnage'],
+      ['interieur', 'Interieur : contraintes propres, gradient de peau'],
+    ])}
+    ${champChoix('meyerKmode', 'Interpolation du facteur k', etat.meyerKmode, [
+      ['lineaire', 'Lineaire (0,80 a 0,50 entre 300 et 800 mm)'],
+      ['parabolique', 'Parabolique (proposition de Meyer)'],
+    ])}
+    <p class="note">Seule la famille <strong>traction / bridage exterieur</strong> a ete confrontee
+      au diagramme de l ouvrage (a environ 3 % pres). La flexion et le bridage interieur sont
+      derives de la meme formulation et n ont ete confrontes a rien.</p>
   </fieldset>
 
   <fieldset>
@@ -957,7 +998,8 @@ function htmlService(
  */
 function htmlVerifications(
   resolu: ResolvedModel,
-  parametres: Issue<ParametresVerifications>
+  parametres: Issue<ParametresVerifications>,
+  parametresMeyer: Issue<ParametresMeyer>
 ): string {
   const section = resolu.section;
 
@@ -1027,11 +1069,35 @@ function htmlVerifications(
           );
   }
 
+  // La methode Meyer a sa PROPRE saisie, evaluee separement : elle ne partage
+  // aucun parametre avec les trois modules ci-dessus, et un champ vide dans
+  // son cadre n'a aucune raison d'effacer leurs blocs.
+  //
+  // Elle ne recoit rien de `resolu` non plus — ni geometrie, ni ferraillage,
+  // ni sollicitation. Elle reste donc calculable sur un cercle, la ou le
+  // §6.2 et le §7.3.2 sont hors domaine.
+  let meyer: Issue<MeyerResult>;
+  let dsMeyer = 0;
+
+  if (!('resultat' in parametresMeyer)) {
+    meyer = { motif: parametresMeyer.motif };
+  } else {
+    const m = parametresMeyer.resultat;
+    // `ds` est transmis a cote du resultat : `MeyerResult` ne le porte pas,
+    // et le bloc en tire la repartition de barres.
+    dsMeyer = m.ds;
+    // `meyerRestraintReinforcement` LEVE sur tout parametre non strictement
+    // positif — un champ vide en cours de frappe suffit — et aussi sur une
+    // configuration hors domaine, quand A_cr absorbe toute la section tendue.
+    meyer = tenter(() => meyerRestraintReinforcement(m));
+  }
+
   return (
     '<div id="verifications"><h2>Effort tranchant, dispositions et deformation genee</h2>' +
     htmlBlocService(blocTranchant(tranchant, VEd), 'tranchant') +
     htmlBlocService(blocDispositions(dispositions), 'dispositions') +
     htmlBlocService(blocZwang(zwang), 'zwang') +
+    htmlBlocService(blocMeyer(meyer, dsMeyer), 'meyer') +
     '</div>'
   );
 }
@@ -1086,11 +1152,14 @@ function recalculer(mode?: 'proportional'): void {
     // saisie en cours de frappe dans ce cadre ne doit pas priver l'ecran du
     // resultat de flexion, deja calcule.
     const parametresVerifications = tenter(() => parametresDeVerification(etat));
+    // Evalues SEPAREMENT : les deux cadres de saisie sont independants, et une
+    // frappe en cours dans l'un ne doit pas priver l'autre de son bloc.
+    const parametresMeyer = tenter(() => parametresDeMeyer(etat));
 
     dernierResultat =
       htmlResultat(resolu, resultat, etatAxe) +
       htmlService(resolu, resolu.action.Mz, parametres) +
-      htmlVerifications(resolu, parametresVerifications);
+      htmlVerifications(resolu, parametresVerifications, parametresMeyer);
     dernierDessin = dessiner(resolu, resultat, etatAxe);
     zoneResultat.innerHTML = dernierResultat;
     zoneSection.innerHTML = dernierDessin;

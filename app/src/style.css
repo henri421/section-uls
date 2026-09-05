@@ -604,6 +604,31 @@ label.large > input {
 }
 
 /*
+ * Le bloc Meyer se detache des trois qui le precedent, et c'est le point.
+ *
+ * Il repond a la meme question que le §7.3.2 affiche juste au-dessus, par une
+ * autre methode et un autre referentiel (DIN 1045). Ses grandeurs portent les
+ * memes noms — a commencer par le facteur k — sans recouvrir les memes
+ * valeurs. Un liseré different est le premier signal, avant meme la lecture,
+ * qu'on change de methode et non de ligne.
+ */
+.groupe.bloc[data-bloc='meyer'] {
+  border-left-color: var(--attention);
+}
+
+/*
+ * k_zt gouverne tout le resultat de la methode, et son defaut n'est pas le
+ * cas defavorable : il merite donc la couleur de l'attention, la ou les
+ * autres notes de saisie restent en gris.
+ */
+.note-decisive {
+  padding: 0.45rem 0.55rem;
+  border-left: 3px solid var(--attention);
+  background: #fdf6e3;
+  color: #6b5400;
+}
+
+/*
  * La flexion deviee de l'ELU est une PRECISION, jamais un refus : elle porte
  * donc la couleur de l'attention, et surtout pas celle de l'echec.
  */

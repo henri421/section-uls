@@ -670,4 +670,126 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
 
     expect(nombre(valeur(dom, 'dispositions', 'A_s,min'))).toBeGreaterThan(avec500);
   });
+
+  /**
+   * La methode Meyer / DIN 1045 dans la page.
+   *
+   * Meme histoire encore : le module etait livre et teste, et n atteignait
+   * pas l ecran. Il vit A COTE du §7.3.2, jamais a sa place — c est la
+   * confusion que ces tests surveillent autant que le calcul.
+   */
+  describe('methode Meyer (DIN 1045), elements massifs', () => {
+    it('le bloc est calcule des le chargement, sans aucun clic', async () => {
+      const dom = await monterApplication();
+
+      expect(bloc(dom, 'meyer').textContent).toMatch(/DIN 1045/);
+      expect(lignes(dom, 'meyer')).toBeGreaterThan(0);
+      expect(bloc(dom, 'meyer').innerHTML).not.toContain('NaN');
+
+      // h est pre-rempli avec la hauteur de la section rectangulaire, f_ctm
+      // avec celui deduit du f_ck saisi : un bloc vide au chargement ne se
+      // ferait jamais decouvrir.
+      expect(nombre(valeur(dom, 'meyer', 'A_s par face'))).toBeGreaterThan(0);
+    });
+
+    it('coexiste avec le §7.3.2 et dit que les deux k ne sont pas comparables', async () => {
+      // Les deux blocs affichent un « k » a dix lignes d ecart, avec deux
+      // valeurs differentes. Sans la mention, c est un bug apparent.
+      const dom = await monterApplication();
+
+      expect(lignes(dom, 'zwang')).toBeGreaterThan(0);
+      expect(lignes(dom, 'meyer')).toBeGreaterThan(0);
+      expect(bloc(dom, 'meyer').textContent).toMatch(/remplace/i);
+      expect(bloc(dom, 'meyer').textContent).toMatch(/7\.3\.2/);
+    });
+
+    it('changer l epaisseur h change l armature exigee', async () => {
+      const dom = await monterApplication();
+      const mince = nombre(valeur(dom, 'meyer', 'A_s par face'));
+
+      saisir(dom, 'meyerH', '1200');
+      vi.advanceTimersByTime(500);
+
+      expect(nombre(valeur(dom, 'meyer', 'A_s par face'))).toBeGreaterThan(mince);
+    });
+
+    it('en bridage INTERIEUR l armature devient insensible a l epaisseur', async () => {
+      // Signature physique du regime : l effort ne vient que de la peau,
+      // `F_cr = f_ct,eff · A_cr`, et A_cr est plafonne par 2,5·d1 bien avant
+      // que l epaisseur ne compte. C est le test qui prouve que le bon
+      // regime est appele, et pas seulement que le module repond.
+      const dom = await monterApplication();
+
+      choisir(dom, 'meyerBridage', 'interieur');
+      saisir(dom, 'meyerH', '400');
+      vi.advanceTimersByTime(500);
+      const a400 = nombre(valeur(dom, 'meyer', 'A_s par face'));
+
+      saisir(dom, 'meyerH', '1200');
+      vi.advanceTimersByTime(500);
+      const a1200 = nombre(valeur(dom, 'meyer', 'A_s par face'));
+
+      expect(a1200).toBeCloseTo(a400, 0);
+      expect(bloc(dom, 'meyer').textContent).toMatch(/interieur|propres/i);
+
+      // Et le contraste, sans lequel le test ci-dessus passerait aussi sur un
+      // module qui ne calculerait rien : en bridage EXTERIEUR, la meme
+      // variation d epaisseur deplace bien l armature.
+      choisir(dom, 'meyerBridage', 'exterieur');
+      vi.advanceTimersByTime(500);
+      expect(nombre(valeur(dom, 'meyer', 'A_s par face'))).not.toBeCloseTo(a1200, 0);
+    });
+
+    it('REGRESSION : une epaisseur vide ou nulle n efface PAS la page', async () => {
+      // `meyerRestraintReinforcement` LEVE sur tout parametre non
+      // strictement positif — un champ vide en cours de frappe suffit.
+      // L exception remontee au `try` global remplacerait tout le resultat
+      // de flexion par un message d erreur.
+      const dom = await monterApplication();
+
+      saisir(dom, 'meyerH', '');
+      vi.advanceTimersByTime(500);
+
+      expect(verdictElu(dom)).toMatch(/taux/i);
+      expect(lignes(dom, 'meyer')).toBe(0);
+      expect(bloc(dom, 'meyer').innerHTML).not.toContain('NaN');
+      // Le bloc reduit a son motif garde son avertissement : c est quand rien
+      // ne s affiche qu on cherche a comprendre ce que ce bloc fait la.
+      expect(bloc(dom, 'meyer').textContent).toMatch(/DIN 1045/);
+      // Les autres verifications ne sont pas concernees par cette saisie.
+      expect(lignes(dom, 'zwang')).toBeGreaterThan(0);
+      expect(lignes(dom, 'tranchant')).toBeGreaterThan(0);
+
+      saisir(dom, 'meyerH', '0');
+      vi.advanceTimersByTime(500);
+
+      expect(verdictElu(dom)).toMatch(/taux/i);
+      expect(lignes(dom, 'meyer')).toBe(0);
+      expect(lignes(dom, 'zwang')).toBeGreaterThan(0);
+    });
+
+    it('une geometrie circulaire n empeche PAS la methode Meyer', async () => {
+      // Contrairement au §6.2 et au §7.3.2, Meyer ne depend d AUCUNE
+      // grandeur de la section : ses parametres sont les siens.
+      const dom = await monterApplication();
+      choisir(dom, 'geometryKind', 'circle');
+      vi.advanceTimersByTime(500);
+
+      expect(lignes(dom, 'zwang')).toBe(0); // le §7.3.2, lui, est hors domaine
+      expect(lignes(dom, 'meyer')).toBeGreaterThan(0);
+      expect(nombre(valeur(dom, 'meyer', 'A_s par face'))).toBeGreaterThan(0);
+      expect(bloc(dom, 'meyer').innerHTML).not.toContain('NaN');
+    });
+
+    it('la page AVERTIT sur k_zt, le parametre decisif', async () => {
+      // Le Zwang des pieces massives nait de la chaleur d hydratation et
+      // fissure a quelques jours : k_zt = 1,0 donne l armature la plus forte
+      // et n est PAS le cas courant.
+      const dom = await monterApplication();
+      const saisie = dom.window.document.querySelector('#saisie')?.textContent ?? '';
+
+      expect(saisie).toMatch(/k_zt/);
+      expect(saisie).toMatch(/hydratation|jeune age|quelques jours/i);
+    });
+  });
 });

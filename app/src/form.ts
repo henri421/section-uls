@@ -4,8 +4,10 @@ import type {
   ServiceActionModel, ServiceActionsModel,
 } from '../../src/index';
 import type { LoadingMode, ElementType, RestraintType, ShearReinforcement } from '../../src/index';
-import { ec2Recommended, FORMAT_VERSION, ENGINE_VERSION } from '../../src/index';
+import type { MeyerCas, MeyerBridage, MeyerModeK } from '../../src/index';
+import { ec2Recommended, fctmDepuisFck, FORMAT_VERSION, ENGINE_VERSION } from '../../src/index';
 import { evaluateExpression, ExpressionError } from './expression';
+import { formatNumber } from './format';
 
 /** Un lit tel qu'il est saisi : nombre de barres OU espacement maximal. */
 export interface RowInput {
@@ -102,6 +104,24 @@ export interface FormState {
   restraintType: RestraintType;
   fctEff: string; sigmaSZwang: string;
   zoneEfficace: boolean;
+
+  /**
+   * Elements massifs sous deformation genee, methode Meyer (DIN 1045).
+   *
+   * ⚠ MEME LIMITE que les champs ci-dessus : le format ne les porte pas, ils
+   * reprennent leur valeur de depart a chaque chargement, et la page l ecrit
+   * a cote de la saisie.
+   *
+   * Ces parametres sont ceux de la METHODE, pas ceux de la section : Meyer ne
+   * lit ni la geometrie ni le ferraillage, et reste donc calculable sur un
+   * cercle ou un polygone. `meyerH` et `meyerFctm` sont seulement PRE-REMPLIS
+   * a partir de la section au chargement, et l utilisateur les ecrase.
+   */
+  meyerH: string; meyerD1: string; meyerDs: string;
+  meyerWk: string; meyerFctm: string; meyerKzt: string;
+  meyerCas: MeyerCas;
+  meyerBridage: MeyerBridage;
+  meyerKmode: MeyerModeK;
 }
 
 /** Valeurs de depart des trois parametres assumes, telles qu'elles s'affichent. */
@@ -125,6 +145,27 @@ export const V_ED_PAR_DEFAUT = '0';
 export const FYWK_PAR_DEFAUT = '500';
 export const COT_THETA_PAR_DEFAUT = '2,5';
 export const RESTRAINT_TYPE_PAR_DEFAUT: RestraintType = 'central';
+
+/**
+ * Valeurs de depart de la methode Meyer.
+ *
+ * `d1 = 40 mm` et `ds = 16 mm` sont les ordres de grandeur des armatures de
+ * peau d un element massif ; `w_k = 0,3 mm` est la valeur courante du tableau
+ * 7.1N pour les classes d exposition usuelles.
+ *
+ * `k_zt = 0,5` est le seul de ces defauts qui soit un ARBITRAGE et non une
+ * habitude : le Zwang des pieces massives nait de la chaleur d hydratation et
+ * fissure a quelques jours, quand le beton est loin de son `f_ctm` a 28 jours.
+ * Partir de 1,0 conduirait a l armature la plus forte pour un instant de
+ * fissuration qui n est pas celui du phenomene.
+ */
+export const MEYER_D1_PAR_DEFAUT = '40';
+export const MEYER_DS_PAR_DEFAUT = '16';
+export const MEYER_WK_PAR_DEFAUT = '0,3';
+export const MEYER_KZT_PAR_DEFAUT = '0,5';
+export const MEYER_CAS_PAR_DEFAUT: MeyerCas = 'traction';
+export const MEYER_BRIDAGE_PAR_DEFAUT: MeyerBridage = 'exterieur';
+export const MEYER_KMODE_PAR_DEFAUT: MeyerModeK = 'lineaire';
 
 export class FormError extends Error {}
 
@@ -285,6 +326,47 @@ export function parametresDeVerification(form: FormState): ParametresVerificatio
     fctEff: nombreOptionnel(form.fctEff, 'f_ct,eff'),
     sigmaS: nombreOptionnel(form.sigmaSZwang, 'sigma_s de la deformation genee'),
     zoneEfficace: form.zoneEfficace,
+  };
+}
+
+// --- Parametres de la methode Meyer (DIN 1045) ---
+
+/**
+ * Ce que la saisie apporte a `meyerRestraintReinforcement`, une fois evaluee.
+ *
+ * La forme est exactement celle de `MeyerParams` : le cablage transmet cet
+ * objet tel quel, sans rien en deriver. `Es` et `b` ne sont pas saisis et
+ * restent aux defauts du module (200000 MPa, 1000 mm) — les aires sortent
+ * donc PAR METRE de largeur.
+ *
+ * Aucune borne n est verifiee ici : le module REFUSE lui-meme tout parametre
+ * qui n est pas strictement positif, et son refus n atteint que son propre
+ * bloc. Le dupliquer ici transformerait un resultat d un seul module en
+ * erreur de formulaire, qui bloquerait toute la page.
+ */
+export interface ParametresMeyer {
+  h: number;
+  d1: number;
+  ds: number;
+  wk: number;
+  fctm: number;
+  kzt: number;
+  cas: MeyerCas;
+  bridage: MeyerBridage;
+  kmode: MeyerModeK;
+}
+
+export function parametresDeMeyer(form: FormState): ParametresMeyer {
+  return {
+    h: nombreRequis(form.meyerH, 'Meyer : epaisseur h'),
+    d1: nombreRequis(form.meyerD1, 'Meyer : enrobage a l axe d1'),
+    ds: nombreRequis(form.meyerDs, 'Meyer : diametre des barres ds'),
+    wk: nombreRequis(form.meyerWk, 'Meyer : ouverture visee w_k'),
+    fctm: nombreRequis(form.meyerFctm, 'Meyer : f_ctm'),
+    kzt: nombreRequis(form.meyerKzt, 'Meyer : facteur d age k_zt'),
+    cas: form.meyerCas,
+    bridage: form.meyerBridage,
+    kmode: form.meyerKmode,
   };
 }
 
@@ -554,6 +636,26 @@ export function modelToForm(model: SectionModel): FormState {
     restraintType: RESTRAINT_TYPE_PAR_DEFAUT,
     fctEff: '', sigmaSZwang: '',
     zoneEfficace: false,
+
+    // `h` PRE-REMPLI avec la hauteur de la section quand elle est
+    // rectangulaire : c est le cas ou l epaisseur de l element massif et la
+    // hauteur de la section coincident. Hors du rectangle, aucune dimension
+    // ne s impose et le champ reste vide plutot que de proposer une
+    // epaisseur que personne n a donnee.
+    meyerH:
+      model.geometry.kind === 'rectangle' ? texteDe(model.geometry.height) : '',
+    meyerD1: MEYER_D1_PAR_DEFAUT,
+    meyerDs: MEYER_DS_PAR_DEFAUT,
+    meyerWk: MEYER_WK_PAR_DEFAUT,
+    // `f_ctm` DEDUIT du f_ck saisi (tableau 3.1), et non la valeur de table
+    // de l ouvrage : les deux concordent a moins de 2 % — 2,896 contre 2,9
+    // pour un C30/37 — et la valeur deduite suit le beton reellement saisi.
+    // L utilisateur reste libre de la remplacer par celle de la table.
+    meyerFctm: formatNumber(fctmDepuisFck(model.concrete.fck), 2),
+    meyerKzt: MEYER_KZT_PAR_DEFAUT,
+    meyerCas: MEYER_CAS_PAR_DEFAUT,
+    meyerBridage: MEYER_BRIDAGE_PAR_DEFAUT,
+    meyerKmode: MEYER_KMODE_PAR_DEFAUT,
   };
 
   switch (model.geometry.kind) {
