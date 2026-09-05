@@ -535,3 +535,50 @@ label.large > input {
     grid-column: 1 / -1;
   }
 }
+
+/* --- Verifications de service (ELS) --- */
+
+/*
+ * Le service vient APRES l'ELU dans le meme panneau, separe par un trait :
+ * ce sont deux etats-limites distincts, sous des combinaisons d'actions
+ * differentes, et les confondre d'un coup d'oeil serait la premiere erreur
+ * possible sur cette page.
+ */
+#service {
+  margin-top: 1.1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--trait);
+}
+
+#service h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.groupe.service {
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--appui);
+}
+
+/*
+ * Verdict de service : la meme grammaire de couleurs que celui de l'ELU,
+ * mais en retrait — il conclut un bloc, pas la page.
+ */
+.verdict.service {
+  margin: 0.4rem 0 0;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.85rem;
+}
+
+/*
+ * La flexion deviee de l'ELU est une PRECISION, jamais un refus : elle porte
+ * donc la couleur de l'attention, et surtout pas celle de l'echec.
+ */
+.note-deviee {
+  margin: 0 0 0.7rem;
+  padding: 0.5rem 0.6rem;
+  border-left: 3px solid var(--attention);
+  background: #fdf6e3;
+  color: #6b5400;
+}

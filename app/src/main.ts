@@ -3,13 +3,27 @@ import {
   verifySection,
   capacityAtAngle,
   polygonArea,
+  verifyServiceUniaxial,
+  verifyCrackWidth,
+  sectionCurvature,
   FORMAT_VERSION,
   ENGINE_VERSION,
 } from '../../src/index';
-import type { SectionModel, VerificationResult, ResolvedModel, NeutralAxisState } from '../../src/index';
-import { formToModel, modelToForm, FormError } from './form';
+import type {
+  SectionModel, VerificationResult, ResolvedModel, NeutralAxisState,
+  Section, Action, ServiceResult, CrackResult, CurvatureResult,
+} from '../../src/index';
+import { formToModel, modelToForm, parametresDeService, FormError } from './form';
 import { rectangularRebarLayout, rebarRow, formatRow } from '../../src/index';
-import type { FormState, RowInput, FreeRowInput } from './form';
+import type { FormState, RowInput, FreeRowInput, ParametresService } from './form';
+import {
+  noteFlexionDeviee,
+  obstacleFissuration,
+  blocContraintes,
+  blocFissuration,
+  blocCourbure,
+} from './service-view';
+import type { BlocService, Issue } from './service-view';
 import { interactionDiagramNM, interactionCurveAtN } from '../../src/index';
 import { outlineOf, boundingBox, neutralAxisSegment, barRadius, splitByLine, zetaOf } from './draw';
 import { plotSvg } from './plot';
@@ -728,6 +742,119 @@ function htmlResultat(
   return verdict + jauge + sollicitation + resistance + equilibre + materiaux + ferraillage + note + motif;
 }
 
+// --- Verifications de service -----------------------------------------------
+
+/**
+ * Les trois verifications de service (§7.2, §7.3, §7.4.3) partent AVEC le
+ * reste, sans bouton : 9 a 24 ms chacune (mesure du 2026-09-05), negligeable
+ * devant les 25 a 120 ms du recalcul ELU. Rien ici ne ressemble au piege du
+ * mode proportionnel, qui coute des secondes.
+ *
+ * Aucun calcul dans ce bloc : il lit les sollicitations resolues, appelle les
+ * modules et confie la mise en forme a `service-view.ts`.
+ */
+
+const SANS_CARACTERISTIQUE =
+  'Aucune sollicitation de service caracteristique saisie. La limitation des contraintes du §7.2 ' +
+  'porte sur la combinaison CARACTERISTIQUE, qui n est pas celle de l ELU : la reprendre serait ' +
+  'fausse d un facteur 1,35 a 1,5, elle doit donc etre renseignee separement.';
+
+const SANS_QUASI_PERMANENTE =
+  'Aucune sollicitation de service quasi-permanente saisie. L ouverture de fissures (§7.3) et la ' +
+  'courbure (§7.4.3) portent sur la combinaison QUASI-PERMANENTE, qui n est pas celle de l ELU : ' +
+  'elle doit etre renseignee separement.';
+
+/**
+ * Protege UN appel de verification, et lui seul.
+ *
+ * `verifyCrackWidth` LEVE sur toute geometrie non rectangulaire. Laisser
+ * l'exception remonter jusqu'au `try` global de `recalculer()` effacerait tout
+ * le resultat ELU au profit d'un message d'erreur — parce qu'un module
+ * OPTIONNEL n'a pas pu s'appliquer. L'echec devient donc ici une donnee, que
+ * `service-view.ts` affiche comme un resultat parmi les autres.
+ */
+function tenter<T>(calcul: () => T): Issue<T> {
+  try {
+    return { resultat: calcul() };
+  } catch (e) {
+    return { motif: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+function issueFissuration(
+  section: Section,
+  action: Action | undefined,
+  parametres: ParametresService
+): Issue<CrackResult> {
+  if (action === undefined) return { motif: SANS_QUASI_PERMANENTE };
+
+  // Le garde est interroge AVANT l'appel : le message du module ne dit pas que
+  // les deux autres verifications, elles, restent valables sur un polygone.
+  const obstacle = obstacleFissuration(section);
+  if (obstacle !== null) return { motif: obstacle };
+
+  return tenter(() =>
+    verifyCrackWidth(section, action, {
+      wMax: parametres.wMax,
+      service: { n: parametres.n },
+    })
+  );
+}
+
+function htmlBlocService(bloc: BlocService, cle: string): string {
+  const lignes = bloc.lignes.map((l) => ligne(echapper(l.libelle), echapper(l.valeur))).join('');
+
+  const verdict =
+    bloc.verdict === null
+      ? ''
+      : `<p class="verdict service ${bloc.verdict.ok ? 'ok' : 'non-ok'}">${echapper(bloc.verdict.texte)}</p>`;
+
+  // Une note qui accompagne un verdict DEFAVORABLE est le motif de l'echec ;
+  // partout ailleurs c'est une precision — l'avertissement « pas une fleche »
+  // en tete. Deux styles, pour deux lectures qui n'appellent pas la meme
+  // reaction.
+  const classeNote = bloc.verdict !== null && !bloc.verdict.ok ? 'motif' : 'note';
+  const note = bloc.note === null ? '' : `<p class="${classeNote}">${echapper(bloc.note)}</p>`;
+
+  return `<div class="groupe service" data-bloc="${cle}"><h3>${echapper(bloc.titre)}</h3>${lignes}${verdict}${note}</div>`;
+}
+
+function htmlService(
+  resolu: ResolvedModel,
+  MzElu: number,
+  parametres: ParametresService
+): string {
+  const section = resolu.section;
+  const caracteristique = resolu.serviceActions?.characteristic;
+  const quasiPermanent = resolu.serviceActions?.quasiPermanent;
+
+  const contraintes: Issue<ServiceResult> =
+    caracteristique === undefined
+      ? { motif: SANS_CARACTERISTIQUE }
+      : tenter(() => verifyServiceUniaxial(section, caracteristique, { n: parametres.n }));
+
+  const courbure: Issue<CurvatureResult> =
+    quasiPermanent === undefined
+      ? { motif: SANS_QUASI_PERMANENTE }
+      : tenter(() =>
+          sectionCurvature(section, quasiPermanent, { n: parametres.n, beta: parametres.beta })
+        );
+
+  // Le Mz de l'ELU informe, il ne BLOQUE jamais : les verifications ci-dessous
+  // portent sur d'autres combinaisons, saisies separement et uniaxiales par
+  // construction. Refuser de calculer sur ce motif refuserait le cas normal.
+  const note = noteFlexionDeviee(MzElu);
+  const deviee = note === null ? '' : `<p class="note note-deviee">${echapper(note)}</p>`;
+
+  return (
+    `<div id="service"><h2>Verifications de service (ELS)</h2>${deviee}` +
+    htmlBlocService(blocContraintes(contraintes), 'contraintes') +
+    htmlBlocService(blocFissuration(issueFissuration(section, quasiPermanent, parametres)), 'fissuration') +
+    htmlBlocService(blocCourbure(courbure), 'courbure') +
+    '</div>'
+  );
+}
+
 // --- Boucle de calcul -------------------------------------------------------
 
 const zoneSaisie = document.querySelector<HTMLElement>('#saisie');
@@ -746,8 +873,10 @@ function recalculer(mode?: 'proportional'): void {
   if (!zoneResultat || !zoneSection) return;
 
   let modele: SectionModel;
+  let parametres: ParametresService;
   try {
     modele = formToModel(etat);
+    parametres = parametresDeService(etat);
   } catch (e) {
     afficherErreur(e instanceof FormError ? e.message : String(e));
     return;
@@ -772,7 +901,9 @@ function recalculer(mode?: 'proportional'): void {
         ? null
         : capacityAtAngle(resolu.section, resultat.neutralAxis.angle, resolu.action.N, resolu.norm);
 
-    dernierResultat = htmlResultat(resolu, resultat, etatAxe);
+    dernierResultat =
+      htmlResultat(resolu, resultat, etatAxe) +
+      htmlService(resolu, resolu.action.Mz, parametres);
     dernierDessin = dessiner(resolu, resultat, etatAxe);
     zoneResultat.innerHTML = dernierResultat;
     zoneSection.innerHTML = dernierDessin;

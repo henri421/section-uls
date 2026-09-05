@@ -52,6 +52,14 @@ function saisir(dom: JSDOM, nom: string, valeur: string): void {
   input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 }
 
+function choisir(dom: JSDOM, nom: string, valeur: string): void {
+  const element = dom.window.document.querySelector(`select[data-champ="${nom}"]`);
+  if (element === null) throw new Error(`liste "${nom}" absente du formulaire`);
+  const select = element as HTMLSelectElement;
+  select.value = valeur;
+  select.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+}
+
 function resultat(dom: JSDOM): string {
   return dom.window.document.querySelector('#resultat')?.textContent ?? '';
 }
@@ -282,5 +290,165 @@ describe('domaine My-Mz', () => {
     vi.advanceTimersByTime(500);
 
     expect(domaine(dom)).toBeNull();
+  });
+});
+
+/**
+ * Les trois verifications de SERVICE dans la page.
+ *
+ * Livrees aux sessions 6, 7 et 8, elles n'etaient appelees nulle part dans
+ * `app/` : l'utilisateur, qui se sert de la page publiee, ne voyait que
+ * l'ELU. Ces tests fixent le contrat d'affichage — et surtout le garde-fou
+ * qui empeche un module optionnel d'effacer le resultat principal.
+ *
+ * Cout mesure le 2026-09-05 : 9 a 24 ms par verification, contre 25 a 120 ms
+ * pour le recalcul ELU. Elles partent donc AVEC le reste, sans bouton.
+ */
+describe('verifications de service', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function service(dom: JSDOM): Element {
+    const element = dom.window.document.querySelector('#resultat #service');
+    if (element === null) throw new Error('la section Service est absente du panneau de resultats');
+    return element;
+  }
+
+  function bloc(dom: JSDOM, nom: string): Element {
+    const element = service(dom).querySelector(`[data-bloc="${nom}"]`);
+    if (element === null) throw new Error(`le bloc de service "${nom}" est absent`);
+    return element;
+  }
+
+  /** Nombre de lignes chiffrees : zero signifie « pas calcule ». */
+  function lignes(dom: JSDOM, nom: string): number {
+    return bloc(dom, nom).querySelectorAll('.ligne').length;
+  }
+
+  /**
+   * Le verdict de l'ELU, et lui seul : les blocs de service portent leurs
+   * propres verdicts, mais imbriques. Celui de l'ELU est enfant DIRECT du
+   * panneau.
+   */
+  function verdictElu(dom: JSDOM): string {
+    return dom.window.document.querySelector('#resultat > .verdict')?.textContent ?? '';
+  }
+
+  it('la section Service est affichee des le chargement, sans aucun clic', async () => {
+    const dom = await monterApplication();
+    expect(service(dom)).not.toBeNull();
+    expect(bloc(dom, 'contraintes').textContent).toMatch(/7\.2/);
+    expect(bloc(dom, 'fissuration').textContent).toMatch(/7\.3/);
+    expect(bloc(dom, 'courbure').textContent).toMatch(/7\.4\.3/);
+  });
+
+  it('les trois verifications sont reellement calculees sur le modele de depart', async () => {
+    const dom = await monterApplication();
+    expect(lignes(dom, 'contraintes')).toBeGreaterThan(0);
+    expect(lignes(dom, 'fissuration')).toBeGreaterThan(0);
+    expect(lignes(dom, 'courbure')).toBeGreaterThan(0);
+  });
+
+  it('ne contient jamais NaN', async () => {
+    // Les modules rendent `NaN` sur leur chemin d'echec : un bloc qui n'a pas
+    // converge ne doit afficher AUCUN chiffre, pas un chiffre illisible.
+    const dom = await monterApplication();
+    expect(service(dom).innerHTML).not.toContain('NaN');
+  });
+
+  it('le bloc courbure porte TOUJOURS qu il ne s agit pas d une fleche', async () => {
+    const dom = await monterApplication();
+    expect(bloc(dom, 'courbure').textContent).toMatch(/pas.*fleche/i);
+
+    // Y compris apres un changement de sollicitation.
+    saisir(dom, 'serviceQpM', '250');
+    vi.advanceTimersByTime(500);
+    expect(bloc(dom, 'courbure').textContent).toMatch(/pas.*fleche/i);
+  });
+
+  it('changer une sollicitation de service change le service, PAS le verdict ELU', async () => {
+    const dom = await monterApplication();
+    const eluAvant = verdictElu(dom);
+    const courbureAvant = bloc(dom, 'courbure').textContent;
+    const contraintesAvant = bloc(dom, 'contraintes').textContent;
+
+    saisir(dom, 'serviceQpM', '120');
+    vi.advanceTimersByTime(500);
+
+    expect(bloc(dom, 'courbure').textContent).not.toBe(courbureAvant);
+    expect(verdictElu(dom)).toBe(eluAvant);
+    // La quasi-permanente ne gouverne PAS le §7.2 : les contraintes ne
+    // bougent pas. Si elles bougeaient, les deux combinaisons seraient
+    // cablees sur la meme verification.
+    expect(bloc(dom, 'contraintes').textContent).toBe(contraintesAvant);
+  });
+
+  it('changer la combinaison caracteristique change les contraintes', async () => {
+    const dom = await monterApplication();
+    const avant = bloc(dom, 'contraintes').textContent;
+
+    saisir(dom, 'serviceCarM', '140');
+    vi.advanceTimersByTime(500);
+
+    expect(bloc(dom, 'contraintes').textContent).not.toBe(avant);
+  });
+
+  it('une combinaison non saisie donne un motif, pas un bloc muet', async () => {
+    // C'est le cas d'un fichier de format v1, qui ne porte aucun service.
+    const dom = await monterApplication();
+
+    saisir(dom, 'serviceCarN', '');
+    saisir(dom, 'serviceCarM', '');
+    vi.advanceTimersByTime(500);
+
+    expect(lignes(dom, 'contraintes')).toBe(0);
+    expect(bloc(dom, 'contraintes').textContent).toMatch(/saisie|renseign/i);
+    // Les verifications quasi-permanentes, elles, restent calculees.
+    expect(lignes(dom, 'courbure')).toBeGreaterThan(0);
+  });
+
+  it('REGRESSION : une geometrie circulaire n efface PAS le resultat', async () => {
+    // `verifyCrackWidth` LEVE sur toute geometrie non rectangulaire. Laisser
+    // l'exception remonter au `try` global du recalcul remplacerait tout le
+    // resultat ELU par un message d'erreur — parce qu'un module OPTIONNEL n'a
+    // pas pu s'appliquer. L'appel doit etre protege localement.
+    const dom = await monterApplication();
+    choisir(dom, 'geometryKind', 'circle');
+    vi.advanceTimersByTime(500);
+
+    expect(verdictElu(dom)).toMatch(/taux/i);
+    // Aucune exception brute n'a fuite : le nom de la fonction du noyau ne
+    // doit jamais atteindre l'ecran.
+    expect(resultat(dom)).not.toContain('verifyCrackWidth');
+
+    // Le bloc fissuration explique la geometrie, sans chiffre.
+    expect(lignes(dom, 'fissuration')).toBe(0);
+    expect(bloc(dom, 'fissuration').textContent).toMatch(/rectangulaire/i);
+
+    // Les deux autres verifications acceptent les polygones : elles restent
+    // calculees, et le dire evite de croire tout le service perdu.
+    expect(lignes(dom, 'contraintes')).toBeGreaterThan(0);
+    expect(lignes(dom, 'courbure')).toBeGreaterThan(0);
+    expect(service(dom).innerHTML).not.toContain('NaN');
+  });
+
+  it('un Mz non nul a l ELU informe, il ne bloque JAMAIS le service', async () => {
+    // Le modele de depart porte Mz = 40. Les verifications de service portent
+    // sur des combinaisons DIFFERENTES, saisies separement et uniaxiales : la
+    // quasi-permanente exclut d'ailleurs le vent, qui apporte le plus souvent
+    // le moment transversal. Refuser de calculer sur ce motif refuserait le
+    // cas normal.
+    const dom = await monterApplication();
+
+    expect(service(dom).querySelector('.note-deviee')).not.toBeNull();
+    expect(lignes(dom, 'contraintes')).toBeGreaterThan(0);
+    expect(lignes(dom, 'fissuration')).toBeGreaterThan(0);
+    expect(lignes(dom, 'courbure')).toBeGreaterThan(0);
+
+    saisir(dom, 'Mz', '0');
+    vi.advanceTimersByTime(500);
+
+    expect(service(dom).querySelector('.note-deviee')).toBeNull();
+    expect(lignes(dom, 'contraintes')).toBeGreaterThan(0);
   });
 });
