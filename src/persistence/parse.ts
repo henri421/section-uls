@@ -1,6 +1,9 @@
 import {
   FORMAT_VERSION,
+  SUPPORTED_FORMAT_VERSIONS,
   type SectionModel,
+  type ServiceActionModel,
+  type ServiceActionsModel,
   type NormModel,
   type ConcreteModel,
   type SteelModel,
@@ -275,6 +278,38 @@ function sollicitation(v: unknown, chemin: string): ActionModel {
 }
 
 /**
+ * Lit une sollicitation de service. Uniaxiale : ni `My` ni `Mz`, mais un
+ * `M` unique, comme le prennent les trois modules de service. Les deux
+ * composantes sont des nombres quelconques : un N nul ou negatif (traction)
+ * et un M nul sont des cas de service courants.
+ */
+function sollicitationService(v: unknown, chemin: string): ServiceActionModel {
+  const o = objet(v, chemin);
+  return {
+    N: nombre(o.N, `${chemin}.N`),
+    M: nombre(o.M, `${chemin}.M`),
+  };
+}
+
+function sollicitationsService(v: unknown, chemin: string): ServiceActionsModel {
+  const o = objet(v, chemin);
+  const characteristic = optionnel(
+    o.characteristic,
+    `${chemin}.characteristic`,
+    sollicitationService
+  );
+  const quasiPermanent = optionnel(
+    o.quasiPermanent,
+    `${chemin}.quasiPermanent`,
+    sollicitationService
+  );
+  return {
+    ...(characteristic !== undefined ? { characteristic } : {}),
+    ...(quasiPermanent !== undefined ? { quasiPermanent } : {}),
+  };
+}
+
+/**
  * Lit un modele depuis sa representation JSON, en validant tout. Un fichier
  * s'edite au bloc-notes, se tronque a la copie, se produit par un autre
  * outil : aucune confiance ne lui est accordee.
@@ -289,11 +324,16 @@ export function parseModel(json: string): SectionModel {
 
   const o = objet(brut, 'modele');
 
+  // Appartenance a une LISTE, et non egalite avec la version courante : un
+  // fichier deja enregistre porte une version ancienne et doit rester
+  // lisible. La version lue est conservee telle quelle dans le modele rendu
+  // ; c'est l'ecriture qui le fera passer a la version courante.
   const formatVersion = nombre(o.formatVersion, 'formatVersion');
-  if (formatVersion !== FORMAT_VERSION) {
+  if (!SUPPORTED_FORMAT_VERSIONS.includes(formatVersion)) {
     echec(
       'formatVersion',
-      `version ${formatVersion} non supportee (ce moteur lit la version ${FORMAT_VERSION})`
+      `version ${formatVersion} non supportee ` +
+        `(ce moteur lit les versions ${SUPPORTED_FORMAT_VERSIONS.join(', ')})`
     );
   }
 
@@ -316,6 +356,10 @@ export function parseModel(json: string): SectionModel {
   }
 
   const name = optionnel(o.name, 'name', chaine);
+  // Optionnel a toutes les versions : absent d'un fichier de version 1 par
+  // construction, et licite a la version 2 pour un modele dont le service
+  // n'est pas encore saisi.
+  const serviceActions = optionnel(o.serviceActions, 'serviceActions', sollicitationsService);
 
   return {
     formatVersion,
@@ -327,6 +371,7 @@ export function parseModel(json: string): SectionModel {
     geometry,
     reinforcement,
     action: sollicitation(o.action, 'action'),
+    ...(serviceActions !== undefined ? { serviceActions } : {}),
   };
 }
 
@@ -395,7 +440,10 @@ function ferraillageOrdonne(r: ReinforcementModel) {
 
 export function serializeModel(model: SectionModel): string {
   const ordonne = {
-    formatVersion: model.formatVersion,
+    // La version ECRITE est toujours la courante, jamais celle que portait
+    // le modele : un fichier relu en version 1 puis reenregistre est bel et
+    // bien un fichier de version 2, et doit l'annoncer.
+    formatVersion: FORMAT_VERSION,
     engineVersion: model.engineVersion,
     ...(model.name !== undefined ? { name: model.name } : {}),
     norm: {

@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { parseModel, serializeModel, ModelParseError } from '../../src/persistence/parse';
-import { FORMAT_VERSION, ENGINE_VERSION } from '../../src/persistence/model-format';
+import {
+  FORMAT_VERSION,
+  ENGINE_VERSION,
+  SUPPORTED_FORMAT_VERSIONS,
+} from '../../src/persistence/model-format';
 import type { SectionModel } from '../../src/persistence/model-format';
 
 function modeleValide(): SectionModel {
@@ -185,6 +189,115 @@ describe('parseModel', () => {
     }`;
     expect(() => parseModel(json)).toThrow(/Infinity/);
     expect(() => parseModel(json)).toThrow(/concrete\.fck/);
+  });
+});
+
+describe('parseModel : les deux versions du format', () => {
+  it('lit la version 1, ou les sollicitations de service n existent pas', () => {
+    // C'est la garantie de retrocompatibilite : tout fichier deja enregistre
+    // par l'utilisateur porte formatVersion 1. Une egalite stricte avec
+    // FORMAT_VERSION le rendrait illisible du jour ou la version monte.
+    const json = avecAlteration((m) => {
+      m.formatVersion = 1;
+      delete m.serviceActions;
+    });
+    const lu = parseModel(json);
+    expect(lu.formatVersion).toBe(1);
+    expect(lu.serviceActions).toBeUndefined();
+  });
+
+  it('la version courante est 2 et les deux versions sont lues', () => {
+    expect(FORMAT_VERSION).toBe(2);
+    expect([...SUPPORTED_FORMAT_VERSIONS]).toEqual([1, 2]);
+  });
+
+  it('lit les deux combinaisons de service', () => {
+    const json = avecAlteration((m) => {
+      m.serviceActions = {
+        characteristic: { N: -120, M: 85 },
+        quasiPermanent: { N: -90, M: 60 },
+      };
+    });
+    const lu = parseModel(json);
+    expect(lu.serviceActions).toEqual({
+      characteristic: { N: -120, M: 85 },
+      quasiPermanent: { N: -90, M: 60 },
+    });
+  });
+
+  it('accepte une seule des deux combinaisons : elles sont independamment optionnelles', () => {
+    const seuleCaract = parseModel(
+      avecAlteration((m) => {
+        m.serviceActions = { characteristic: { N: 0, M: 120 } };
+      })
+    );
+    expect(seuleCaract.serviceActions).toEqual({ characteristic: { N: 0, M: 120 } });
+    expect(seuleCaract.serviceActions?.quasiPermanent).toBeUndefined();
+
+    const seuleQp = parseModel(
+      avecAlteration((m) => {
+        m.serviceActions = { quasiPermanent: { N: 0, M: 90 } };
+      })
+    );
+    expect(seuleQp.serviceActions).toEqual({ quasiPermanent: { N: 0, M: 90 } });
+    expect(seuleQp.serviceActions?.characteristic).toBeUndefined();
+  });
+
+  it('refuse une version 3, en nommant les versions qu il sait lire', () => {
+    const json = avecAlteration((m) => {
+      m.formatVersion = 3;
+    });
+    expect(() => parseModel(json)).toThrow(/formatVersion/);
+    expect(() => parseModel(json)).toThrow(/3/);
+    expect(() => parseModel(json)).toThrow(/1, 2/);
+  });
+
+  it('refuse un serviceActions mal forme en nommant le champ fautif', () => {
+    expect(() =>
+      parseModel(
+        avecAlteration((m) => {
+          m.serviceActions = { characteristic: { N: 100 } };
+        })
+      )
+    ).toThrow(/serviceActions\.characteristic\.M/);
+
+    expect(() =>
+      parseModel(
+        avecAlteration((m) => {
+          m.serviceActions = { quasiPermanent: { N: 'beaucoup', M: 60 } };
+        })
+      )
+    ).toThrow(/serviceActions\.quasiPermanent\.N/);
+
+    expect(() =>
+      parseModel(
+        avecAlteration((m) => {
+          m.serviceActions = 'aucune';
+        })
+      )
+    ).toThrow(/serviceActions/);
+  });
+
+  it('ecrit toujours la version courante, meme pour un modele relu en version 1', () => {
+    // Sinon un modele charge en version 1 puis enrichi de sollicitations de
+    // service se reecrirait en annoncant la version 1 tout en portant un
+    // champ qui n'y existe pas : le fichier mentirait sur son propre format.
+    const v1 = parseModel(
+      avecAlteration((m) => {
+        m.formatVersion = 1;
+      })
+    );
+    expect(v1.formatVersion).toBe(1);
+    expect(parseModel(serializeModel(v1)).formatVersion).toBe(FORMAT_VERSION);
+  });
+
+  it('accepte un N de service nul ou negatif : la traction est un cas de service courant', () => {
+    const lu = parseModel(
+      avecAlteration((m) => {
+        m.serviceActions = { quasiPermanent: { N: -45, M: 0 } };
+      })
+    );
+    expect(lu.serviceActions?.quasiPermanent).toEqual({ N: -45, M: 0 });
   });
 });
 

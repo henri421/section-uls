@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseModel } from '../../src/persistence/parse';
+import { FORMAT_VERSION } from '../../src/persistence/model-format';
 import { resolveModel } from '../../src/persistence/resolve';
 import { verifyBiaxial } from '../../src/solvers/uls-biaxial';
 
@@ -21,6 +22,18 @@ describe('temoin de format', () => {
     expect(m.geometry).toEqual({ kind: 'circle', diameter: 600, segments: 32 });
     expect(m.reinforcement.kind).toBe('circular-cage');
     expect(m.action.N).toBe(1200);
+  });
+
+  it('est ecrit en version 1 du format et reste lisible apres la montee en version 2', () => {
+    // Ce test est la preuve de la retrocompatibilite, et il ne vaut que
+    // parce que le fichier n'est PAS regenere : il porte la version 1, celle
+    // de tous les modeles deja enregistres par l'utilisateur. Le jour ou
+    // `parseModel` se remettrait a exiger l'egalite avec FORMAT_VERSION,
+    // c'est ici que cela se verrait.
+    const m = parseModel(json);
+    expect(m.formatVersion).toBe(1);
+    expect(FORMAT_VERSION).toBeGreaterThan(m.formatVersion);
+    expect(m.serviceActions).toBeUndefined();
   });
 
   it('produit toujours le meme moment resistant', () => {
