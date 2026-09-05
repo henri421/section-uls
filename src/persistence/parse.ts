@@ -573,6 +573,46 @@ function serviceOrdonne(s: ServiceActionsModel) {
   };
 }
 
+/**
+ * Ecrit les blocs de la version 3, avec le meme ordre de cles stable et la
+ * meme regle d'absence que le reste du format : un champ facultatif absent
+ * n'est PAS ecrit. Inscrire `cotTheta: 2.5` ou `effectiveZoneOnly: false`
+ * ferait passer le defaut du moteur pour un choix de l'ingenieur, et le
+ * figerait dans le fichier le jour ou ce defaut changerait.
+ */
+function tranchantOrdonne(s: ShearModel) {
+  return {
+    V_Ed: s.V_Ed,
+    ...(s.links !== undefined
+      ? { links: { Asw: s.links.Asw, s: s.links.s, fywk: s.links.fywk } }
+      : {}),
+    ...(s.cotTheta !== undefined ? { cotTheta: s.cotTheta } : {}),
+  };
+}
+
+function geneOrdonnee(r: RestraintModel) {
+  return {
+    type: r.type,
+    ...(r.fctEff !== undefined ? { fctEff: r.fctEff } : {}),
+    ...(r.sigmaS !== undefined ? { sigmaS: r.sigmaS } : {}),
+    ...(r.effectiveZoneOnly !== undefined ? { effectiveZoneOnly: r.effectiveZoneOnly } : {}),
+  };
+}
+
+function meyerOrdonne(m: MeyerModel) {
+  return {
+    h: m.h,
+    d1: m.d1,
+    ds: m.ds,
+    wk: m.wk,
+    fctm: m.fctm,
+    kzt: m.kzt,
+    cas: m.cas,
+    bridage: m.bridage,
+    ...(m.kmode !== undefined ? { kmode: m.kmode } : {}),
+  };
+}
+
 export function serializeModel(model: SectionModel): string {
   const ordonne = {
     // La version ECRITE est toujours la courante, jamais celle que portait
@@ -596,6 +636,14 @@ export function serializeModel(model: SectionModel): string {
     ...(model.serviceActions !== undefined
       ? { serviceActions: serviceOrdonne(model.serviceActions) }
       : {}),
+    // Blocs de la version 3, ecrits APRES les blocs anterieurs : l'ordre est
+    // celui de l'histoire du format, et un fichier de version 2 relu puis
+    // reecrit garde ainsi ses premieres lignes a l'identique, ce qui rend les
+    // differences entre deux enregistrements lisibles.
+    ...(model.elementType !== undefined ? { elementType: model.elementType } : {}),
+    ...(model.shear !== undefined ? { shear: tranchantOrdonne(model.shear) } : {}),
+    ...(model.restraint !== undefined ? { restraint: geneOrdonnee(model.restraint) } : {}),
+    ...(model.meyer !== undefined ? { meyer: meyerOrdonne(model.meyer) } : {}),
   };
 
   return `${JSON.stringify(ordonne, null, 2)}\n`;

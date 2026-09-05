@@ -589,6 +589,97 @@ describe('serializeModel', () => {
     expect(serializeModel(desordre)).toBe(serializeModel(normal));
   });
 
+  it('aller-retour avec les quatre blocs de la version 3', () => {
+    const m: SectionModel = {
+      ...modeleValide(),
+      elementType: 'beam',
+      shear: { V_Ed: 180, links: { Asw: 100.5, s: 200, fywk: 500 }, cotTheta: 2.0 },
+      restraint: { type: 'central', fctEff: 1.8, sigmaS: 320, effectiveZoneOnly: true },
+      meyer: {
+        h: 800, d1: 50, ds: 16, wk: 0.2, fctm: 2.9, kzt: 0.5,
+        cas: 'traction', bridage: 'exterieur', kmode: 'parabolique',
+      },
+    };
+    expect(parseModel(serializeModel(m))).toEqual(m);
+  });
+
+  it('aller-retour avec un seul des quatre blocs, et avec leurs champs facultatifs absents', () => {
+    const partiels: SectionModel[] = [
+      { ...modeleValide(), elementType: 'slab' },
+      { ...modeleValide(), shear: { V_Ed: 120 } },
+      { ...modeleValide(), shear: { V_Ed: 120, cotTheta: 1.5 } },
+      { ...modeleValide(), restraint: { type: 'bending' } },
+      {
+        ...modeleValide(),
+        meyer: {
+          h: 500, d1: 40, ds: 12, wk: 0.3, fctm: 2.6, kzt: 1.0,
+          cas: 'flexion', bridage: 'interieur',
+        },
+      },
+    ];
+
+    for (const partiel of partiels) {
+      expect(parseModel(serializeModel(partiel))).toEqual(partiel);
+    }
+
+    // Un champ facultatif absent ne doit pas reapparaitre a l'ecriture : un
+    // `cotTheta: 2.5` inscrit d'office ferait passer un defaut du moteur pour
+    // un choix d'ingenieur, et le figerait le jour ou ce defaut changerait.
+    expect(serializeModel({ ...modeleValide(), shear: { V_Ed: 120 } })).not.toContain('cotTheta');
+    expect(serializeModel({ ...modeleValide(), shear: { V_Ed: 120 } })).not.toContain('links');
+    expect(serializeModel({ ...modeleValide(), restraint: { type: 'bending' } })).not.toContain(
+      'effectiveZoneOnly'
+    );
+  });
+
+  it('sans les blocs de la version 3, aucun d eux n apparait dans le JSON', () => {
+    // Meme regle que `serviceActions` : ni `null`, que la relecture
+    // refuserait, ni objet vide, qui mentirait sur l'intention.
+    const texte = serializeModel(modeleValide());
+    for (const bloc of ['elementType', 'shear', 'restraint', 'meyer']) {
+      expect(texte).not.toContain(bloc);
+    }
+    const relu = parseModel(texte);
+    expect(relu.elementType).toBeUndefined();
+    expect(relu.shear).toBeUndefined();
+    expect(relu.restraint).toBeUndefined();
+    expect(relu.meyer).toBeUndefined();
+  });
+
+  it('l ordre des cles reste stable pour les blocs de la version 3', () => {
+    const normal: SectionModel = {
+      ...modeleValide(),
+      elementType: 'beam',
+      shear: { V_Ed: 180, links: { Asw: 100.5, s: 200, fywk: 500 }, cotTheta: 2.0 },
+      restraint: { type: 'central', fctEff: 1.8, sigmaS: 320, effectiveZoneOnly: true },
+      meyer: {
+        h: 800, d1: 50, ds: 16, wk: 0.2, fctm: 2.9, kzt: 0.5,
+        cas: 'traction', bridage: 'exterieur', kmode: 'parabolique',
+      },
+    };
+    const desordre = {
+      meyer: {
+        kmode: 'parabolique', bridage: 'exterieur', cas: 'traction',
+        kzt: 0.5, fctm: 2.9, wk: 0.2, ds: 16, d1: 50, h: 800,
+      },
+      restraint: { effectiveZoneOnly: true, sigmaS: 320, fctEff: 1.8, type: 'central' },
+      shear: { cotTheta: 2.0, links: { fywk: 500, s: 200, Asw: 100.5 }, V_Ed: 180 },
+      elementType: 'beam',
+      ...modeleValide(),
+    } as SectionModel;
+
+    expect(serializeModel(desordre)).toBe(serializeModel(normal));
+  });
+
+  it('un modele relu en version 1 puis enrichi se reecrit en version 3', () => {
+    const v1 = parseModel(avecAlteration((m) => { m.formatVersion = 1; }));
+    const enrichi: SectionModel = { ...v1, elementType: 'column', shear: { V_Ed: 45 } };
+    const relu = parseModel(serializeModel(enrichi));
+    expect(relu.formatVersion).toBe(FORMAT_VERSION);
+    expect(relu.elementType).toBe('column');
+    expect(relu.shear).toEqual({ V_Ed: 45 });
+  });
+
   it('produit un JSON indente, lisible et versionne en tete', () => {
     const texte = serializeModel(modeleValide());
     expect(texte).toContain('\n  "formatVersion"');
