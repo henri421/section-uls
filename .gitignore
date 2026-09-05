@@ -5,3 +5,6 @@ dist/
 # Documentation de conception : conservee en local, hors du depot public
 PLAN_module_section-uls_Aedificium.md
 docs/superpowers/
+
+# Memoire des agents : outillage local, jamais du contenu de projet
+.claude/
