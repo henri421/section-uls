@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 
-import { svgAutonome, PALETTE, STYLES_TRACE } from '../../app/src/export';
+import { svgAutonome, resultatsEnCsv, PALETTE, STYLES_TRACE } from '../../app/src/export';
+import type { BlocService } from '../../app/src/service-view';
+import { sansCalcul } from '../../app/src/service-view';
 
 /**
  * Tests des SORTIES : ce qui quitte la page.
@@ -118,5 +120,96 @@ describe('la palette exportee ne derive pas de celle de la page', () => {
       expect(dansLaPage, `${nom} absente de style.css`).not.toBeNull();
       expect(dansLaPage?.[1].trim(), `${nom} a derive de style.css`).toBe(valeur.trim());
     }
+  });
+});
+
+// --- CSV des resultats -------------------------------------------------------
+
+const BLOC_CONTRAINTES: BlocService = {
+  titre: 'Contraintes en service (§7.2)',
+  lignes: [
+    { libelle: 'σc', valeur: '12,3 MPa (limite 15,0 MPa)' },
+    { libelle: 'σs', valeur: '210,4 MPa (limite 400,0 MPa)' },
+  ],
+  verdict: { ok: true, texte: 'Contraintes de service verifiees' },
+  note: null,
+};
+
+/** Le contenu, BOM et en-tete retires, decoupe en lignes. */
+function lignesDe(csv: string): string[] {
+  return csv.replace(/^\uFEFF/, '').split('\r\n').slice(1);
+}
+
+describe('resultatsEnCsv', () => {
+  it('rend une ligne par grandeur affichee, colonnes separees par un point-virgule', () => {
+    // Le separateur decimal est la VIRGULE (`formatNumber` la produit) : la
+    // prendre aussi comme separateur de colonnes couperait chaque nombre en
+    // deux. Le point-virgule est aussi ce qu attend un tableur francais.
+    const lignes = lignesDe(resultatsEnCsv([BLOC_CONTRAINTES]));
+
+    expect(lignes[0]).toBe('Contraintes en service (§7.2);σc;12,3 MPa (limite 15,0 MPa)');
+    expect(lignes[1]).toBe('Contraintes en service (§7.2);σs;210,4 MPa (limite 400,0 MPa)');
+  });
+
+  it('porte un en-tete de colonnes', () => {
+    const csv = resultatsEnCsv([BLOC_CONTRAINTES]).replace(/^\uFEFF/, '');
+    expect(csv.split('\r\n')[0]).toBe('Bloc;Grandeur;Valeur');
+  });
+
+  it('commence par le BOM, sans quoi Excel massacre les accents et les σ', () => {
+    // Le BOM est le seul moyen fiable de dire a Excel que le fichier est en
+    // UTF-8. Sans lui, les libelles de ce module — σ, ρ, ζ — sortent illisibles.
+    expect(resultatsEnCsv([BLOC_CONTRAINTES]).startsWith('\uFEFF')).toBe(true);
+  });
+
+  it('rapporte le verdict du bloc', () => {
+    const lignes = lignesDe(resultatsEnCsv([BLOC_CONTRAINTES]));
+
+    expect(lignes).toContain(
+      'Contraintes en service (§7.2);Verdict;Contraintes de service verifiees'
+    );
+  });
+
+  it('echappe un champ contenant un point-virgule, un guillemet ou un saut de ligne', () => {
+    const piege: BlocService = {
+      titre: 'Dispositions constructives (§9)',
+      lignes: [
+        { libelle: 'Violations', valeur: 'A_s < A_s,min ; cadres absents' },
+        { libelle: 'Mode dit "simplifie"', valeur: 'ligne 1\nligne 2' },
+      ],
+      verdict: { ok: false, texte: 'Dispositions constructives non respectees' },
+      note: null,
+    };
+
+    const lignes = lignesDe(resultatsEnCsv([piege]));
+
+    expect(lignes[0]).toBe(
+      'Dispositions constructives (§9);Violations;"A_s < A_s,min ; cadres absents"'
+    );
+    expect(lignes[1]).toBe(
+      'Dispositions constructives (§9);"Mode dit ""simplifie""";"ligne 1\nligne 2"'
+    );
+  });
+
+  it('SORT un module hors domaine, AVEC son motif', () => {
+    // Une absence silencieuse serait pire qu une ligne vide : le lecteur
+    // croirait la verification faite.
+    const hors = sansCalcul(
+      'Ouverture de fissures (§7.3)',
+      'Geometrie non rectangulaire. Les formules du §7.3.4 supposent une zone tendue rectangulaire.'
+    );
+
+    const lignes = lignesDe(resultatsEnCsv([BLOC_CONTRAINTES, hors]));
+
+    expect(lignes.some((l) => l.startsWith('Ouverture de fissures (§7.3);'))).toBe(true);
+    expect(lignes.join('\n')).toContain('Geometrie non rectangulaire');
+  });
+
+  it('ne laisse AUCUN bloc sans ligne, meme prive de tout', () => {
+    const muet: BlocService = { titre: 'Bloc muet', lignes: [], verdict: null, note: null };
+
+    const lignes = lignesDe(resultatsEnCsv([muet]));
+
+    expect(lignes.some((l) => l.startsWith('Bloc muet;'))).toBe(true);
   });
 });

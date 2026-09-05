@@ -1,3 +1,5 @@
+import type { BlocService } from './service-view';
+
 /**
  * Les SORTIES : ce qui quitte la page.
  *
@@ -112,4 +114,66 @@ export function svgAutonome(svg: string, styles: string): string {
   const contenu = svg.slice(debut.index + debut[0].length, fin);
 
   return `${DECLARATION_XML}\n${ouverture}${baliseStyle(styles)}${contenu}</svg>`;
+}
+
+// --- CSV des resultats -------------------------------------------------------
+
+/**
+ * Le point-virgule, et pas la virgule.
+ *
+ * Le separateur decimal de l interface est la VIRGULE — `formatNumber` la
+ * produit partout. La prendre aussi comme separateur de colonnes couperait
+ * chaque nombre en deux a l ouverture. Le point-virgule est du reste ce
+ * qu attend un tableur en configuration francaise.
+ */
+const SEPARATEUR = ';';
+
+/** Fin de ligne CSV usuelle (RFC 4180), celle qu attendent les tableurs. */
+const FIN_DE_LIGNE = '\r\n';
+
+/**
+ * Marque d ordre des octets.
+ *
+ * Sans elle, Excel lit le fichier dans l encodage de la machine et massacre
+ * les accents comme les σ, ρ et ζ dont les libelles de ce module sont peuples.
+ * C est le seul moyen fiable de lui dire que le fichier est en UTF-8.
+ */
+const BOM = '\uFEFF';
+
+function champCsv(valeur: string): string {
+  if (!/[;"\r\n]/.test(valeur)) return valeur;
+  return `"${valeur.replace(/"/g, '""')}"`;
+}
+
+function ligneCsv(champs: string[]): string {
+  return champs.map(champCsv).join(SEPARATEUR);
+}
+
+/**
+ * Les resultats affiches, en tableau.
+ *
+ * Prend les `BlocService` DEJA produits par `service-view.ts`,
+ * `checks-view.ts` et `meyer-view.ts` : l export dit exactement ce que l ecran
+ * dit, parce qu il lit la meme chose. Reconstruire les valeurs ici creerait
+ * une seconde source de verite, qui finirait par diverger.
+ *
+ * AUCUN BLOC N EST OMIS. Un module hors domaine sort avec son motif : une
+ * absence silencieuse ferait croire au lecteur que la verification a eu lieu.
+ */
+export function resultatsEnCsv(blocs: BlocService[]): string {
+  const lignes = [ligneCsv(['Bloc', 'Grandeur', 'Valeur'])];
+
+  for (const bloc of blocs) {
+    const avant = lignes.length;
+
+    for (const l of bloc.lignes) lignes.push(ligneCsv([bloc.titre, l.libelle, l.valeur]));
+    if (bloc.verdict !== null) lignes.push(ligneCsv([bloc.titre, 'Verdict', bloc.verdict.texte]));
+    if (bloc.note !== null) lignes.push(ligneCsv([bloc.titre, 'Note', bloc.note]));
+
+    // Un bloc prive de tout garde quand meme sa ligne : c est son TITRE qui
+    // porte alors l information, et le faire disparaitre serait pire.
+    if (lignes.length === avant) lignes.push(ligneCsv([bloc.titre, '', '']));
+  }
+
+  return BOM + lignes.join(FIN_DE_LIGNE) + FIN_DE_LIGNE;
 }
