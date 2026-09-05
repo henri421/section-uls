@@ -17,6 +17,20 @@ export interface ConcreteMaterial {
   n: number;
 }
 
+/**
+ * Resistance moyenne a la traction directe (MPa), EN 1992-1-1 tableau 3.1.
+ *
+ * `f_ctm = 0,30·f_ck^(2/3)` jusqu'a C50/60, expression logarithmique au-dela.
+ *
+ * SOURCE UNIQUE dans le projet : la fissuration (§7.3.4), la courbure (§7.4.3)
+ * et les dispositions constructives (§9.2.1.1) l'appellent toutes ici. Elle a
+ * ete recopiee dans deux modules de service avant d'etre remontee ici ; il ne
+ * doit pas en exister de seconde version.
+ */
+export function fctmDepuisFck(fck: number): number {
+  return fck <= 50 ? 0.3 * fck ** (2 / 3) : 2.12 * Math.log(1 + (fck + 8) / 10);
+}
+
 export function createConcrete(fck: number, profile: NormProfile): ConcreteMaterial {
   const fcd = (profile.alphaCc * fck) / profile.gammaC;
 

@@ -2,6 +2,7 @@ import type { Section, Action } from '../model/section';
 import type { ServiceOptions } from './verify-service';
 import { verifyServiceUniaxial } from './verify-service';
 import { effectiveTensionArea, equivalentBarDiameter } from './effective-area';
+import { fctmDepuisFck } from '../model/concrete';
 
 export interface CrackOptions {
   /**
@@ -43,11 +44,6 @@ export interface CrackResult {
   sigmaS: number;
   reason?: string;
   converged: boolean;
-}
-
-/** Resistance moyenne a la traction, EN 1992-1-1 tableau 3.1 (fck <= 50). */
-function fctmDepuisFck(fck: number): number {
-  return fck <= 50 ? 0.3 * fck ** (2 / 3) : 2.12 * Math.log(1 + (fck + 8) / 10);
 }
 
 /** Module secant, EN 1992-1-1 tableau 3.1 (MPa). */

@@ -2,6 +2,7 @@ import type { Section, Action } from '../model/section';
 import { crackedProperties } from './cracked-section';
 import { uncrackedProperties } from './uncracked-section';
 import { verifyServiceUniaxial } from './verify-service';
+import { fctmDepuisFck } from '../model/concrete';
 
 export interface CurvatureOptions {
   /** Coefficient d'equivalence, la meme convention qu'en session 6. Defaut 15. */
@@ -42,10 +43,6 @@ export interface CurvatureResult {
   effectiveStiffness: number;
   converged: boolean;
   reason?: string;
-}
-
-function fctmDepuisFck(fck: number): number {
-  return fck <= 50 ? 0.3 * fck ** (2 / 3) : 2.12 * Math.log(1 + (fck + 8) / 10);
 }
 
 /**
