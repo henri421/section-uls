@@ -191,3 +191,62 @@ describe('interactionDiagramNM — les deux branches', () => {
     expect(d[0].neutralAxisDepth).toBeCloseTo(d[d.length - 1].neutralAxisDepth, 9);
   });
 });
+
+/**
+ * Coherence EXTERNE du diagramme : le contour passe-t-il par le point que rend
+ * le solveur droit ?
+ *
+ * Les tests ci-dessus verifient la coherence INTERNE — symetrie, ordre,
+ * dissymetrie. Aucun d'eux n'attraperait une erreur de signe, d'echelle ou
+ * d'unite : un contour faux d'un facteur mille reste parfaitement symetrique et
+ * parfaitement ordonne. Celui-ci confronte le diagramme a une source
+ * independante, `verifyUniaxial`, qui n'emprunte pas le meme chemin de calcul
+ * (bissection sur la profondeur d'axe neutre, la ou le diagramme balaye).
+ */
+describe('interactionDiagramNM — concordance avec le solveur droit', () => {
+  // Section DISSYMETRIQUE a dessein : sur une section symetrique, une erreur de
+  // signe sur la branche opposee passerait inapercue.
+  const dissymetrique = rectangularSection({
+    width: 300,
+    height: 500,
+    concrete,
+    rebars: [
+      { depthFromTop: 450, area: 3 * Math.PI * 10 ** 2, steel },
+      { depthFromTop: 50, area: 2 * Math.PI * 6 ** 2, steel },
+    ],
+  });
+
+  /** Moment du contour a l'effort normal `N`, interpole sur la branche donnee. */
+  function momentDuContour(points: DiagramPointNM[], sense: 1 | -1, N: number): number {
+    const branche = points.filter((p) => p.sense === sense).sort((a, b) => a.N - b.N);
+
+    for (let i = 1; i < branche.length; i++) {
+      const a = branche[i - 1];
+      const b = branche[i];
+      if (a.N <= N && N <= b.N) {
+        return a.M + ((N - a.N) / (b.N - a.N)) * (b.M - a.M);
+      }
+    }
+
+    throw new Error(`le contour ne couvre pas N = ${N} kN`);
+  }
+
+  it('rend le meme moment resistant que verifyUniaxial, de la traction a la compression', () => {
+    const points = interactionDiagramNM(dissymetrique, profile, { steps: 400 });
+
+    // Ecarts mesures le 2026-09-04 : 0,001 % a N = -100 et 0, jusqu'a 0,023 %
+    // a N = 2000. Ils viennent de l'INTERPOLATION entre deux points du
+    // balayage geometrique, pas d'une imprecision de calcul — d'ou leur
+    // croissance avec N, la ou les points du balayage s'espacent. La tolerance
+    // est fixee a 0,5 %, vingt fois le plus large ecart mesure : elle est
+    // choisie AU-DESSUS de la mesure, pas ajustee dessus.
+    const TOLERANCE = 0.005;
+
+    for (const N of [-100, 0, 200, 500, 1000, 2000]) {
+      const attendu = verifyUniaxial(dissymetrique, { N, M: 0 }, profile).M_Rd;
+      const obtenu = momentDuContour(points, 1, N);
+
+      expect(Math.abs(obtenu - attendu) / Math.abs(attendu)).toBeLessThan(TOLERANCE);
+    }
+  });
+});
