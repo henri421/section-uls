@@ -12,6 +12,12 @@ npm run build    # construit dans docs/, servi par GitHub Pages
 npm run preview  # verifie le resultat construit
 ```
 
+Trois **sorties** quittent la page. Les **dessins** partent en SVG autonomes, styles inlinés — sans quoi ils s'ouvriraient sans couleur ailleurs, les teintes venant de variables CSS définies dans la page. Les **résultats** partent en CSV, point-virgule en séparateur de colonnes (la virgule est déjà le séparateur décimal) et UTF-8 avec BOM, sans quoi un tableur massacre les accents et les `σ`, `ρ`, `ζ` des libellés.
+
+La **note de calcul** est un document HTML autonome, ouvert dans un onglet et imprimable en PDF par le navigateur — avec repli sur un téléchargement si l'ouverture d'onglet est bloquée. Elle porte les données d'entrée, le dessin de la section et les diagrammes, puis chaque vérification **avec ses valeurs intermédiaires** : un `V_Rd,c` sans son `k`, son `ρ_l` et son `σ_cp` n'est pas vérifiable par un tiers, et c'est à cela qu'une note de calcul sert. Une vérification hors domaine y figure **avec son motif**, jamais par une absence : une section qui disparaît sans explication ferait croire qu'elle a été vérifiée.
+
+C'est un **compte rendu**, pas une justification réglementaire signée : elle porte les hypothèses, elle n'engage personne.
+
 L'interface n'invente aucun état : elle édite un modèle, dont tout le reste est dérivé. Ce qui est enregistré est donc exactement ce qui est calculé.
 
 Deux diagrammes d'interaction y sont tracés, et leurs coûts n'ont rien de comparable :
