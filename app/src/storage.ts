@@ -69,14 +69,25 @@ export function sauvegardeIllisible(): string | null {
   }
 }
 
-export function telechargerModele(model: SectionModel, nomFichier: string): void {
-  const blob = new Blob([serializeModel(model)], { type: 'application/json' });
+/**
+ * Le telechargement, quel que soit ce qu'on telecharge.
+ *
+ * SEUL endroit du projet qui touche au navigateur pour faire sortir un
+ * fichier : modele, dessin, tableau ou note passent tous par ici. Tout ce qui
+ * COMPOSE ces documents est pur et vit dans `export.ts`.
+ */
+export function telecharger(nomFichier: string, contenu: string, typeMime: string): void {
+  const blob = new Blob([contenu], { type: typeMime });
   const url = URL.createObjectURL(blob);
   const lien = document.createElement('a');
   lien.href = url;
   lien.download = nomFichier;
   lien.click();
   URL.revokeObjectURL(url);
+}
+
+export function telechargerModele(model: SectionModel, nomFichier: string): void {
+  telecharger(nomFichier, serializeModel(model), 'application/json');
 }
 
 /**

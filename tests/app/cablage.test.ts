@@ -17,6 +17,24 @@ import { JSDOM } from 'jsdom';
 
 const CHEMIN_HTML = fileURLToPath(new URL('../../app/index.html', import.meta.url));
 
+/** Ce qu un `Blob` telecharge laisse voir de lui-meme. */
+interface FichierProduit {
+  type: string;
+  text(): Promise<string>;
+  /** Les octets bruts — le seul moyen d observer un BOM (voir plus bas). */
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+/**
+ * Ce que la page a fait telecharger depuis le dernier montage.
+ *
+ * jsdom n implemente pas `URL.createObjectURL` : on l installe pour capturer
+ * le contenu au lieu de fabriquer une URL. C est le seul moyen d observer ce
+ * qu un bouton d export produit reellement, plutot que de se contenter de
+ * verifier qu il ne leve pas.
+ */
+let telechargements: FichierProduit[] = [];
+
 async function monterApplication(stockage?: Map<string, string>): Promise<JSDOM> {
   const html = readFileSync(CHEMIN_HTML, 'utf8');
   const dom = new JSDOM(html, { url: 'http://localhost/', pretendToBeVisual: true });
@@ -37,6 +55,19 @@ async function monterApplication(stockage?: Map<string, string>): Promise<JSDOM>
   g.localStorage = dom.window.localStorage;
   g.Blob = dom.window.Blob;
   g.URL = dom.window.URL;
+
+  telechargements = [];
+  const urls = dom.window.URL as unknown as {
+    createObjectURL: (fichier: FichierProduit) => string;
+    revokeObjectURL: (url: string) => void;
+  };
+  urls.createObjectURL = (fichier) => {
+    telechargements.push(fichier);
+    return 'blob:capture';
+  };
+  urls.revokeObjectURL = () => {
+    /* rien a liberer : aucune URL n a ete creee */
+  };
 
   // Import a chaud : le module se cable au chargement, sur le document
   // qu'on vient d'installer.
@@ -891,5 +922,113 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
       expect(saisie).toMatch(/k_zt/);
       expect(saisie).toMatch(/hydratation|jeune age|quelques jours/i);
     });
+  });
+});
+
+describe('les sorties : dessins, resultats, note de calcul', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function cliquer(dom: JSDOM, action: string): void {
+    const bouton = dom.window.document.querySelector(`[data-action="${action}"]`);
+    if (bouton === null) throw new Error(`bouton "${action}" absent de la page`);
+    (bouton as HTMLElement).click();
+  }
+
+  function pageEnErreur(dom: JSDOM): boolean {
+    return dom.window.document.querySelector('#resultat .erreur') !== null;
+  }
+
+  it('les trois boutons de sortie existent', async () => {
+    const dom = await monterApplication();
+
+    for (const action of ['exporter-dessins', 'exporter-resultats', 'exporter-note']) {
+      expect(
+        dom.window.document.querySelector(`[data-action="${action}"]`),
+        `bouton "${action}"`
+      ).not.toBeNull();
+    }
+  });
+
+  it('les dessins sortent en SVG autonomes, styles inlines', async () => {
+    const dom = await monterApplication();
+    cliquer(dom, 'exporter-dessins');
+
+    expect(pageEnErreur(dom)).toBe(false);
+    expect(telechargements.length).toBeGreaterThan(0);
+
+    const contenu = await telechargements[0].text();
+    expect(telechargements[0].type).toContain('svg');
+    expect(contenu).toContain('<svg');
+    expect(contenu).toContain('xmlns="http://www.w3.org/2000/svg"');
+    // Sans les variables inlinees, le dessin s ouvre sans couleur ailleurs.
+    expect(contenu).toContain('--compression');
+  });
+
+  it('les resultats sortent en CSV, point-virgule et BOM', async () => {
+    const dom = await monterApplication();
+    cliquer(dom, 'exporter-resultats');
+
+    expect(pageEnErreur(dom)).toBe(false);
+    expect(telechargements).toHaveLength(1);
+
+    // Le BOM s observe sur les OCTETS, pas sur le texte : `Blob.text()`
+    // applique l algorithme « UTF-8 decode », qui retire un BOM en tete par
+    // specification. Le chercher dans la chaine decodee ne prouverait donc
+    // rien — ni sa presence, ni son absence.
+    const octets = new Uint8Array(await telechargements[0].arrayBuffer());
+    expect([octets[0], octets[1], octets[2]]).toEqual([0xef, 0xbb, 0xbf]);
+
+    const contenu = await telechargements[0].text();
+    expect(contenu).toContain(';');
+    expect(contenu).toMatch(/Contraintes en service/);
+    // Ce qui n a pas ete calcule sort AUSSI, avec son motif.
+    expect(contenu).toMatch(/Ouverture de fissures/);
+  });
+
+  it('la note de calcul sort en document HTML complet', async () => {
+    const dom = await monterApplication();
+    cliquer(dom, 'exporter-note');
+
+    expect(pageEnErreur(dom)).toBe(false);
+    // jsdom n ouvre pas d onglet : c est exactement le repli a verifier, celui
+    // qu un bloqueur de fenetres declenche chez l utilisateur.
+    expect(telechargements).toHaveLength(1);
+
+    const contenu = await telechargements[0].text();
+    expect(telechargements[0].type).toContain('html');
+    expect(contenu).toContain('<!doctype html>');
+    expect(contenu).toContain('note de calcul');
+    // Donnees d entree, dessin, verifications, hypotheses, avertissement.
+    expect(contenu).toContain('Donnees d entree');
+    expect(contenu).toContain('<svg');
+    expect(contenu).toContain('Effort tranchant');
+    expect(contenu).toContain('Hypotheses et limites');
+    expect(contenu).toMatch(/responsabilite incombent a l ingenieur/);
+    expect(contenu).not.toContain('NaN');
+  });
+
+  it('les sorties suivent la saisie', async () => {
+    const dom = await monterApplication();
+
+    saisir(dom, 'N', '1234');
+    vi.advanceTimersByTime(500);
+    cliquer(dom, 'exporter-note');
+
+    const contenu = await telechargements[0].text();
+    expect(contenu).toContain('1234');
+  });
+
+  it('une saisie fautive n empeche pas d exporter le dernier etat valide', async () => {
+    // Le dernier resultat valide reste a l ecran : il doit rester exportable,
+    // sans quoi un champ en cours de frappe rendrait les boutons muets.
+    const dom = await monterApplication();
+
+    saisir(dom, 'My', 'abc');
+    vi.advanceTimersByTime(500);
+    cliquer(dom, 'exporter-resultats');
+
+    expect(telechargements).toHaveLength(1);
+    expect((await telechargements[0].text()).length).toBeGreaterThan(0);
   });
 });

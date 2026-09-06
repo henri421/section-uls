@@ -56,9 +56,18 @@ import { formatNumber, formatAngleDegrees, formatUtilization } from './format';
 import {
   chargerLocalement,
   sauvegarderLocalement,
+  telecharger,
   telechargerModele,
   lireFichier,
 } from './storage';
+import {
+  svgAutonome,
+  resultatsEnCsv,
+  noteDeCalculHtml,
+  STYLES_TRACE,
+  STYLES_NOTE,
+} from './export';
+import { blocsDEntree, hypothesesDeLaNote } from './note-view';
 import './style.css';
 
 /**
@@ -110,9 +119,25 @@ let etat: FormState = modelToForm(chargerLocalement() ?? modeleParDefaut());
 
 /** Dernier resultat valide, conserve pour ne pas l'effacer sur une saisie fautive. */
 let dernierResultat: string = '';
-let dernierDessin: string = '';
 /** Dernier diagramme N-M rendu, reaffiche tel quel pendant un trace de domaine. */
 let dernierDiagramme: string = '';
+
+/**
+ * Tout ce qu'il faut pour composer une sortie, fige au dernier calcul REUSSI.
+ *
+ * Les blocs et les dessins sont ceux-la memes qui sont affiches : l'export dit
+ * exactement ce que l'ecran dit, parce qu'il montre la meme chose. Le
+ * reconstruire creerait une seconde source de verite.
+ */
+interface EtatExportable {
+  modele: SectionModel;
+  resolu: ResolvedModel;
+  parametres: ParametresService;
+  blocs: BlocService[];
+  dessins: Array<{ suffixe: string; svg: string }>;
+}
+
+let derniereSortie: EtatExportable | null = null;
 
 // --- Fabriques de balisage --------------------------------------------------
 
@@ -401,6 +426,17 @@ function htmlFormulaire(): string {
     <legend>Modele</legend>
     <button type="button" data-action="enregistrer">Enregistrer</button>
     <label class="large fichier"><span>Charger un modele</span><input type="file" accept="application/json,.json" data-action="charger" /></label>
+  </fieldset>
+
+  <fieldset class="sorties">
+    <legend>Sorties</legend>
+    <button type="button" data-action="exporter-dessins">Dessins (SVG)</button>
+    <button type="button" data-action="exporter-resultats">Resultats (CSV)</button>
+    <button type="button" data-action="exporter-note">Note de calcul (HTML imprimable)</button>
+    <p class="note">Les sorties decrivent le dernier calcul <strong>reussi</strong>. La note
+      s ouvre dans un nouvel onglet, d ou le navigateur l imprime en PDF ; si l ouverture est
+      bloquee, elle est telechargee. C est un <strong>compte rendu</strong> de calcul, pas une
+      justification reglementaire signee.</p>
   </fieldset>`;
 }
 
@@ -547,7 +583,7 @@ function dessiner(
 
   // L'axe vertical du SVG va vers le bas, comme le repere du module : aucune
   // inversion, donc aucune occasion de se tromper de signe a l'affichage.
-  const svg = `<svg viewBox="${boite.yMin - marge} ${boite.zMin - marge} ${largeur + 2 * marge} ${hauteur + 2 * marge}" preserveAspectRatio="xMidYMid meet">
+  return `<svg viewBox="${boite.yMin - marge} ${boite.zMin - marge} ${largeur + 2 * marge} ${hauteur + 2 * marge}" preserveAspectRatio="xMidYMid meet">
     ${zones}
     <polygon points="${chemin(contour)}" class="contour" stroke-width="${trait}" />
     ${barres}
@@ -555,9 +591,19 @@ function dessiner(
     ${resultantes}
     ${repere}
   </svg>`;
-
-  return `${svg}<p class="legende"><span class="c">zone comprimee</span><span class="t">zone tendue</span><span class="n">axe neutre</span><span>cercles : resultantes, reliees par le bras de levier</span><span>origine du repere au centroide, y vers la droite, z vers le bas</span></p>`;
 }
+
+/**
+ * La legende du trace, SEPAREE du SVG.
+ *
+ * `dessiner()` rend desormais le SVG seul : c est ce SVG-la, et lui seul, qui
+ * part a l export. La legende est du HTML, elle accompagne le dessin dans la
+ * page et n a rien a faire dans un fichier `.svg`.
+ */
+const LEGENDE_SECTION =
+  '<p class="legende"><span class="c">zone comprimee</span><span class="t">zone tendue</span>' +
+  '<span class="n">axe neutre</span><span>cercles : resultantes, reliees par le bras de levier</span>' +
+  '<span>origine du repere au centroide, y vers la droite, z vers le bas</span></p>';
 
 // --- Diagrammes d'interaction ----------------------------------------------
 
@@ -573,7 +619,7 @@ function dessiner(
  * A ne pas confondre avec le domaine My-Mz ci-dessous, qui coute deux ordres
  * de grandeur de plus et ne part JAMAIS tout seul.
  */
-function dessinerDiagrammeNM(resolu: ResolvedModel): string {
+function dessinerDiagrammeNM(resolu: ResolvedModel): { svg: string; html: string } {
   const points = interactionDiagramNM(resolu.section, resolu.norm, { steps: 120 });
   const N = resolu.action.N;
   const My = resolu.action.My;
@@ -604,7 +650,9 @@ function dessinerDiagrammeNM(resolu: ResolvedModel): string {
          pas rendre le verdict. C'est le domaine My-Mz ci-dessous qui fait foi.</p>`
       : '';
 
-  return `<h2>Diagramme d'interaction N-My</h2>${svg}${limites}${avertissement}`;
+  // Le SVG est rendu A COTE du balisage : c est lui qu on exporte, sans le
+  // titre ni les legendes, qui sont du HTML.
+  return { svg, html: `<h2>Diagramme d'interaction N-My</h2>${svg}${limites}${avertissement}` };
 }
 
 /**
@@ -928,11 +976,19 @@ function htmlBlocService(bloc: BlocService, cle: string): string {
   return `<div class="groupe bloc" data-bloc="${cle}"><h3>${echapper(bloc.titre)}</h3>${lignes}${verdict}${note}</div>`;
 }
 
-function htmlService(
-  resolu: ResolvedModel,
-  MzElu: number,
-  parametres: ParametresService
-): string {
+/**
+ * Un bloc et la CLE qui le designe dans la page.
+ *
+ * Les blocs sont produits une fois, puis affiches ET exportes. Sans cette
+ * paire, l export devrait reconstruire ce que l ecran montre — une seconde
+ * source de verite, qui finirait par en diverger.
+ */
+interface BlocAffiche {
+  cle: string;
+  bloc: BlocService;
+}
+
+function blocsDeService(resolu: ResolvedModel, parametres: ParametresService): BlocAffiche[] {
   const section = resolu.section;
   const caracteristique = resolu.serviceActions?.characteristic;
   const quasiPermanent = resolu.serviceActions?.quasiPermanent;
@@ -949,6 +1005,17 @@ function htmlService(
           sectionCurvature(section, quasiPermanent, { n: parametres.n, beta: parametres.beta })
         );
 
+  return [
+    { cle: 'contraintes', bloc: blocContraintes(contraintes) },
+    {
+      cle: 'fissuration',
+      bloc: blocFissuration(issueFissuration(section, quasiPermanent, parametres)),
+    },
+    { cle: 'courbure', bloc: blocCourbure(courbure) },
+  ];
+}
+
+function htmlService(MzElu: number, blocs: BlocAffiche[]): string {
   // Le Mz de l'ELU informe, il ne BLOQUE jamais : les verifications ci-dessous
   // portent sur d'autres combinaisons, saisies separement et uniaxiales par
   // construction. Refuser de calculer sur ce motif refuserait le cas normal.
@@ -957,9 +1024,7 @@ function htmlService(
 
   return (
     `<div id="service"><h2>Verifications de service (ELS)</h2>${deviee}` +
-    htmlBlocService(blocContraintes(contraintes), 'contraintes') +
-    htmlBlocService(blocFissuration(issueFissuration(section, quasiPermanent, parametres)), 'fissuration') +
-    htmlBlocService(blocCourbure(courbure), 'courbure') +
+    blocs.map((b) => htmlBlocService(b.bloc, b.cle)).join('') +
     '</div>'
   );
 }
@@ -978,11 +1043,11 @@ function htmlService(
  *
  * Aucun calcul ici : les modules sont appeles, `checks-view.ts` met en forme.
  */
-function htmlVerifications(
+function blocsDeVerifications(
   resolu: ResolvedModel,
   parametres: Issue<ParametresVerifications>,
   parametresMeyer: Issue<ParametresMeyer>
-): string {
+): BlocAffiche[] {
   const section = resolu.section;
 
   let tranchant: Issue<ShearResult>;
@@ -1074,12 +1139,18 @@ function htmlVerifications(
     meyer = tenter(() => meyerRestraintReinforcement(m));
   }
 
+  return [
+    { cle: 'tranchant', bloc: blocTranchant(tranchant, VEd) },
+    { cle: 'dispositions', bloc: blocDispositions(dispositions) },
+    { cle: 'zwang', bloc: blocZwang(zwang) },
+    { cle: 'meyer', bloc: blocMeyer(meyer, dsMeyer) },
+  ];
+}
+
+function htmlVerifications(blocs: BlocAffiche[]): string {
   return (
     '<div id="verifications"><h2>Effort tranchant, dispositions et deformation genee</h2>' +
-    htmlBlocService(blocTranchant(tranchant, VEd), 'tranchant') +
-    htmlBlocService(blocDispositions(dispositions), 'dispositions') +
-    htmlBlocService(blocZwang(zwang), 'zwang') +
-    htmlBlocService(blocMeyer(meyer, dsMeyer), 'meyer') +
+    blocs.map((b) => htmlBlocService(b.bloc, b.cle)).join('') +
     '</div>'
   );
 }
@@ -1138,18 +1209,40 @@ function recalculer(mode?: 'proportional'): void {
     // frappe en cours dans l'un ne doit pas priver l'autre de son bloc.
     const parametresMeyer = tenter(() => parametresDeMeyer(etat));
 
+    const blocsService = blocsDeService(resolu, parametres);
+    const blocsVerifications = blocsDeVerifications(
+      resolu,
+      parametresVerifications,
+      parametresMeyer
+    );
+
     dernierResultat =
       htmlResultat(resolu, resultat, etatAxe) +
-      htmlService(resolu, resolu.action.Mz, parametres) +
-      htmlVerifications(resolu, parametresVerifications, parametresMeyer);
-    dernierDessin = dessiner(resolu, resultat, etatAxe);
+      htmlService(resolu.action.Mz, blocsService) +
+      htmlVerifications(blocsVerifications);
+    const svgSection = dessiner(resolu, resultat, etatAxe);
     zoneResultat.innerHTML = dernierResultat;
-    zoneSection.innerHTML = dernierDessin;
+    zoneSection.innerHTML = svgSection + LEGENDE_SECTION;
 
     // Le domaine My-Mz eventuellement trace n'est PAS reconduit : il vaut pour
     // un effort normal fixe, que la saisie vient peut-etre de changer.
-    dernierDiagramme = dessinerDiagrammeNM(resolu);
+    const diagramme = dessinerDiagrammeNM(resolu);
+    dernierDiagramme = diagramme.html;
     if (zoneDiagramme) zoneDiagramme.innerHTML = dernierDiagramme;
+
+    // L'etat exportable est fige ICI, sur un calcul REUSSI. Les sorties ne
+    // peuvent donc jamais decrire une saisie fautive, et restent disponibles
+    // pendant qu'un champ est en cours de frappe.
+    derniereSortie = {
+      modele,
+      resolu,
+      parametres,
+      blocs: [...blocsService, ...blocsVerifications].map((b) => b.bloc),
+      dessins: [
+        { suffixe: 'section', svg: svgSection },
+        { suffixe: 'diagramme-n-my', svg: diagramme.svg },
+      ],
+    };
 
     const derives = document.querySelector('#derives');
     if (derives) {
@@ -1179,7 +1272,7 @@ function tracerDomaine(): void {
       mode: 'constant-N',
     });
 
-    dernierDiagramme = dessinerDiagrammeNM(resolu);
+    dernierDiagramme = dessinerDiagrammeNM(resolu).html;
     zoneDiagramme.innerHTML = dernierDiagramme + dessinerDomaineMyMz(resolu, resultat);
   } catch (e) {
     afficherErreur(e instanceof FormError ? e.message : String(e));
@@ -1198,6 +1291,107 @@ function recalculerBientot(): void {
 function rendreFormulaire(): void {
   if (!zoneSaisie) return;
   zoneSaisie.innerHTML = htmlFormulaire();
+}
+
+// --- Sorties ----------------------------------------------------------------
+
+/**
+ * Ce qui fait sortir de la page ce qu'elle calcule.
+ *
+ * Rien ne se COMPOSE ici : les documents sont assembles par `export.ts`, qui
+ * est pur, et le telechargement vit dans `storage.ts`. Ce bloc ne fait que
+ * nommer les fichiers et choisir le canal.
+ */
+
+/** Base de nom de fichier, tiree du nom du modele. */
+function baseDeNom(modele: SectionModel): string {
+  const brut = (modele.name ?? 'section').replace(/[^\w-]+/g, '-').toLowerCase();
+  return brut.replace(/^-+|-+$/g, '') || 'section';
+}
+
+/** La date en ISO : la seule graphie qui se lise sans ambiguite. */
+function dateDuJour(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Un fichier par dessin.
+ *
+ * Un document SVG porte UN dessin : la section et le diagramme sortent donc
+ * separement, chacun autonome. Qui veut les deux dans un seul document a la
+ * note de calcul, qui les porte tous.
+ */
+function exporterDessins(sortie: EtatExportable): void {
+  for (const dessin of sortie.dessins) {
+    telecharger(
+      `${baseDeNom(sortie.modele)}-${dessin.suffixe}.svg`,
+      svgAutonome(dessin.svg, STYLES_TRACE),
+      'image/svg+xml;charset=utf-8'
+    );
+  }
+}
+
+/** Les donnees d'entree ET les verifications : un tableau qui se lit seul. */
+function exporterResultats(sortie: EtatExportable): void {
+  const entrees = blocsDEntree(sortie.modele, sortie.resolu, sortie.parametres);
+  telecharger(
+    `${baseDeNom(sortie.modele)}-resultats.csv`,
+    resultatsEnCsv([...entrees, ...sortie.blocs]),
+    'text/csv;charset=utf-8'
+  );
+}
+
+function exporterNote(sortie: EtatExportable): void {
+  const html = noteDeCalculHtml(
+    {
+      titre: sortie.modele.name ?? 'Section',
+      date: dateDuJour(),
+      entrees: blocsDEntree(sortie.modele, sortie.resolu, sortie.parametres),
+      // Les dessins DEJA produits, jamais redessines.
+      dessins: sortie.dessins.map((d) => d.svg),
+      verifications: sortie.blocs,
+      hypotheses: hypothesesDeLaNote(sortie.resolu),
+    },
+    STYLES_NOTE
+  );
+  const nom = `${baseDeNom(sortie.modele)}-note.html`;
+
+  let onglet: Window | null = null;
+  try {
+    onglet = window.open('', '_blank') ?? null;
+  } catch {
+    onglet = null;
+  }
+
+  // L'ouverture d'onglet est bloquee par defaut chez beaucoup d'utilisateurs.
+  // Un bouton qui ne fait rien SANS RIEN DIRE est pire qu'un telechargement
+  // inattendu : on retombe alors sur le fichier.
+  if (onglet === null) {
+    telecharger(nom, html, 'text/html;charset=utf-8');
+    return;
+  }
+
+  try {
+    onglet.document.write(html);
+    onglet.document.close();
+  } catch {
+    telecharger(nom, html, 'text/html;charset=utf-8');
+  }
+}
+
+const SANS_CALCUL_A_EXPORTER =
+  'Aucun calcul valide a exporter. Les sorties decrivent le dernier calcul reussi : corriger ' +
+  'la saisie, puis reessayer.';
+
+function exporter(action: string): void {
+  if (derniereSortie === null) {
+    afficherErreur(SANS_CALCUL_A_EXPORTER);
+    return;
+  }
+
+  if (action === 'exporter-dessins') exporterDessins(derniereSortie);
+  else if (action === 'exporter-resultats') exporterResultats(derniereSortie);
+  else if (action === 'exporter-note') exporterNote(derniereSortie);
 }
 
 // --- Cablage des evenements -------------------------------------------------
@@ -1362,6 +1556,8 @@ document.addEventListener('click', (evenement) => {
       zoneDiagramme.innerHTML = `<p class="attente">Trace du domaine en cours…</p>${dernierDiagramme}`;
     }
     window.setTimeout(tracerDomaine, 0);
+  } else if (action.startsWith('exporter-')) {
+    exporter(action);
   }
 });
 
