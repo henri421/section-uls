@@ -98,7 +98,7 @@ header h1 {
 
 main {
   display: grid;
-  grid-template-columns: 24rem minmax(0, 1fr) 22rem;
+  grid-template-columns: 24rem minmax(0, 1fr) 24rem;
   gap: 1rem;
   padding: 1rem 1.25rem 2rem;
   align-items: start;
@@ -112,31 +112,121 @@ main {
  * colonne voisine, ce qui se lit a l'ecran comme un chevauchement. Autoriser
  * explicitement le retrecissement est la correction de fond.
  */
-main > section {
+main > * {
   min-width: 0;
-  overflow: hidden;
 }
 
-#section {
+/*
+ * LES TROIS COLONNES COMMENCENT SUR LA MEME LIGNE.
+ *
+ * Sans ce placement explicite, le placement automatique poussait le resultat
+ * sur la deuxieme rangee de la grille — donc SOUS le formulaire, dont la
+ * hauteur fait celle de la rangee. Il fallait alors defiler toute la saisie
+ * pour atteindre un resultat pourtant place « a droite », et la colonne de
+ * gauche etait vide une fois qu'on y arrivait. C'etait le defaut de fond de
+ * la mise en page, pas un reglage de hauteur.
+ */
+#saisie {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.visuels {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+#resultat {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+/*
+ * Ce qu'on LIT defile ; ce qu'on CONSULTE reste. La saisie est la seule
+ * colonne longue : c'est elle qui porte le defilement de la page. Les traces
+ * et le resultat restent sous les yeux, chacun avec son propre defilement
+ * interne quand il deborde de l'ecran.
+ *
+ * Le dessin et le diagramme sont dans la MEME boite collante : colle
+ * separement, le dessin occupait tout le haut de l'ecran et le diagramme
+ * n'apparaissait qu'une fois le formulaire epuise.
+ */
+.visuels,
+#resultat {
   position: sticky;
   top: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  /*
+   * Gouttiere reservee : sans elle, l'apparition de la barre de defilement
+   * retrecit la colonne, donc le dessin, a chaque recalcul qui change sa
+   * hauteur. Les infobulles vivent toutes dans la saisie, qui ne defile pas
+   * sur elle-meme : rien n'est rogne ici.
+   */
+  scrollbar-gutter: stable;
 }
 
+/* Le diagramme suit le dessin dans la colonne du milieu. */
+.visuels > #diagramme {
+  margin-top: 1rem;
+}
+
+/*
+ * ECRAN ETROIT : ON REORDONNE, ON N'EMPILE PAS.
+ *
+ * Quand la largeur manque, c'est l'ADJACENCE entre la saisie et le resultat
+ * qui doit survivre — c'est le couple qu'on lit ensemble, une valeur saisie
+ * pour un verdict lu. L'illustration passe donc au bord, et se contente de
+ * la largeur qui reste : elle se consulte, elle ne se compare pas.
+ *
+ * Empiler le resultat sous l'illustration, comme le faisait la version
+ * precedente, ramenait exactement le defaut qu'on vient de corriger : il
+ * fallait defiler pour atteindre le verdict.
+ */
 @media (max-width: 78rem) {
   main {
-    grid-template-columns: 22rem minmax(0, 1fr);
+    grid-template-columns: 19rem 18rem minmax(0, 1fr);
   }
   #resultat {
-    grid-column: 1 / -1;
+    grid-column: 2;
+  }
+  .visuels {
+    grid-column: 3;
+  }
+  /* La colonne de saisie a maigri : les libelles suivent, sinon ils poussent
+     les champs hors du cadre. */
+  :root {
+    --libelle: 9rem;
   }
 }
 
+/*
+ * Une seule colonne : plus rien n'est colle ni borne en hauteur. Un panneau
+ * qui defile sur lui-meme DANS une page qui defile aussi est ingerable au
+ * doigt — a cette largeur, le defilement de la page est le seul.
+ */
 @media (max-width: 60rem) {
   main {
     grid-template-columns: minmax(0, 1fr);
   }
-  #section {
+  #saisie,
+  .visuels,
+  #resultat {
+    grid-column: 1;
     position: static;
+    max-height: none;
+    overflow: visible;
+  }
+  /* Meme ordre de lecture qu'en colonnes : on saisit, on lit le verdict, et
+     l'illustration vient en appui. */
+  #saisie {
+    grid-row: 1;
+  }
+  #resultat {
+    grid-row: 2;
+  }
+  .visuels {
+    grid-row: 3;
   }
   :root {
     --libelle: 10rem;
@@ -331,6 +421,108 @@ label.large > input {
   color: var(--texte-faible);
 }
 
+/* --- Infobulles --- */
+
+/*
+ * Une hypothese, un arbitrage, une limite de validite : tout cela doit rester
+ * ACCESSIBLE, mais pas occuper l'ecran en permanence. Le texte passe donc
+ * derriere un « i » : survol pour lire, clic pour epingler.
+ *
+ * Le clic compte autant que le survol — il n'y a pas de survol sur un ecran
+ * tactile, et une note qu'on relit ne doit pas disparaitre des qu'on bouge le
+ * pointeur.
+ */
+.info {
+  position: relative;
+  display: inline-block;
+  vertical-align: baseline;
+}
+
+.info-bouton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.95rem;
+  height: 0.95rem;
+  margin: 0 0 0 0.3rem;
+  padding: 0;
+  border: 1px solid var(--bordure);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--texte-faible);
+  font: 600 0.66rem/1 var(--sans);
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: help;
+}
+
+.info-bouton:hover,
+.info-bouton[aria-expanded='true'] {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+  color: var(--accent);
+}
+
+.info-bulle {
+  display: none;
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  width: 21rem;
+  max-width: 70vw;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--bordure);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--rayon);
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 12%);
+  font: 0.8rem/1.45 var(--sans);
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--texte-doux);
+  text-align: left;
+}
+
+.info:hover > .info-bulle,
+.info-bouton:focus-visible + .info-bulle,
+.info-bouton[aria-expanded='true'] + .info-bulle {
+  display: block;
+}
+
+/*
+ * Une infobulle ancree pres du bord droit d'une colonne sortirait de l'ecran :
+ * elle s'ouvre alors vers la gauche. Le sens est porte par le balisage, pas
+ * devine a l'execution.
+ */
+.info-bulle.gauche {
+  left: auto;
+  right: 0;
+}
+
+/*
+ * Certains parametres ne sont pas des constantes mais des choix qui gouvernent
+ * le resultat — k_zt en est l'exemple. Leur « i » porte la couleur de
+ * l'attention : c'est le signal AVANT la lecture qu'il y a la un arbitrage.
+ */
+.info-bouton.decisif {
+  border-color: var(--alerte);
+  background: var(--alerte-fond);
+  color: var(--alerte);
+}
+
+.info-bouton.decisif:hover,
+.info-bouton.decisif[aria-expanded='true'] {
+  border-color: var(--alerte);
+  background: var(--alerte-fond);
+  color: var(--alerte);
+}
+
+.info-bulle.decisif {
+  border-left-color: var(--alerte);
+}
+
 .repere {
   stroke: var(--neutre);
   fill: none;
@@ -344,11 +536,16 @@ label.large > input {
 
 /* --- Trace --- */
 
+/*
+ * 55vh, pas 78 : le dessin partage desormais sa colonne avec le diagramme
+ * N-My. A 78vh il remplissait l'ecran a lui seul et masquait le diagramme,
+ * qu'il fallait aller chercher. A 55vh, les deux tiennent ensemble.
+ */
 #section svg {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 78vh;
+  max-height: 55vh;
   background: var(--surface);
   border: 1px solid var(--bordure);
   border-radius: var(--rayon);
@@ -549,13 +746,9 @@ label.large > input {
 
 /*
  * Le diagramme occupe la colonne centrale, sous le dessin de la section :
- * c'est la meme section vue autrement, les deux se lisent ensemble. En une
- * seule colonne, il reprend toute la largeur.
+ * c'est la meme section vue autrement, les deux se lisent ensemble. Son
+ * placement vient de `.visuels`, qui les reunit.
  */
-#diagramme {
-  grid-column: 2;
-}
-
 #diagramme h2 {
   margin: 0 0 0.5rem;
   font-size: 0.95rem;
@@ -642,12 +835,6 @@ label.large > input {
   stroke-dasharray: 4 3;
 }
 
-@media (max-width: 60rem) {
-  #diagramme {
-    grid-column: 1 / -1;
-  }
-}
-
 /* --- Verifications de service (ELS) --- */
 
 /*
@@ -716,19 +903,6 @@ label.large > input {
 }
 
 /*
- * k_zt gouverne tout le resultat de la methode, et son defaut n'est pas le
- * cas defavorable : il merite donc la couleur de l'attention, la ou les
- * autres notes de saisie restent en gris.
- */
-.note-decisive {
-  padding: 0.45rem 0.55rem;
-  border-left: 3px solid var(--alerte);
-  border-radius: var(--rayon);
-  background: var(--alerte-fond);
-  color: var(--alerte);
-}
-
-/*
  * La flexion deviee de l'ELU est une PRECISION, jamais un refus : elle porte
  * donc la couleur de l'attention, et surtout pas celle de l'echec.
  */
@@ -756,5 +930,27 @@ label.large > input {
   }
   body {
     background: var(--surface);
+  }
+  /*
+   * Sur papier il n'y a ni survol ni clic : les notes reprennent leur place
+   * dans le texte, et le « i » qui les appelait disparait.
+   */
+  .info-bouton {
+    display: none;
+  }
+  .info-bulle {
+    display: block;
+    position: static;
+    width: auto;
+    max-width: none;
+    margin: 0.25rem 0 0.5rem;
+    box-shadow: none;
+  }
+  /* Rien n'est colle sur papier : tout se lit a la suite. */
+  .visuels,
+  #resultat {
+    position: static;
+    max-height: none;
+    overflow: visible;
   }
 }

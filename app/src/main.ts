@@ -145,6 +145,35 @@ function echapper(texte: string): string {
   return texte.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/**
+ * Un « i » qui ouvre une note.
+ *
+ * Les hypotheses, les arbitrages et les limites de validite doivent rester
+ * ACCESSIBLES : ce sont eux qui disent ce que le resultat vaut. Affiches en
+ * permanence, ils noyaient la saisie sous le texte. Ils passent donc derriere
+ * un appel : survol pour lire, clic pour epingler.
+ *
+ * Le balisage se GREFFE sur un libelle — `champTexte(c, 'cot theta' +
+ * info('…'), v)` — parce que les libelles sont deja inseres tels quels dans
+ * le gabarit. Aucune fabrique de champ n'a donc a connaitre les notes.
+ *
+ * `classes` porte les variantes : `decisif` pour un parametre qui gouverne le
+ * resultat, `gauche` pour une bulle qui s'ouvrirait hors de l'ecran.
+ */
+let compteurInfo = 0;
+
+function info(contenu: string, classes = ''): string {
+  const id = `aide-${++compteurInfo}`;
+  const decisif = classes.split(' ').includes('decisif') ? ' decisif' : '';
+  return (
+    `<span class="info">` +
+    `<button type="button" class="info-bouton${decisif}" data-action="info"` +
+    ` aria-label="Informations" aria-expanded="false" aria-controls="${id}">i</button>` +
+    `<span class="info-bulle${classes ? ` ${classes}` : ''}" id="${id}" role="note">${contenu}</span>` +
+    `</span>`
+  );
+}
+
 function champTexte(champ: keyof FormState, libelle: string, valeur: string): string {
   return `<label><span>${libelle}</span><input type="text" inputmode="decimal" data-champ="${champ}" value="${echapper(valeur)}" /></label>`;
 }
@@ -267,6 +296,11 @@ function blocFerraillage(): string {
 }
 
 function htmlFormulaire(): string {
+  // Les identifiants des bulles sont uniques DANS un rendu : le compteur
+  // repart a chaque reconstruction du formulaire, sinon il croitrait sans fin
+  // au fil des frappes qui changent la structure.
+  compteurInfo = 0;
+
   return `
   <fieldset>
     <legend>Identification</legend>
@@ -303,62 +337,97 @@ function htmlFormulaire(): string {
   </fieldset>
 
   <fieldset>
-    <legend>Sollicitation</legend>
+    <legend>Sollicitation ${info(
+      `Chemin de chargement : <strong>N constant</strong>, recalcule en continu.
+       Le mode proportionnel et le trace du domaine My-Mz ne partent que sur
+       demande — ils coutent de quelques dixiemes de seconde a quelques secondes.`
+    )}</legend>
     ${champTexte('N', 'N (kN, positif en compression)', etat.N)}
     ${champTexte('My', 'My (kN.m)', etat.My)}
     ${champTexte('Mz', 'Mz (kN.m)', etat.Mz)}
-    <p class="note">Chemin de chargement : <strong>N constant</strong>, recalcule en continu.</p>
     <button type="button" data-action="calculer-proportionnel">Calculer en proportionnel (quelques secondes)</button>
     <button type="button" data-action="tracer-domaine">Tracer le domaine My-Mz (une fraction de seconde)</button>
   </fieldset>
 
   <fieldset>
-    <legend>Effort tranchant et dispositions (§6.2, §9)</legend>
-    ${champChoix('elementType', 'Type d element', etat.elementType, [
-      ['beam', 'Poutre'],
-      ['slab', 'Dalle'],
-      ['column', 'Poteau'],
-    ])}
-    <p class="note">Le type d element est <strong>declare</strong>, jamais devine : un 300&times;500
-      est une poutre ou un poteau selon son role, et les regles du §9 different.</p>
+    <legend>Effort tranchant et dispositions (§6.2, §9) ${info(
+      `Sections <strong>rectangulaires</strong> seulement ; ni precontrainte, ni torsion,
+       ni bielles inclinees, ni verification au droit de l appui. Les valeurs du §9 sont
+       celles <strong>recommandees</strong> par l EN 1992-1-1 : une annexe nationale peut
+       les modifier.`
+    )}</legend>
+    ${champChoix(
+      'elementType',
+      `Type d element ${info(
+        `Le type d element est <strong>declare</strong>, jamais devine : un 300&times;500
+         est une poutre ou un poteau selon son role, et les regles du §9 different.`
+      )}`,
+      etat.elementType,
+      [
+        ['beam', 'Poutre'],
+        ['slab', 'Dalle'],
+        ['column', 'Poteau'],
+      ]
+    )}
     ${champTexte('V_Ed', 'V_Ed (kN)', etat.V_Ed)}
     <p class="sous-titre">Armatures d ame (vides = aucun cadre declare)</p>
     ${champTexte('Asw', 'A_sw, aire d un cours (mm²)', etat.Asw)}
     ${champTexte('sCadres', 'Espacement des cours s (mm)', etat.sCadres)}
     ${champTexte('fywk', 'f_ywk des cadres (MPa)', etat.fywk)}
-    ${champTexte('cotTheta', 'cot theta (1 a 2,5)', etat.cotTheta)}
-    <p class="note"><em>cot theta</em> est un <strong>arbitrage</strong>, pas une constante :
-      2,5 minimise les cadres et sollicite le plus les bielles, 1 fait l inverse. Sections
-      <strong>rectangulaires</strong> seulement ; ni precontrainte, ni torsion, ni bielles
-      inclinees, ni verification au droit de l appui. Les valeurs du §9 sont celles
-      <strong>recommandees</strong> par l EN 1992-1-1 : une annexe nationale peut les modifier.</p>
+    ${champTexte(
+      'cotTheta',
+      `cot theta (1 a 2,5) ${info(
+        `<em>cot theta</em> est un <strong>arbitrage</strong>, pas une constante :
+         2,5 minimise les cadres et sollicite le plus les bielles, 1 fait l inverse.`
+      )}`,
+      etat.cotTheta
+    )}
   </fieldset>
 
   <fieldset>
-    <legend>Sollicitations de service (ELS)</legend>
-    <p class="note">Combinaisons EN 1990 <strong>differentes de l ELU</strong> et differentes entre
-      elles : reprendre le moment de l ELU serait faux d un facteur 1,35 a 1,5. Flexion droite
-      uniquement — un seul moment M par combinaison. Laisser les deux champs d une combinaison
-      vides la desactive.</p>
+    <legend>Sollicitations de service (ELS) ${info(
+      `Combinaisons EN 1990 <strong>differentes de l ELU</strong> et differentes entre
+       elles : reprendre le moment de l ELU serait faux d un facteur 1,35 a 1,5. Flexion
+       droite uniquement — un seul moment M par combinaison. Laisser les deux champs d une
+       combinaison vides la desactive.<br /><br />
+       La combinaison <strong>caracteristique</strong> gouverne la limitation des contraintes
+       (§7.2) ; la <strong>quasi-permanente</strong> gouverne l ouverture de fissures (§7.3)
+       et la courbure (§7.4.3).`
+    )}</legend>
     ${champTexte('serviceCarN', 'N caracteristique (kN)', etat.serviceCarN)}
     ${champTexte('serviceCarM', 'M caracteristique (kN.m)', etat.serviceCarM)}
     ${champTexte('serviceQpN', 'N quasi-permanent (kN)', etat.serviceQpN)}
     ${champTexte('serviceQpM', 'M quasi-permanent (kN.m)', etat.serviceQpM)}
-    <p class="note">La combinaison <strong>caracteristique</strong> gouverne la limitation des
-      contraintes (§7.2) ; la <strong>quasi-permanente</strong> gouverne l ouverture de fissures
-      (§7.3) et la courbure (§7.4.3).</p>
   </fieldset>
 
   <fieldset>
-    <legend>Parametres de service assumes</legend>
-    ${champTexte('serviceN', 'n, coefficient d equivalence', etat.serviceN)}
-    ${champTexte('crackWMax', 'w_max (mm)', etat.crackWMax)}
-    ${champTexte('curvatureBeta', 'beta, duree de chargement', etat.curvatureBeta)}
-    <p class="note">Ces trois-la sont des <strong>choix</strong>, pas des constantes normatives.
-      <em>n</em> = 15 est conventionnel et n est pas prescrit sous cette forme par l EN 1992-1-1 ;
-      <em>w_max</em> depend de la classe d exposition (tableau 7.1N : 0,4 / 0,3 / 0,2 mm) ;
-      <em>beta</em> vaut 0,5 en charge de longue duree ou repetee, 1,0 en charge courte.
-      Les autres coefficients (k1, k2, k3, kt…) restent a leurs valeurs recommandees.</p>
+    <legend>Parametres de service assumes ${info(
+      `Ces trois-la sont des <strong>choix</strong>, pas des constantes normatives.
+       Les autres coefficients (k1, k2, k3, kt…) restent a leurs valeurs recommandees.`
+    )}</legend>
+    ${champTexte(
+      'serviceN',
+      `n, coefficient d equivalence ${info(
+        `<em>n</em> = 15 est conventionnel et n est <strong>pas prescrit sous cette forme</strong>
+         par l EN 1992-1-1.`
+      )}`,
+      etat.serviceN
+    )}
+    ${champTexte(
+      'crackWMax',
+      `w_max (mm) ${info(
+        `Depend de la <strong>classe d exposition</strong> — tableau 7.1N : 0,4 / 0,3 / 0,2 mm.`
+      )}`,
+      etat.crackWMax
+    )}
+    ${champTexte(
+      'curvatureBeta',
+      `beta, duree de chargement ${info(
+        `<strong>0,5</strong> en charge de longue duree ou repetee, <strong>1,0</strong> en
+         charge courte.`
+      )}`,
+      etat.curvatureBeta
+    )}
   </fieldset>
 
   <fieldset>
@@ -367,40 +436,65 @@ function htmlFormulaire(): string {
       ['central', 'Centree (retrait ou refroidissement empeches)'],
       ['bending', 'De flexion (gradient thermique au jeune age)'],
     ])}
-    ${champTexte('fctEff', 'f_ct,eff (MPa, vide = f_ctm a 28 jours)', etat.fctEff)}
+    ${champTexte(
+      'fctEff',
+      `f_ct,eff (MPa, vide = f_ctm a 28 jours) ${info(
+        `Le defaut est le cas <strong>defavorable</strong> : la fissuration des pieces massives
+         survient a quelques jours, quand le beton n a pas atteint sa resistance a 28 jours.`
+      )}`,
+      etat.fctEff
+    )}
     ${champTexte('sigmaSZwang', 'sigma_s (MPa, vide = f_yk)', etat.sigmaSZwang)}
-    ${champCase('zoneEfficace', 'Calculer sur la seule zone tendue efficace', etat.zoneEfficace)}
-    <p class="note">Le defaut de <em>f_ct,eff</em> est le cas <strong>defavorable</strong> : la
-      fissuration des pieces massives survient a quelques jours, quand le beton n a pas atteint
-      sa resistance a 28 jours. La <strong>zone efficace</strong> n est pas le texte de
-      l EN 1992-1-1, qui ecrit l eq. 7.1 sur toute la zone tendue ; c est le raffinement retenu
-      par la pratique pour les pieces epaisses, et l ecart atteint un facteur plusieurs sur un
-      voile d un metre.</p>
+    ${champCase(
+      'zoneEfficace',
+      `Calculer sur la seule zone tendue efficace ${info(
+        `Ce n est <strong>pas le texte</strong> de l EN 1992-1-1, qui ecrit l eq. 7.1 sur toute
+         la zone tendue ; c est le raffinement retenu par la pratique pour les pieces epaisses,
+         et l ecart atteint un facteur plusieurs sur un voile d un metre.`
+      )}`,
+      etat.zoneEfficace
+    )}
   </fieldset>
 
   <fieldset>
-    <legend>Elements massifs, methode Meyer (DIN 1045)</legend>
-    <p class="note">Methode <strong>allemande</strong>, distincte du §7.3.2 ci-dessus et qui ne le
-      remplace pas : elle sert au <strong>pre-dimensionnement</strong> et au controle d ordre de
-      grandeur, la justification reglementaire restant l EN 1992-1-1 et ses annexes nationales.
-      Elle ne lit ni la geometrie ni le ferraillage — ses parametres sont les siens, et
-      <em>h</em> comme <em>f_ctm</em> sont seulement <strong>pre-remplis</strong> a partir de la
-      section au chargement.</p>
+    <legend>Elements massifs, methode Meyer (DIN 1045) ${info(
+      `Methode <strong>allemande</strong>, distincte du §7.3.2 ci-dessus et qui ne le
+       remplace pas : elle sert au <strong>pre-dimensionnement</strong> et au controle d ordre
+       de grandeur, la justification reglementaire restant l EN 1992-1-1 et ses annexes
+       nationales. Elle ne lit ni la geometrie ni le ferraillage — ses parametres sont les
+       siens, et <em>h</em> comme <em>f_ctm</em> sont seulement <strong>pre-remplis</strong> a
+       partir de la section au chargement.`
+    )}</legend>
     ${champTexte('meyerH', 'h, epaisseur de l element (mm)', etat.meyerH)}
     ${champTexte('meyerD1', 'd1, enrobage a l AXE des barres (mm)', etat.meyerD1)}
     ${champTexte('meyerDs', 'ds, diametre des barres (mm)', etat.meyerDs)}
     ${champTexte('meyerWk', 'w_k visee (mm)', etat.meyerWk)}
     ${champTexte('meyerFctm', 'f_ctm a 28 jours (MPa)', etat.meyerFctm)}
-    ${champTexte('meyerKzt', 'k_zt = f_ct,eff / f_ctm', etat.meyerKzt)}
-    <p class="note note-decisive"><em>k_zt</em> est le parametre <strong>decisif</strong> de la
-      methode. Le Zwang des pieces massives nait de la chaleur d <strong>hydratation</strong> et
-      fissure a quelques jours, quand le beton est loin de son f_ctm a 28 jours : <em>k_zt</em> =
-      1,0 correspond a 28 jours, donne l armature la plus forte, et <strong>n est pas le cas
-      courant</strong>. Valeurs usuelles : 0,4 / 0,5 / 0,6.</p>
-    ${champChoix('meyerCas', 'Sollicitation', etat.meyerCas, [
-      ['traction', 'Traction : gene centree, deux faces armees'],
-      ['flexion', 'Flexion : gene de flexion, une seule face tendue'],
-    ])}
+    ${champTexte(
+      'meyerKzt',
+      `k_zt = f_ct,eff / f_ctm ${info(
+        `<em>k_zt</em> est le parametre <strong>decisif</strong> de la methode. Le Zwang des
+         pieces massives nait de la chaleur d <strong>hydratation</strong> et fissure a quelques
+         jours, quand le beton est loin de son f_ctm a 28 jours : <em>k_zt</em> = 1,0 correspond
+         a 28 jours, donne l armature la plus forte, et <strong>n est pas le cas courant</strong>.
+         Valeurs usuelles : 0,4 / 0,5 / 0,6.`,
+        'decisif'
+      )}`,
+      etat.meyerKzt
+    )}
+    ${champChoix(
+      'meyerCas',
+      `Sollicitation ${info(
+        `Seule la famille <strong>traction / bridage exterieur</strong> a ete confrontee au
+         diagramme de l ouvrage (a environ 3 % pres). La flexion et le bridage interieur sont
+         derives de la meme formulation et n ont ete confrontes a rien.`
+      )}`,
+      etat.meyerCas,
+      [
+        ['traction', 'Traction : gene centree, deux faces armees'],
+        ['flexion', 'Flexion : gene de flexion, une seule face tendue'],
+      ]
+    )}
     ${champChoix('meyerBridage', 'Origine du bridage', etat.meyerBridage, [
       ['exterieur', 'Exterieur : appuis, radier durci, reprise de betonnage'],
       ['interieur', 'Interieur : contraintes propres, gradient de peau'],
@@ -409,9 +503,6 @@ function htmlFormulaire(): string {
       ['lineaire', 'Lineaire (0,80 a 0,50 entre 300 et 800 mm)'],
       ['parabolique', 'Parabolique (proposition de Meyer)'],
     ])}
-    <p class="note">Seule la famille <strong>traction / bridage exterieur</strong> a ete confrontee
-      au diagramme de l ouvrage (a environ 3 % pres). La flexion et le bridage interieur sont
-      derives de la meme formulation et n ont ete confrontes a rien.</p>
   </fieldset>
 
   <fieldset>
@@ -429,14 +520,15 @@ function htmlFormulaire(): string {
   </fieldset>
 
   <fieldset class="sorties">
-    <legend>Sorties</legend>
+    <legend>Sorties ${info(
+      `Les sorties decrivent le dernier calcul <strong>reussi</strong>. La note s ouvre dans un
+       nouvel onglet, d ou le navigateur l imprime en PDF ; si l ouverture est bloquee, elle est
+       telechargee. C est un <strong>compte rendu</strong> de calcul, pas une justification
+       reglementaire signee.`
+    )}</legend>
     <button type="button" data-action="exporter-dessins">Dessins (SVG)</button>
     <button type="button" data-action="exporter-resultats">Resultats (CSV)</button>
     <button type="button" data-action="exporter-note">Note de calcul (HTML imprimable)</button>
-    <p class="note">Les sorties decrivent le dernier calcul <strong>reussi</strong>. La note
-      s ouvre dans un nouvel onglet, d ou le navigateur l imprime en PDF ; si l ouverture est
-      bloquee, elle est telechargee. C est un <strong>compte rendu</strong> de calcul, pas une
-      justification reglementaire signee.</p>
   </fieldset>`;
 }
 
@@ -1509,11 +1601,37 @@ document.addEventListener('change', (evenement) => {
   }
 });
 
+/** Libere la note epinglee, s'il y en a une. Une seule l'est a la fois. */
+function fermerInfos(): void {
+  document.querySelectorAll('.info-bouton[aria-expanded="true"]').forEach((bouton) => {
+    bouton.setAttribute('aria-expanded', 'false');
+  });
+}
+
+document.addEventListener('keydown', (evenement) => {
+  if (evenement.key === 'Escape') fermerInfos();
+});
+
 document.addEventListener('click', (evenement) => {
   const cible = evenement.target;
   if (!(cible instanceof HTMLElement)) return;
+
+  // Un clic hors d'une note la libere : sans cela, une note epinglee resterait
+  // en travers de la saisie qu'elle explique.
+  if (!cible.closest('.info')) fermerInfos();
+
   const action = cible.dataset.action;
   if (!action) return;
+
+  if (action === 'info') {
+    // Le survol suffit a lire une note ; le clic la MAINTIENT ouverte — c'est
+    // le seul geste possible sur un ecran tactile, et le seul confortable
+    // quand on la relit en saisissant.
+    const ouvert = cible.getAttribute('aria-expanded') === 'true';
+    fermerInfos();
+    if (!ouvert) cible.setAttribute('aria-expanded', 'true');
+    return;
+  }
 
   if (action === 'ajouter-lit') {
     etat.rows.push({ face: 'bottom', diameter: '20', useSpacing: false, count: '2', maxSpacing: '' });

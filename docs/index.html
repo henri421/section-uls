@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-width=1" />
     <title>section-uls — verification de sections BA a l'ELU</title>
-    <script type="module" crossorigin src="./assets/index-BC15eEbS.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-D0GMPa5l.css">
+    <script type="module" crossorigin src="./assets/index-DgoS8Pve.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DGns9dvQ.css">
   </head>
   <body>
     <!--
@@ -31,10 +31,19 @@
       </p>
     </header>
 
+    <!--
+      Trois colonnes qui commencent toutes EN HAUT : la saisie a gauche, les
+      traces au milieu, le resultat a droite. Le dessin et le diagramme sont
+      reunis dans une meme colonne parce qu'ils montrent la meme section vue
+      autrement, et parce qu'ils doivent defiler ENSEMBLE : c'est ce qui evite
+      que le dessin, colle en haut de l'ecran, masque le diagramme.
+    -->
     <main>
       <section id="saisie" aria-label="saisie de la section"></section>
-      <section id="section" aria-label="trace de la section"></section>
-      <section id="diagramme" aria-label="diagrammes d interaction"></section>
+      <div class="visuels">
+        <section id="section" aria-label="trace de la section"></section>
+        <section id="diagramme" aria-label="diagrammes d interaction"></section>
+      </div>
       <section id="resultat" aria-label="resultat de la verification"></section>
     </main>
 
