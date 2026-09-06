@@ -1,14 +1,40 @@
 :root {
-  --encre: #1a1a1a;
-  --papier: #fbfbf9;
-  --trait: #c8c6c0;
-  --appui: #f2f1ec;
-  --ok: #1f6f3f;
-  --non-ok: #a52121;
-  --attention: #8a6d00;
-  --compression: #2f5d8a;
-  --traction: #a8442a;
-  --libelle: 12rem;
+  /* ---- Châssis ---- */
+  --fond: #f7f7f6;            /* fond de page */
+  --surface: #ffffff;         /* cartes, panneaux, champs */
+  --surface-appui: #f2f1ec;   /* en-têtes de tableau, boutons au repos, blocs d'attente */
+  --texte: #1a1a1a;
+  --texte-doux: #4a4842;      /* notes, libellés de ligne, corps secondaire */
+  --texte-faible: #6a6862;    /* legend, sous-titres, surtitres */
+  --bordure: #c8c6c0;         /* filet structurant : cadres, champs, séparateurs */
+  --bordure-douce: #eceae4;   /* filet interne : lignes de liste, lignes de tableau */
+
+  /* ---- Interface ---- */
+  --accent: #1e5aa8;          /* focus, liens, état actif — JAMAIS une couleur de sens */
+  --accent-doux: #eaf1f9;     /* fond d'un champ actif, surlignage de zone */
+
+  /* ---- Couleurs de sens ---- */
+  --compression: #2f5d8a;     /* bielle, béton comprimé, domaine résistant */
+  --traction: #a8442a;        /* tirant, acier tendu, point sollicitant */
+  --beton: #e7eaee;           /* aplat de matière dans les tracés */
+  --neutre: #9a978f;          /* barre à effort nul, repères de cotation */
+
+  /* ---- Verdicts : trois états, pas quatre ---- */
+  --ok: #1f6f3f;      --ok-fond: #eaf4ee;
+  --alerte: #8a6d00;  --alerte-fond: #fdf6e3;
+  --refus: #a52121;   --refus-fond: #f8ecec;
+
+  /* ---- Typographie ---- */
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ---- Rayons ---- */
+  --rayon: 4px;        /* cartes, panneaux, fieldsets */
+  --rayon-petit: 3px;  /* champs, boutons, pastilles */
+
+  /* ---- Gabarit propre a section-uls ---- */
+  --libelle: 12rem;    /* largeur de la colonne des libelles de saisie */
+
   color-scheme: light;
 }
 
@@ -18,26 +44,56 @@
 
 body {
   margin: 0;
-  background: var(--papier);
-  color: var(--encre);
-  font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: var(--fond);
+  color: var(--texte);
+  font: 14px/1.5 var(--sans);
+}
+
+/*
+ * La barre de la suite, identique dans les quatre outils EC2 : le nom de la
+ * suite a gauche, UN SEUL lien vers le carrefour a droite. Un lien unique,
+ * c'est la surface d'echec minimale quand la page est ouverte hors ligne ;
+ * les autres outils ne sont pas listes ici, le hub reste le carrefour.
+ */
+.barre {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.35rem 1.25rem;
+  border-bottom: 1px solid var(--bordure);
+  background: var(--surface);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--texte-faible);
+}
+
+.barre a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.barre a:hover {
+  text-decoration: underline;
 }
 
 header {
   padding: 1rem 1.25rem 0.75rem;
-  border-bottom: 1px solid var(--trait);
+  border-bottom: 1px solid var(--bordure);
 }
 
 header h1 {
   margin: 0;
   font-size: 1.1rem;
+  font-weight: normal;
   letter-spacing: 0.02em;
 }
 
 .avertissement {
   margin: 0.25rem 0 0;
   font-size: 0.8rem;
-  color: var(--attention);
+  color: var(--alerte);
 }
 
 main {
@@ -98,11 +154,11 @@ fieldset {
    */
   min-inline-size: 0;
   width: 100%;
-  border: 1px solid var(--trait);
-  border-radius: 4px;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
   margin: 0 0 0.75rem;
   padding: 0.5rem 0.75rem 0.75rem;
-  background: #fff;
+  background: var(--surface);
 }
 
 legend {
@@ -110,7 +166,7 @@ legend {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #6a6862;
+  color: var(--texte-faible);
 }
 
 label {
@@ -152,43 +208,64 @@ textarea {
   flex: 1 1 auto;
   min-width: 0;
   padding: 0.28rem 0.4rem;
-  border: 1px solid var(--trait);
-  border-radius: 3px;
-  background: #fff;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit);
+  background: var(--surface);
   color: inherit;
   font: inherit;
+}
+
+/*
+ * Tout nombre est en monoespace tabulaire et cale a droite : ce sont les
+ * chiffres qui doivent s'aligner d'une ligne a l'autre.
+ *
+ * Les champs numeriques de cette page sont des `type="text"` — ils acceptent
+ * une EXPRESSION, pas seulement un nombre — et se reconnaissent donc a leur
+ * `inputmode`. Le champ « Nom », seul vrai champ de texte, reste en sans et
+ * cale a gauche.
+ */
+input[inputmode='decimal'],
+input[inputmode='numeric'] {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 button:focus-visible {
-  outline: 2px solid var(--compression);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
 textarea {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono);
   font-size: 0.82rem;
 }
 
 button {
   margin-top: 0.4rem;
   padding: 0.32rem 0.7rem;
-  border: 1px solid var(--trait);
-  border-radius: 3px;
-  background: var(--appui);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit);
+  background: var(--surface-appui);
   color: inherit;
   font: inherit;
   cursor: pointer;
 }
 
 button:hover {
-  background: #e8e7e1;
+  background: color-mix(in srgb, var(--surface-appui) 95%, var(--texte));
 }
 
+/*
+ * Un lit est un `fieldset` DANS un `fieldset` : il se separe par son propre
+ * filet, pas par un second blanc casse. Le fond plat est la regle de la
+ * suite — un seul niveau de surface, la bordure fait la separation.
+ */
 .lit {
-  background: #fdfdfb;
+  background: var(--surface);
   margin-bottom: 0.5rem;
 }
 
@@ -205,9 +282,9 @@ button:hover {
 .derive {
   margin: 0.5rem 0 0;
   padding-top: 0.4rem;
-  border-top: 1px dashed var(--trait);
+  border-top: 1px dashed var(--bordure);
   font-size: 0.82rem;
-  color: #4a4842;
+  color: var(--texte-doux);
 }
 
 
@@ -234,13 +311,14 @@ label.large > input {
 .note {
   margin: 0.4rem 0 0;
   font-size: 0.8rem;
-  color: #4a4842;
+  color: var(--texte-doux);
 }
 
 .aire-lit {
   margin: 0.15rem 0 0;
   font-size: 0.78rem;
-  color: #4a4842;
+  color: var(--texte-doux);
+  font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -248,18 +326,20 @@ label.large > input {
   margin: 0.6rem 0 0.1rem;
   font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  color: #6a6862;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--texte-faible);
 }
 
 .repere {
-  stroke: #9a978f;
+  stroke: var(--neutre);
   fill: none;
 }
 
+/* Les lettres d'axe y et z sont du texte, pas des nombres : elles restent en sans. */
 .repere-texte {
-  fill: #6a6862;
-  font-family: system-ui, sans-serif;
+  fill: var(--texte-faible);
+  font-family: var(--sans);
 }
 
 /* --- Trace --- */
@@ -269,9 +349,9 @@ label.large > input {
   width: 100%;
   height: auto;
   max-height: 78vh;
-  background: #fff;
-  border: 1px solid var(--trait);
-  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
 }
 
 .zone-comprimee {
@@ -286,7 +366,7 @@ label.large > input {
 
 .contour {
   fill: none;
-  stroke: var(--encre);
+  stroke: var(--texte);
 }
 
 .barre-comprimee {
@@ -298,17 +378,17 @@ label.large > input {
 }
 
 .axe-neutre {
-  stroke: var(--encre);
+  stroke: var(--texte);
   stroke-dasharray: 14 9;
 }
 
 .resultante {
-  stroke: var(--encre);
+  stroke: var(--texte);
   fill: none;
 }
 
 .bras-levier {
-  stroke: var(--encre);
+  stroke: var(--texte);
   stroke-dasharray: 3 4;
   fill: none;
 }
@@ -319,7 +399,7 @@ label.large > input {
   gap: 0.25rem 1rem;
   margin: 0.5rem 0 0;
   font-size: 0.78rem;
-  color: #4a4842;
+  color: var(--texte-doux);
 }
 
 .legende span::before {
@@ -329,7 +409,7 @@ label.large > input {
   height: 0.7rem;
   margin-right: 0.35rem;
   vertical-align: -1px;
-  border-radius: 2px;
+  border-radius: var(--rayon-petit);
 }
 
 .legende .c::before {
@@ -344,37 +424,44 @@ label.large > input {
 
 .legende .n::before {
   height: 0;
-  border-top: 2px dashed var(--encre);
+  border-top: 2px dashed var(--texte);
   border-radius: 0;
   vertical-align: 3px;
 }
 
 /* --- Resultat --- */
 
+/*
+ * La forme UNIQUE d'un verdict dans toute la suite : liseré gauche de 3px en
+ * couleur pleine, fond attenue de la meme couleur, texte en couleur pleine.
+ * Le gras est reserve a cette forme — c'est ce qui la distingue d'une ligne
+ * de grandeur, dont la valeur reste de poids normal.
+ */
 .verdict {
   margin: 0 0 0.6rem;
   padding: 0.6rem 0.75rem;
-  border-radius: 4px;
+  border-left: 3px solid currentColor;
+  border-radius: var(--rayon);
   font-size: 1rem;
   font-weight: 600;
 }
 
 .verdict.ok {
-  background: #eaf4ee;
+  background: var(--ok-fond);
   color: var(--ok);
 }
 
 .verdict.non-ok {
-  background: #f8ecec;
-  color: var(--non-ok);
+  background: var(--refus-fond);
+  color: var(--refus);
 }
 
 .jauge {
   height: 0.55rem;
   margin: 0.35rem 0 0.9rem;
-  border: 1px solid var(--trait);
+  border: 1px solid var(--bordure);
   border-radius: 999px;
-  background: #fff;
+  background: var(--surface);
   overflow: hidden;
 }
 
@@ -384,7 +471,7 @@ label.large > input {
 }
 
 .jauge.depasse > div {
-  background: var(--non-ok);
+  background: var(--refus);
 }
 
 .groupe {
@@ -397,7 +484,7 @@ label.large > input {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #6a6862;
+  color: var(--texte-faible);
 }
 
 .ligne {
@@ -406,41 +493,55 @@ label.large > input {
   align-items: baseline;
   gap: 0.75rem;
   padding: 0.22rem 0;
-  border-bottom: 1px solid #eceae4;
+  border-bottom: 1px solid var(--bordure-douce);
   font-size: 0.85rem;
 }
 
 .ligne > span {
-  color: #4a4842;
+  color: var(--texte-doux);
 }
 
+/*
+ * La valeur d'une grandeur : monoespace tabulaire, POIDS NORMAL. Le mono
+ * tabulaire suffit a faire tenir la colonne ; le gras en plus l'alourdit, et
+ * il appartient aux verdicts.
+ */
 .ligne > strong {
+  font-family: var(--mono);
   font-variant-numeric: tabular-nums;
+  font-weight: normal;
   text-align: right;
 }
 
 .motif {
   margin: 0.5rem 0 0;
   padding: 0.5rem 0.6rem;
-  border-left: 3px solid var(--non-ok);
-  background: #f8ecec;
+  border-left: 3px solid var(--refus);
+  border-radius: var(--rayon);
+  background: var(--refus-fond);
   font-size: 0.85rem;
-  color: var(--non-ok);
+  color: var(--refus);
 }
 
 .erreur {
   margin: 0 0 0.75rem;
   padding: 0.5rem 0.7rem;
-  border-left: 3px solid var(--attention);
-  background: #fdf6e3;
-  color: #6b5400;
+  border-left: 3px solid var(--alerte);
+  border-radius: var(--rayon);
+  background: var(--alerte-fond);
+  color: var(--alerte);
   font-size: 0.85rem;
 }
 
+/*
+ * « Pas encore de saisie » n'est pas un verdict : bloc gris sur la surface
+ * d'appui, SANS liseré colore. Un liseré ferait croire a une conclusion.
+ */
 .attente {
   margin: 0 0 0.75rem;
   padding: 0.5rem 0.7rem;
-  background: var(--appui);
+  border-radius: var(--rayon);
+  background: var(--surface-appui);
   font-size: 0.85rem;
 }
 
@@ -470,24 +571,24 @@ label.large > input {
   display: block;
   width: 100%;
   height: auto;
-  background: #fff;
-  border: 1px solid var(--trait);
-  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
 }
 
 .plot-cadre {
-  fill: #fff;
-  stroke: var(--trait);
+  fill: var(--surface);
+  stroke: var(--bordure);
   stroke-width: 1;
 }
 
 .plot-axe {
-  stroke: var(--trait);
+  stroke: var(--bordure);
   stroke-width: 1;
 }
 
 .plot-graduation {
-  stroke: var(--trait);
+  stroke: var(--bordure);
   stroke-width: 1;
 }
 
@@ -496,14 +597,25 @@ label.large > input {
 .plot-libelle-x,
 .plot-libelle-y,
 .plot-marqueur-libelle {
-  fill: #4a4842;
+  fill: var(--texte-doux);
   font-size: 9px;
 }
 
 .plot-libelle-x,
 .plot-libelle-y {
-  fill: var(--encre);
+  fill: var(--texte);
   font-size: 10px;
+}
+
+/*
+ * Les graduations portent des NOMBRES : monoespace tabulaire, comme partout
+ * ailleurs. Les libelles d'axe et l'etiquette du marqueur sont des phrases,
+ * ils restent en sans.
+ */
+.plot-etiquette-x,
+.plot-etiquette-y {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Le contour resistant : c'est la limite, elle se lit d'un trait ferme. */
@@ -519,7 +631,7 @@ label.large > input {
  */
 .plot-sollicitation {
   fill: var(--traction);
-  stroke: #fff;
+  stroke: var(--surface);
   stroke-width: 1;
 }
 
@@ -547,7 +659,7 @@ label.large > input {
 #service {
   margin-top: 1.1rem;
   padding-top: 0.9rem;
-  border-top: 1px solid var(--trait);
+  border-top: 1px solid var(--bordure);
 }
 
 #service h2 {
@@ -558,7 +670,7 @@ label.large > input {
 
 .groupe.bloc {
   padding-left: 0.6rem;
-  border-left: 2px solid var(--appui);
+  border-left: 2px solid var(--surface-appui);
 }
 
 /*
@@ -581,7 +693,7 @@ label.large > input {
 #verifications {
   margin-top: 1.1rem;
   padding-top: 0.9rem;
-  border-top: 1px solid var(--trait);
+  border-top: 1px solid var(--bordure);
 }
 
 #verifications h2 {
@@ -600,7 +712,7 @@ label.large > input {
  * qu'on change de methode et non de ligne.
  */
 .groupe.bloc[data-bloc='meyer'] {
-  border-left-color: var(--attention);
+  border-left-color: var(--alerte);
 }
 
 /*
@@ -610,9 +722,10 @@ label.large > input {
  */
 .note-decisive {
   padding: 0.45rem 0.55rem;
-  border-left: 3px solid var(--attention);
-  background: #fdf6e3;
-  color: #6b5400;
+  border-left: 3px solid var(--alerte);
+  border-radius: var(--rayon);
+  background: var(--alerte-fond);
+  color: var(--alerte);
 }
 
 /*
@@ -622,7 +735,26 @@ label.large > input {
 .note-deviee {
   margin: 0 0 0.7rem;
   padding: 0.5rem 0.6rem;
-  border-left: 3px solid var(--attention);
-  background: #fdf6e3;
-  color: #6b5400;
+  border-left: 3px solid var(--alerte);
+  border-radius: var(--rayon);
+  background: var(--alerte-fond);
+  color: var(--alerte);
+}
+
+/* --- Impression --- */
+
+/*
+ * La barre de suite disparait — son lien ne mene nulle part sur papier — et
+ * le fond passe au blanc. Les filets restent : c'est eux qui separent.
+ *
+ * `--fond: #fff` sur `:root` ne suffirait pas dans tous les navigateurs, qui
+ * appliquent leur propre fond a `body` : la regle porte donc sur `body`.
+ */
+@media print {
+  .barre {
+    display: none;
+  }
+  body {
+    background: var(--surface);
+  }
 }

@@ -66,7 +66,7 @@ describe('svgAutonome', () => {
     const style = analyserSvg(svgAutonome(SVG_SECTION, STYLES_TRACE)).querySelector('style');
     const css = style?.textContent ?? '';
 
-    for (const variable of ['--encre', '--compression', '--traction']) {
+    for (const variable of ['--texte', '--compression', '--traction']) {
       expect(css).toContain(`${variable}:`);
     }
     // Et les classes qui les consomment, sinon les variables ne servent a rien.
@@ -269,7 +269,7 @@ const NOTE = {
   ],
 };
 
-const STYLES_ESSAI = ':root { --encre: #1a1a1a; } @media print { body { background: #fff; } }';
+const STYLES_ESSAI = ':root { --texte: #1a1a1a; } @media print { body { background: #fff; } }';
 
 function analyserNote(html: string): Document {
   return new JSDOM(html).window.document;
@@ -354,7 +354,7 @@ describe('noteDeCalculHtml', () => {
     expect(html).not.toMatch(/<link\b/i);
     expect(html).not.toMatch(/<script\b/i);
     expect(html).not.toContain('@import');
-    expect(analyserNote(html).querySelector('style')?.textContent).toContain('--encre');
+    expect(analyserNote(html).querySelector('style')?.textContent).toContain('--texte');
   });
 
   it('embarque une feuille de style d impression', () => {

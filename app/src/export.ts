@@ -28,15 +28,38 @@ import type { BlocService } from './service-view';
  * c est la copie, mais surveillee.
  */
 export const PALETTE = `:root {
-  --encre: #1a1a1a;
-  --papier: #fbfbf9;
-  --trait: #c8c6c0;
-  --appui: #f2f1ec;
-  --ok: #1f6f3f;
-  --non-ok: #a52121;
-  --attention: #8a6d00;
-  --compression: #2f5d8a;
-  --traction: #a8442a;
+  /* ---- Châssis ---- */
+  --fond: #f7f7f6;            /* fond de page */
+  --surface: #ffffff;         /* cartes, panneaux, champs */
+  --surface-appui: #f2f1ec;   /* en-têtes de tableau, boutons au repos, blocs d'attente */
+  --texte: #1a1a1a;
+  --texte-doux: #4a4842;      /* notes, libellés de ligne, corps secondaire */
+  --texte-faible: #6a6862;    /* legend, sous-titres, surtitres */
+  --bordure: #c8c6c0;         /* filet structurant : cadres, champs, séparateurs */
+  --bordure-douce: #eceae4;   /* filet interne : lignes de liste, lignes de tableau */
+
+  /* ---- Interface ---- */
+  --accent: #1e5aa8;          /* focus, liens, état actif — JAMAIS une couleur de sens */
+  --accent-doux: #eaf1f9;     /* fond d'un champ actif, surlignage de zone */
+
+  /* ---- Couleurs de sens ---- */
+  --compression: #2f5d8a;     /* bielle, béton comprimé, domaine résistant */
+  --traction: #a8442a;        /* tirant, acier tendu, point sollicitant */
+  --beton: #e7eaee;           /* aplat de matière dans les tracés */
+  --neutre: #9a978f;          /* barre à effort nul, repères de cotation */
+
+  /* ---- Verdicts : trois états, pas quatre ---- */
+  --ok: #1f6f3f;      --ok-fond: #eaf4ee;
+  --alerte: #8a6d00;  --alerte-fond: #fdf6e3;
+  --refus: #a52121;   --refus-fond: #f8ecec;
+
+  /* ---- Typographie ---- */
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ---- Rayons ---- */
+  --rayon: 4px;        /* cartes, panneaux, fieldsets */
+  --rayon-petit: 3px;  /* champs, boutons, pastilles */
 }`;
 
 /**
@@ -49,31 +72,39 @@ export const PALETTE = `:root {
 export const STYLES_TRACE = `${PALETTE}
 
 svg {
-  background: #fff;
+  background: var(--surface);
   color-scheme: light;
+  /*
+   * La police est AJOUTEE elle aussi : dans la page, les textes du trace
+   * heritent celle du corps de page. Hors de la page il n y a plus de corps,
+   * et le dessin sortirait dans la police par defaut du visualiseur.
+   */
+  font-family: var(--sans);
 }
 
 .zone-comprimee { fill: var(--compression); fill-opacity: 0.18; }
 .zone-tendue { fill: var(--traction); fill-opacity: 0.09; }
-.contour { fill: none; stroke: var(--encre); }
+.contour { fill: none; stroke: var(--texte); }
 .barre-comprimee { fill: var(--compression); }
 .barre-tendue { fill: var(--traction); }
-.axe-neutre { stroke: var(--encre); stroke-dasharray: 14 9; }
-.resultante { stroke: var(--encre); fill: none; }
-.bras-levier { stroke: var(--encre); stroke-dasharray: 3 4; fill: none; }
-.repere { stroke: #9a978f; fill: none; }
-.repere-texte { fill: #6a6862; font-family: system-ui, sans-serif; }
+.axe-neutre { stroke: var(--texte); stroke-dasharray: 14 9; }
+.resultante { stroke: var(--texte); fill: none; }
+.bras-levier { stroke: var(--texte); stroke-dasharray: 3 4; fill: none; }
+.repere { stroke: var(--neutre); fill: none; }
+.repere-texte { fill: var(--texte-faible); font-family: var(--sans); }
 
-.plot-cadre { fill: #fff; stroke: var(--trait); stroke-width: 1; }
-.plot-axe { stroke: var(--trait); stroke-width: 1; }
-.plot-graduation { stroke: var(--trait); stroke-width: 1; }
+.plot-cadre { fill: var(--surface); stroke: var(--bordure); stroke-width: 1; }
+.plot-axe { stroke: var(--bordure); stroke-width: 1; }
+.plot-graduation { stroke: var(--bordure); stroke-width: 1; }
 .plot-etiquette-x,
 .plot-etiquette-y,
-.plot-marqueur-libelle { fill: #4a4842; font-size: 9px; }
+.plot-marqueur-libelle { fill: var(--texte-doux); font-size: 9px; }
 .plot-libelle-x,
-.plot-libelle-y { fill: var(--encre); font-size: 10px; }
+.plot-libelle-y { fill: var(--texte); font-size: 10px; }
+.plot-etiquette-x,
+.plot-etiquette-y { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .plot-domaine { stroke: var(--compression); stroke-width: 1.6; fill: none; }
-.plot-sollicitation { fill: var(--traction); stroke: #fff; stroke-width: 1; }
+.plot-sollicitation { fill: var(--traction); stroke: var(--surface); stroke-width: 1; }
 .plot-rayon { stroke: var(--traction); stroke-width: 1; stroke-dasharray: 4 3; }`;
 
 // --- SVG autonome ------------------------------------------------------------
@@ -204,20 +235,21 @@ body {
   margin: 0 auto;
   padding: 1.5rem;
   max-width: 60rem;
-  background: #fff;
-  color: var(--encre);
-  font: 13px/1.55 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: var(--surface);
+  color: var(--texte);
+  font: 13px/1.55 var(--sans);
 }
 
-header { border-bottom: 2px solid var(--encre); padding-bottom: 0.6rem; }
-h1 { margin: 0; font-size: 1.3rem; }
-.date { margin: 0.2rem 0 0.5rem; color: #4a4842; }
+header { border-bottom: 2px solid var(--texte); padding-bottom: 0.6rem; }
+h1 { margin: 0; font-size: 1.3rem; font-weight: normal; }
+.date { margin: 0.2rem 0 0.5rem; color: var(--texte-doux); }
 .avertissement {
   margin: 0.5rem 0 0;
   padding: 0.5rem 0.6rem;
-  border-left: 3px solid var(--attention);
-  background: #fdf6e3;
-  color: #6b5400;
+  border-left: 3px solid var(--alerte);
+  border-radius: var(--rayon);
+  background: var(--alerte-fond);
+  color: var(--alerte);
   font-size: 0.85rem;
 }
 
@@ -225,60 +257,69 @@ h1 { margin: 0; font-size: 1.3rem; }
 .partie > h2 {
   margin: 0 0 0.6rem;
   padding-bottom: 0.2rem;
-  border-bottom: 1px solid var(--trait);
+  border-bottom: 1px solid var(--bordure);
   font-size: 1rem;
 }
 
-.bloc { margin: 0 0 1rem; padding-left: 0.6rem; border-left: 2px solid var(--appui); }
+.bloc { margin: 0 0 1rem; padding-left: 0.6rem; border-left: 2px solid var(--surface-appui); }
 .bloc > h3 {
   margin: 0 0 0.3rem;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #6a6862;
+  color: var(--texte-faible);
 }
 
 table.lignes { width: 100%; border-collapse: collapse; }
 table.lignes th {
   width: 55%;
   padding: 0.2rem 0.4rem 0.2rem 0;
-  border-bottom: 1px solid #eceae4;
+  border-bottom: 1px solid var(--bordure-douce);
   font-weight: normal;
   text-align: left;
-  color: #4a4842;
+  color: var(--texte-doux);
 }
 table.lignes td {
   padding: 0.2rem 0;
-  border-bottom: 1px solid #eceae4;
+  border-bottom: 1px solid var(--bordure-douce);
   text-align: right;
+  font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
 
 .verdict {
   margin: 0.4rem 0 0;
   padding: 0.35rem 0.55rem;
-  border-radius: 3px;
+  border-left: 3px solid currentColor;
+  border-radius: var(--rayon);
   font-weight: 600;
 }
-.verdict.ok { background: #eaf4ee; color: var(--ok); }
-.verdict.non-ok { background: #f8ecec; color: var(--non-ok); }
+.verdict.ok { background: var(--ok-fond); color: var(--ok); }
+.verdict.non-ok { background: var(--refus-fond); color: var(--refus); }
 
-.note { margin: 0.4rem 0 0; font-size: 0.85rem; color: #4a4842; }
+.note { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--texte-doux); }
 .motif {
   margin: 0.4rem 0 0;
   padding: 0.4rem 0.55rem;
-  border-left: 3px solid var(--non-ok);
-  background: #f8ecec;
+  border-left: 3px solid var(--refus);
+  border-radius: var(--rayon);
+  background: var(--refus-fond);
   font-size: 0.85rem;
-  color: var(--non-ok);
+  color: var(--refus);
 }
 
 figure { margin: 0 0 1rem; }
-figure svg { width: 100%; max-width: 32rem; height: auto; border: 1px solid var(--trait); }
+figure svg {
+  width: 100%;
+  max-width: 32rem;
+  height: auto;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+}
 
 @media print {
   @page { margin: 15mm; }
-  body { max-width: none; padding: 0; background: #fff; }
+  body { max-width: none; padding: 0; background: var(--surface); }
   /* Une partie commence sur sa page ; un bloc ou un dessin ne se coupe pas. */
   .partie { break-before: page; page-break-before: always; }
   .partie:first-of-type { break-before: auto; page-break-before: auto; }
