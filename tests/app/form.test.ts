@@ -226,7 +226,15 @@ describe('sollicitations de service dans le formulaire', () => {
 describe('parametres de service', () => {
   it('reprend les valeurs par defaut du formulaire', () => {
     const form = modelToForm(SEPT_FORMES[0]);
-    expect(parametresDeService(form)).toEqual({ n: 15, wMax: 0.3, beta: 0.5 });
+    expect(parametresDeService(form)).toEqual({
+      n: 15,
+      wMax: 0.3,
+      beta: 0.5,
+      // Le critere du §7.1(2) s'applique, et `f_ct,eff` reste au defaut du
+      // module : c'est `f_ctm` a 28 jours, que le formulaire n'inscrit pas.
+      crackingMode: 'auto',
+      crackingFctEff: undefined,
+    });
   });
 
   it('evalue les expressions saisies', () => {
@@ -234,7 +242,14 @@ describe('parametres de service', () => {
     form.serviceN = '30/2';
     form.crackWMax = '0.2';
     form.curvatureBeta = '1';
-    expect(parametresDeService(form)).toEqual({ n: 15, wMax: 0.2, beta: 1 });
+    form.crackingFctEff = '3.6/2';
+    expect(parametresDeService(form)).toEqual({
+      n: 15,
+      wMax: 0.2,
+      beta: 1,
+      crackingMode: 'auto',
+      crackingFctEff: 1.8,
+    });
   });
 
   it('refuse une valeur non numerique en nommant le parametre', () => {
@@ -377,10 +392,26 @@ describe('rechargement des champs de verification', () => {
     },
   };
 
-  it('aller-retour A L IDENTIQUE sur un modele de version 3 complet', () => {
-    // C'est ici, et seulement ici, que l'identite stricte a un sens : le
-    // modele porte tous les blocs que le formulaire sait afficher.
-    expect(formToModel(modelToForm(COMPLET))).toEqual(COMPLET);
+  /**
+   * Un fichier de version 3 ne porte pas les verifications retenues. Rouvert,
+   * il retrouve celles que ses DONNEES impliquent — un bloc `shear` veut dire
+   * qu'on verifiait le tranchant — et il ressort en version 4 avec ce choix
+   * ecrit. C'est l'unique ajout, et il doit etre exactement celui-la.
+   */
+  it('un modele de version 3 complet ne perd rien et gagne ses verifications', () => {
+    const reconstruit = formToModel(modelToForm(COMPLET));
+
+    expect(reconstruit).toMatchObject(COMPLET);
+    expect(reconstruit.checks).toEqual({
+      // Aucune sollicitation de service dans COMPLET : rien a verifier.
+      service: false,
+      shear: true,
+      detailing: true,
+      restraint: true,
+      sectionState: true,
+      restraintReferential: 'both',
+      cracking: { mode: 'auto' },
+    });
   });
 
   it('chaque champ affiche ce que le modele portait', () => {

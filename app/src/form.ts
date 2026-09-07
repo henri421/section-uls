@@ -2,11 +2,13 @@ import type {
   SectionModel, RowFaceModel, BarSpecModel, PointModel,
   GeometryModel, ReinforcementModel,
   ServiceActionModel, ServiceActionsModel,
-  ShearModel, ShearLinksModel, RestraintModel, MeyerModel,
+  ShearModel, ShearLinksModel, RestraintModel, MeyerModel, ChecksModel,
 } from '../../src/index';
 import type { LoadingMode, ElementType, RestraintType, ShearReinforcement } from '../../src/index';
 import type { MeyerCas, MeyerBridage, MeyerModeK } from '../../src/index';
-import { ec2Recommended, fctmDepuisFck, FORMAT_VERSION, ENGINE_VERSION } from '../../src/index';
+import {
+  ec2Recommended, fctmDepuisFck, resolveChecks, FORMAT_VERSION, ENGINE_VERSION,
+} from '../../src/index';
 import { evaluateExpression, ExpressionError } from './expression';
 import { formatNumber } from './format';
 
@@ -120,6 +122,44 @@ export interface FormState {
   meyerCas: MeyerCas;
   meyerBridage: MeyerBridage;
   meyerKmode: MeyerModeK;
+
+  /**
+   * LES VERIFICATIONS RETENUES (version 4 du format).
+   *
+   * Une case decochee retire A LA FOIS les champs de saisie et le bloc de
+   * resultat, et retire aussi la verification de la note de calcul et de
+   * l export. C'est la condition pour que decocher veuille dire quelque
+   * chose : une verification qui continuerait de se calculer en silence,
+   * simplement cachee, reapparaitrait dans la note et ferait mentir l ecran.
+   *
+   * La flexion a l ELU n a pas de case : c est l objet meme de l outil, et
+   * une case qu on ne peut pas decocher n est pas une case.
+   */
+  checkService: boolean;
+  checkShear: boolean;
+  checkDetailing: boolean;
+  checkRestraint: boolean;
+  checkSectionState: boolean;
+
+  /**
+   * Referentiel de l armature minimale sous deformation genee.
+   *
+   * `both` est le COMPARATIF : les deux methodes cote a cote, ce qui montre
+   * laquelle surarme. C est la question qui a motive leur coexistence.
+   */
+  restraintReferential: 'ec2' | 'meyer' | 'both';
+
+  /**
+   * Etat de fissuration en service, et la resistance a la traction qui sert
+   * a en decider.
+   *
+   * ⚠ `crackingFctEff` n est PAS `fctEff` ci-dessus, malgre le nom. Ici une
+   * valeur elevee RETARDE la fissuration ; la-bas, dans le §7.3.2, elle
+   * AUGMENTE l armature exigee. Deux champs distincts pour deux roles
+   * opposes, plutot qu un seul dont le sens changerait selon le lecteur.
+   */
+  crackingMode: 'auto' | 'uncracked' | 'cracked';
+  crackingFctEff: string;
 }
 
 /** Valeurs de depart des trois parametres assumes, telles qu'elles s'affichent. */
@@ -234,7 +274,7 @@ function sollicitationDeService(
 const LIBELLE_CARACTERISTIQUE = 'Sollicitation de service caracteristique (§7.2)';
 const LIBELLE_QUASI_PERMANENT = 'Sollicitation de service quasi-permanente (§7.3, §7.4.3)';
 
-/** Les trois parametres assumes, evalues comme n'importe quel champ. */
+/** Les parametres assumes du service, evalues comme n'importe quel champ. */
 export interface ParametresService {
   /** Coefficient d'equivalence. */
   n: number;
@@ -242,6 +282,10 @@ export interface ParametresService {
   wMax: number;
   /** Duree de chargement pour l'interpolation de courbure. */
   beta: number;
+  /** Etat de fissuration : automatique (§7.1(2)) ou impose. */
+  crackingMode: 'auto' | 'uncracked' | 'cracked';
+  /** `f_ct,eff` du critere de fissuration. `undefined` : `f_ctm` a 28 jours. */
+  crackingFctEff: number | undefined;
 }
 
 export function parametresDeService(form: FormState): ParametresService {
@@ -249,6 +293,8 @@ export function parametresDeService(form: FormState): ParametresService {
     n: nombreRequis(form.serviceN, 'coefficient d equivalence n'),
     wMax: nombreRequis(form.crackWMax, 'ouverture limite w_max'),
     beta: nombreRequis(form.curvatureBeta, 'duree de chargement beta'),
+    crackingMode: form.crackingMode,
+    crackingFctEff: nombreOptionnel(form.crackingFctEff, 'f_ct,eff de fissuration'),
   };
 }
 
@@ -694,6 +740,33 @@ export function formToModel(form: FormState): SectionModel {
     ...(shear !== undefined ? { shear } : {}),
     restraint: geneDuModele(form),
     ...(meyer !== undefined ? { meyer } : {}),
+    checks: verificationsDuModele(form),
+  };
+}
+
+/**
+ * Les verifications retenues, TOUJOURS ecrites en entier.
+ *
+ * Contrairement aux blocs de donnees, aucun drapeau n'est omis : un drapeau
+ * absent se DEDUIT a la relecture de ce que le fichier contient, ce qui est
+ * la bonne regle pour un fichier ancien et la mauvaise pour un fichier
+ * recent. Un utilisateur qui decoche « Service » tout en gardant ses
+ * sollicitations de service verrait sinon la case revenir cochee au
+ * rechargement — la deduction ecraserait son choix.
+ */
+function verificationsDuModele(form: FormState): ChecksModel {
+  const fctEff = nombreOptionnel(form.crackingFctEff, 'f_ct,eff de fissuration');
+  return {
+    service: form.checkService,
+    shear: form.checkShear,
+    detailing: form.checkDetailing,
+    restraint: form.checkRestraint,
+    sectionState: form.checkSectionState,
+    restraintReferential: form.restraintReferential,
+    cracking: {
+      mode: form.crackingMode,
+      ...(fctEff !== undefined ? { fctEff } : {}),
+    },
   };
 }
 
@@ -703,6 +776,8 @@ export function formToModel(form: FormState): SectionModel {
  * autres restent a leur valeur par defaut (chaine vide, tableau vide).
  */
 export function modelToForm(model: SectionModel): FormState {
+  const verifications = resolveChecks(model);
+
   const form: FormState = {
     name: model.name ?? '',
     fck: texteDe(model.concrete.fck),
@@ -795,6 +870,19 @@ export function modelToForm(model: SectionModel): FormState {
     meyerCas: model.meyer?.cas ?? MEYER_CAS_PAR_DEFAUT,
     meyerBridage: model.meyer?.bridage ?? MEYER_BRIDAGE_PAR_DEFAUT,
     meyerKmode: model.meyer?.kmode ?? MEYER_KMODE_PAR_DEFAUT,
+
+    // Les verifications retenues passent par `resolveChecks`, qui porte la
+    // regle de retrocompatibilite : un fichier anterieur a la version 4 y
+    // retrouve les verifications que ses donnees impliquent. La dupliquer ici
+    // la ferait diverger de celle du noyau, teste.
+    checkService: verifications.service,
+    checkShear: verifications.shear,
+    checkDetailing: verifications.detailing,
+    checkRestraint: verifications.restraint,
+    checkSectionState: verifications.sectionState,
+    restraintReferential: verifications.restraintReferential,
+    crackingMode: verifications.cracking.mode,
+    crackingFctEff: texteDe(verifications.cracking.fctEff),
   };
 
   switch (model.geometry.kind) {

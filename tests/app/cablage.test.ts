@@ -142,6 +142,23 @@ function resultat(dom: JSDOM): string {
   return dom.window.document.querySelector('#resultat')?.textContent ?? '';
 }
 
+/**
+ * Monte la page AVEC toutes les familles de verification cochees.
+ *
+ * Depuis la version 4 du format, une page vierge ne verifie que la flexion
+ * composee a l'ELU : le service, le tranchant, le §9 et la deformation genee
+ * se cochent. Les blocs de tests qui portent sur ces familles-la commencent
+ * donc par les demander — c'est aussi le geste de l'utilisateur, et le
+ * tester au passage vaut mieux que de le contourner.
+ */
+async function monterAvecVerifications(stockage?: Map<string, string>): Promise<JSDOM> {
+  const dom = await monterApplication(stockage);
+  for (const nom of ['checkService', 'checkShear', 'checkDetailing', 'checkRestraint']) {
+    cocher(dom, nom, true);
+  }
+  return dom;
+}
+
 describe('cablage de l interface', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -413,7 +430,7 @@ describe('verifications de service', () => {
   }
 
   it('la section Service est affichee des le chargement, sans aucun clic', async () => {
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
     expect(service(dom)).not.toBeNull();
     expect(bloc(dom, 'contraintes').textContent).toMatch(/7\.2/);
     expect(bloc(dom, 'fissuration').textContent).toMatch(/7\.3/);
@@ -421,7 +438,7 @@ describe('verifications de service', () => {
   });
 
   it('les trois verifications sont reellement calculees sur le modele de depart', async () => {
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
     expect(lignes(dom, 'contraintes')).toBeGreaterThan(0);
     expect(lignes(dom, 'fissuration')).toBeGreaterThan(0);
     expect(lignes(dom, 'courbure')).toBeGreaterThan(0);
@@ -430,12 +447,12 @@ describe('verifications de service', () => {
   it('ne contient jamais NaN', async () => {
     // Les modules rendent `NaN` sur leur chemin d'echec : un bloc qui n'a pas
     // converge ne doit afficher AUCUN chiffre, pas un chiffre illisible.
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
     expect(service(dom).innerHTML).not.toContain('NaN');
   });
 
   it('le bloc courbure porte TOUJOURS qu il ne s agit pas d une fleche', async () => {
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
     expect(bloc(dom, 'courbure').textContent).toMatch(/pas.*fleche/i);
 
     // Y compris apres un changement de sollicitation.
@@ -445,7 +462,7 @@ describe('verifications de service', () => {
   });
 
   it('changer une sollicitation de service change le service, PAS le verdict ELU', async () => {
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
     const eluAvant = verdictElu(dom);
     const courbureAvant = bloc(dom, 'courbure').textContent;
     const contraintesAvant = bloc(dom, 'contraintes').textContent;
@@ -462,7 +479,7 @@ describe('verifications de service', () => {
   });
 
   it('changer la combinaison caracteristique change les contraintes', async () => {
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
     const avant = bloc(dom, 'contraintes').textContent;
 
     saisir(dom, 'serviceCarM', '140');
@@ -473,7 +490,7 @@ describe('verifications de service', () => {
 
   it('une combinaison non saisie donne un motif, pas un bloc muet', async () => {
     // C'est le cas d'un fichier de format v1, qui ne porte aucun service.
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
 
     saisir(dom, 'serviceCarN', '');
     saisir(dom, 'serviceCarM', '');
@@ -490,7 +507,7 @@ describe('verifications de service', () => {
     // l'exception remonter au `try` global du recalcul remplacerait tout le
     // resultat ELU par un message d'erreur — parce qu'un module OPTIONNEL n'a
     // pas pu s'appliquer. L'appel doit etre protege localement.
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
     choisir(dom, 'geometryKind', 'circle');
     vi.advanceTimersByTime(500);
 
@@ -516,7 +533,7 @@ describe('verifications de service', () => {
     // quasi-permanente exclut d'ailleurs le vent, qui apporte le plus souvent
     // le moment transversal. Refuser de calculer sur ce motif refuserait le
     // cas normal.
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
 
     expect(service(dom).querySelector('.note-deviee')).not.toBeNull();
     expect(lignes(dom, 'contraintes')).toBeGreaterThan(0);
@@ -589,7 +606,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
   }
 
   it('les trois blocs sont calcules des le chargement, sans aucun clic', async () => {
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
 
     expect(bloc(dom, 'tranchant').textContent).toMatch(/6\.2/);
     expect(bloc(dom, 'dispositions').textContent).toMatch(/§9/);
@@ -607,7 +624,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
     // enregistres » que la page portait jusqu'a la version 3 du format. Elle
     // se verifie de bout en bout, sur la vraie page : on saisit, la page
     // enregistre d'elle-meme, on recharge l'onglet, et on relit les champs.
-    const premier = await monterApplication();
+    const premier = await monterAvecVerifications();
 
     choisir(premier, 'elementType', 'beam');
     saisir(premier, 'V_Ed', '260');
@@ -632,7 +649,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
     choisir(premier, 'meyerKmode', 'parabolique');
     vi.advanceTimersByTime(500);
 
-    const second = await monterApplication(stockageDe(premier));
+    const second = await monterAvecVerifications(stockageDe(premier));
 
     expect(liste(second, 'elementType').value).toBe('beam');
     expect(nombreDuChamp(second, 'V_Ed')).toBe(260);
@@ -666,7 +683,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
     // L'avertissement de la session 11 est devenu FAUX avec la version 3 du
     // format. Le laisser serait pire que de n'avoir rien dit : il ferait
     // ressaisir a chaque ouverture des champs deja conserves.
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
     const saisie = dom.window.document.querySelector('#saisie')?.textContent ?? '';
     expect(saisie).not.toMatch(/pas (encore )?(enregistr|conserv)/i);
   });
@@ -675,7 +692,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
     // `verifyShear` et `minimumRestraintArea` LEVENT hors du rectangle.
     // Laisser l exception remonter au `try` global remplacerait tout le
     // resultat de flexion par un message d erreur.
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
     choisir(dom, 'geometryKind', 'circle');
     vi.advanceTimersByTime(500);
 
@@ -706,7 +723,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
   });
 
   it('changer V_Ed change le tranchant, PAS le verdict de flexion', async () => {
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
     const eluAvant = verdictElu(dom);
 
     saisir(dom, 'V_Ed', '90');
@@ -722,7 +739,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
   });
 
   it('declarer des cadres fait apparaitre V_Rd,s et V_Rd,max', async () => {
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
     expect(bloc(dom, 'tranchant').textContent).not.toContain('V_Rd,s');
 
     saisir(dom, 'Asw', '100');
@@ -737,7 +754,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
   it('un cot theta hors du §6.2.3(2) n efface que le bloc tranchant', async () => {
     // Le noyau REFUSE la valeur plutot que de l ecreter en silence. Ce refus
     // est un resultat du seul module concerne, pas une panne de la page.
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
 
     saisir(dom, 'Asw', '100');
     saisir(dom, 'sCadres', '200');
@@ -753,7 +770,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
   it('passer de poutre a dalle fait disparaitre l exigence d armature d ame', async () => {
     // Le §6.2.1(4) dispense les dalles du minimum d ame. L exiger
     // declarerait non conformes toutes les dalles courantes.
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
 
     choisir(dom, 'elementType', 'beam');
     vi.advanceTimersByTime(500);
@@ -769,7 +786,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
   it('cocher la zone efficace REDUIT l armature exigee sous deformation genee', async () => {
     // Ecart assume au texte de l EN 1992-1-1, retenu par la pratique pour
     // les pieces epaisses : l ecart est considerable, il doit se voir.
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
     const avant = nombre(valeur(dom, 'zwang', 'A_s,min'));
 
     cocher(dom, 'zoneEfficace', true);
@@ -784,7 +801,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
     // `minimumLongitudinalArea` LEVE sur un poteau dont `N_Ed` est absent.
     // La sollicitation ELU deja saisie le fournit — il n y a pas d autre
     // effort normal a l ELU que celui-la.
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
 
     choisir(dom, 'elementType', 'column');
     vi.advanceTimersByTime(500);
@@ -811,7 +828,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
    */
   describe('methode Meyer (DIN 1045), elements massifs', () => {
     it('le bloc est calcule des le chargement, sans aucun clic', async () => {
-      const dom = await monterApplication();
+      const dom = await monterAvecVerifications();
 
       expect(bloc(dom, 'meyer').textContent).toMatch(/DIN 1045/);
       expect(lignes(dom, 'meyer')).toBeGreaterThan(0);
@@ -826,7 +843,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
     it('coexiste avec le §7.3.2 et dit que les deux k ne sont pas comparables', async () => {
       // Les deux blocs affichent un « k » a dix lignes d ecart, avec deux
       // valeurs differentes. Sans la mention, c est un bug apparent.
-      const dom = await monterApplication();
+      const dom = await monterAvecVerifications();
 
       expect(lignes(dom, 'zwang')).toBeGreaterThan(0);
       expect(lignes(dom, 'meyer')).toBeGreaterThan(0);
@@ -835,7 +852,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
     });
 
     it('changer l epaisseur h change l armature exigee', async () => {
-      const dom = await monterApplication();
+      const dom = await monterAvecVerifications();
       const mince = nombre(valeur(dom, 'meyer', 'A_s par face'));
 
       saisir(dom, 'meyerH', '1200');
@@ -849,7 +866,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
       // `F_cr = f_ct,eff · A_cr`, et A_cr est plafonne par 2,5·d1 bien avant
       // que l epaisseur ne compte. C est le test qui prouve que le bon
       // regime est appele, et pas seulement que le module repond.
-      const dom = await monterApplication();
+      const dom = await monterAvecVerifications();
 
       choisir(dom, 'meyerBridage', 'interieur');
       saisir(dom, 'meyerH', '400');
@@ -876,7 +893,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
       // strictement positif — un champ vide en cours de frappe suffit.
       // L exception remontee au `try` global remplacerait tout le resultat
       // de flexion par un message d erreur.
-      const dom = await monterApplication();
+      const dom = await monterAvecVerifications();
 
       saisir(dom, 'meyerH', '');
       vi.advanceTimersByTime(500);
@@ -902,7 +919,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
     it('une geometrie circulaire n empeche PAS la methode Meyer', async () => {
       // Contrairement au §6.2 et au §7.3.2, Meyer ne depend d AUCUNE
       // grandeur de la section : ses parametres sont les siens.
-      const dom = await monterApplication();
+      const dom = await monterAvecVerifications();
       choisir(dom, 'geometryKind', 'circle');
       vi.advanceTimersByTime(500);
 
@@ -916,7 +933,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
       // Le Zwang des pieces massives nait de la chaleur d hydratation et
       // fissure a quelques jours : k_zt = 1,0 donne l armature la plus forte
       // et n est PAS le cas courant.
-      const dom = await monterApplication();
+      const dom = await monterAvecVerifications();
       const saisie = dom.window.document.querySelector('#saisie')?.textContent ?? '';
 
       expect(saisie).toMatch(/k_zt/);
@@ -966,7 +983,7 @@ describe('les sorties : dessins, resultats, note de calcul', () => {
   });
 
   it('les resultats sortent en CSV, point-virgule et BOM', async () => {
-    const dom = await monterApplication();
+    const dom = await monterAvecVerifications();
     cliquer(dom, 'exporter-resultats');
 
     expect(pageEnErreur(dom)).toBe(false);
@@ -984,6 +1001,36 @@ describe('les sorties : dessins, resultats, note de calcul', () => {
     expect(contenu).toMatch(/Contraintes en service/);
     // Ce qui n a pas ete calcule sort AUSSI, avec son motif.
     expect(contenu).toMatch(/Ouverture de fissures/);
+  });
+
+  /**
+   * CE QUI DONNE SON SENS A LA CASE. Une verification decochee ne doit pas
+   * seulement disparaitre de l ecran : elle doit disparaitre du CSV et de la
+   * note. Un bloc encore calcule, simplement cache, ressortirait dans les
+   * sorties et ferait mentir la page.
+   */
+  it('une verification decochee est absente du CSV et de la note', async () => {
+    const dom = await monterAvecVerifications();
+    cocher(dom, 'checkService', false);
+    vi.advanceTimersByTime(500);
+
+    cliquer(dom, 'exporter-resultats');
+    const csv = await telechargements[0].text();
+    expect(csv).not.toMatch(/Contraintes en service/);
+    expect(csv).not.toMatch(/Ouverture de fissures/);
+
+    cliquer(dom, 'exporter-note');
+    const note = await telechargements[1].text();
+    expect(note).not.toMatch(/Contraintes en service/);
+  });
+
+  it('une verification cochee apparait dans la note de calcul', async () => {
+    const dom = await monterAvecVerifications();
+    cliquer(dom, 'exporter-note');
+
+    const note = await telechargements[0].text();
+    expect(note).toMatch(/Contraintes en service/);
+    expect(note).toMatch(/Effort tranchant/);
   });
 
   it('la note de calcul sort en document HTML complet', async () => {

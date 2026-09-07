@@ -32,9 +32,11 @@
  *
  * Historique : 1 = format initial (session 5) ; 2 = ajout des
  * sollicitations de service (session 10) ; 3 = type d'element, effort
- * tranchant, deformation genee du §7.3.2 et methode Meyer (session 14).
+ * tranchant, deformation genee du §7.3.2 et methode Meyer (session 14) ;
+ * 4 = verifications retenues, referentiel de la deformation genee et etat
+ * de fissuration en service.
  */
-export const FORMAT_VERSION = 3;
+export const FORMAT_VERSION = 4;
 
 /**
  * Versions ACCEPTEES a la lecture, de la plus ancienne a la courante.
@@ -51,7 +53,7 @@ export const FORMAT_VERSION = 3;
  * Ne retirer une version d'ici que le jour ou on assume de refuser les
  * fichiers qui la portent, et alors avec un message qui le dise.
  */
-export const SUPPORTED_FORMAT_VERSIONS: readonly number[] = [1, 2, 3];
+export const SUPPORTED_FORMAT_VERSIONS: readonly number[] = [1, 2, 3, 4];
 
 /**
  * Version du moteur ayant produit le fichier. Trace de provenance, JAMAIS
@@ -220,6 +222,78 @@ export interface MeyerModel {
   kmode?: 'lineaire' | 'parabolique';
 }
 
+/**
+ * Referentiel retenu pour l'armature minimale sous deformation genee
+ * (version 4 du format).
+ *
+ * Les deux methodes coexistent dans le noyau et ne se remplacent pas : le
+ * §7.3.2 de l'EN 1992-1-1 d'un cote, la methode Meyer / DIN 1045 de l'autre.
+ * Les afficher toutes les deux en permanence ne dit pas laquelle a servi ;
+ * ce champ le dit, et la note de calcul le reproduit.
+ *
+ * `both` n'est pas une indecision : c'est le mode COMPARATIF, celui qui
+ * montre laquelle des deux surarme, et il reste un choix declare.
+ */
+export type RestraintReferentialModel = 'ec2' | 'meyer' | 'both';
+
+/**
+ * Comment l'etat de fissuration en service est choisi (version 4).
+ *
+ * `auto` applique le critere du §7.1(2) ; les deux autres imposent l'etat I
+ * (beton tendu actif) ou l'etat II (beton tendu neglige).
+ */
+export type CrackingModeModel = 'auto' | 'uncracked' | 'cracked';
+
+/** Etat de fissuration retenu en service (version 4). */
+export interface CrackingModel {
+  mode?: CrackingModeModel;
+  /**
+   * `f_ct,eff` du critere (MPa). Absent : `f_ctm` a 28 jours.
+   *
+   * ⚠ A ne pas confondre avec le `fctEff` de `RestraintModel`, qui porte le
+   * meme nom et joue le role INVERSE : ici une valeur elevee repousse la
+   * fissuration, la-bas elle augmente l'armature exigee. Deux champs
+   * distincts, deliberement, plutot qu'un seul dont le sens changerait selon
+   * le lecteur.
+   */
+  fctEff?: number;
+}
+
+/**
+ * LES VERIFICATIONS RETENUES (version 4 du format).
+ *
+ * ⚠ EXCEPTION ASSUMEE A LA FRONTIERE DU FORMAT, enoncee en bas de ce
+ * fichier : ceci decrit bien une HYPOTHESE DE VERIFICATION, pas l'ouvrage,
+ * et la regle voudrait donc que cela se re-choisisse a chaque session.
+ *
+ * Ce qui fait pencher dans l'autre sens : cette selection gouverne ce que la
+ * NOTE DE CALCUL affirme. Une note qui annoncerait d'autres verifications
+ * que le fichier dont elle sort ne serait pas relisable six mois plus tard,
+ * et c'est precisement ce que la frontiere cherche a eviter. Le champ est
+ * donc du cote « se sauvegarde », pour la meme raison que `cot theta`, et
+ * l'arbitrage est ecrit ici plutot que devine.
+ *
+ * Tous les drapeaux sont OPTIONNELS. Absents — un fichier de version 1 a 3 —
+ * ils se deduisent de ce que le fichier PORTE : un modele qui a des
+ * sollicitations de service voulait verifier le service. C'est ce qui rend
+ * un fichier ancien identique a lui-meme apres la mise a jour.
+ */
+export interface ChecksModel {
+  /** Contraintes (§7.2), fissuration (§7.3), courbure (§7.4.3), etat de fissuration (§7.1). */
+  service?: boolean;
+  /** Effort tranchant (§6.2). */
+  shear?: boolean;
+  /** Dispositions constructives (§9). */
+  detailing?: boolean;
+  /** Armature minimale sous deformation genee. Voir `restraintReferential`. */
+  restraint?: boolean;
+  /** Etat d'equilibre et contrainte des aciers sous la sollicitation ELU. */
+  sectionState?: boolean;
+  /** Absent : `both`, le comparatif. */
+  restraintReferential?: RestraintReferentialModel;
+  cracking?: CrackingModel;
+}
+
 export type GeometryModel =
   | { kind: 'rectangle'; width: number; height: number }
   | { kind: 'polygon'; vertices: PointModel[] }
@@ -284,6 +358,11 @@ export interface SectionModel {
   restraint?: RestraintModel;
   /** Saisie de la methode Meyer (version 3). Voir `MeyerModel`. */
   meyer?: MeyerModel;
+  /**
+   * Verifications retenues (version 4). Voir `ChecksModel`, et l'exception
+   * a la frontiere du format qui y est justifiee.
+   */
+  checks?: ChecksModel;
 }
 
 /**

@@ -206,9 +206,9 @@ describe('parseModel : les versions du format', () => {
     expect(lu.serviceActions).toBeUndefined();
   });
 
-  it('la version courante est 3 et les trois versions sont lues', () => {
-    expect(FORMAT_VERSION).toBe(3);
-    expect([...SUPPORTED_FORMAT_VERSIONS]).toEqual([1, 2, 3]);
+  it('la version courante est 4 et les quatre versions sont lues', () => {
+    expect(FORMAT_VERSION).toBe(4);
+    expect([...SUPPORTED_FORMAT_VERSIONS]).toEqual([1, 2, 3, 4]);
   });
 
   it('lit les deux combinaisons de service', () => {
@@ -243,13 +243,13 @@ describe('parseModel : les versions du format', () => {
     expect(seuleQp.serviceActions?.characteristic).toBeUndefined();
   });
 
-  it('refuse une version 4, en nommant les versions qu il sait lire', () => {
+  it('refuse une version 5, en nommant les versions qu il sait lire', () => {
     const json = avecAlteration((m) => {
-      m.formatVersion = 4;
+      m.formatVersion = 5;
     });
     expect(() => parseModel(json)).toThrow(/formatVersion/);
-    expect(() => parseModel(json)).toThrow(/4/);
-    expect(() => parseModel(json)).toThrow(/1, 2, 3/);
+    expect(() => parseModel(json)).toThrow(/5/);
+    expect(() => parseModel(json)).toThrow(/1, 2, 3, 4/);
   });
 
   it('refuse un serviceActions mal forme en nommant le champ fautif', () => {

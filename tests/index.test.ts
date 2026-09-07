@@ -307,8 +307,8 @@ describe('API publique — format v3', () => {
       meyer,
     };
 
-    expect([...SUPPORTED_FORMAT_VERSIONS]).toEqual([1, 2, 3]);
-    expect(FORMAT_VERSION).toBe(3);
+    expect([...SUPPORTED_FORMAT_VERSIONS]).toEqual([1, 2, 3, 4]);
+    expect(FORMAT_VERSION).toBe(4);
 
     // Aller-retour complet par l'entree publique, puis consommation directe :
     // c'est la preuve que rien de ce qui se saisit ne se perd en chemin.

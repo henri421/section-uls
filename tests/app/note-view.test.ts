@@ -14,7 +14,13 @@ import type { ParametresService } from '../../app/src/form';
  * teste sans navigateur.
  */
 
-const PARAMETRES: ParametresService = { n: 15, wMax: 0.3, beta: 0.5 };
+const PARAMETRES: ParametresService = {
+  n: 15,
+  wMax: 0.3,
+  beta: 0.5,
+  crackingMode: 'auto',
+  crackingFctEff: undefined,
+};
 
 function modele(): SectionModel {
   return {

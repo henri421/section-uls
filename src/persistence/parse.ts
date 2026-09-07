@@ -18,6 +18,10 @@ import {
   type ShearLinksModel,
   type RestraintModel,
   type MeyerModel,
+  type ChecksModel,
+  type CrackingModel,
+  type RestraintReferentialModel,
+  type CrackingModeModel,
 } from './model-format';
 
 /**
@@ -343,6 +347,8 @@ const TYPES_DE_GENE: readonly RestraintModel['type'][] = ['central', 'bending'];
 const CAS_MEYER: readonly MeyerModel['cas'][] = ['traction', 'flexion'];
 const BRIDAGES_MEYER: readonly MeyerModel['bridage'][] = ['exterieur', 'interieur'];
 const MODES_K_MEYER: readonly NonNullable<MeyerModel['kmode']>[] = ['lineaire', 'parabolique'];
+const REFERENTIELS_DE_GENE: readonly RestraintReferentialModel[] = ['ec2', 'meyer', 'both'];
+const MODES_DE_FISSURATION: readonly CrackingModeModel[] = ['auto', 'uncracked', 'cracked'];
 
 function cadres(v: unknown, chemin: string): ShearLinksModel {
   const o = objet(v, chemin);
@@ -410,6 +416,54 @@ function meyer(v: unknown, chemin: string): MeyerModel {
   };
 }
 
+/** Etat de fissuration retenu en service (version 4). */
+function fissuration(v: unknown, chemin: string): CrackingModel {
+  const o = objet(v, chemin);
+  const mode = optionnel(o.mode, `${chemin}.mode`, (x, c) => enumere(x, c, MODES_DE_FISSURATION));
+  const fctEff = optionnel(o.fctEff, `${chemin}.fctEff`, positif);
+  return {
+    ...(mode !== undefined ? { mode } : {}),
+    ...(fctEff !== undefined ? { fctEff } : {}),
+  };
+}
+
+/**
+ * Lit les verifications retenues (version 4).
+ *
+ * TOUS les champs sont optionnels, y compris le bloc lui-meme : un fichier
+ * anterieur n'en porte pas, et c'est l'appelant qui deduit alors la selection
+ * de ce que le fichier CONTIENT. Rien n'est inscrit ici de ce qui n'y est pas
+ * ecrit — la meme discipline que pour les autres blocs.
+ */
+function verifications(v: unknown, chemin: string): ChecksModel {
+  const o = objet(v, chemin);
+
+  const drapeau = (nom: keyof ChecksModel) =>
+    optionnel(o[nom], `${chemin}.${nom}`, booleen);
+
+  const service = drapeau('service');
+  const shear = drapeau('shear');
+  const detailing = drapeau('detailing');
+  const restraint = drapeau('restraint');
+  const sectionState = drapeau('sectionState');
+  const restraintReferential = optionnel(
+    o.restraintReferential,
+    `${chemin}.restraintReferential`,
+    (x, c) => enumere(x, c, REFERENTIELS_DE_GENE)
+  );
+  const cracking = optionnel(o.cracking, `${chemin}.cracking`, fissuration);
+
+  return {
+    ...(service !== undefined ? { service } : {}),
+    ...(shear !== undefined ? { shear } : {}),
+    ...(detailing !== undefined ? { detailing } : {}),
+    ...(restraint !== undefined ? { restraint } : {}),
+    ...(sectionState !== undefined ? { sectionState } : {}),
+    ...(restraintReferential !== undefined ? { restraintReferential } : {}),
+    ...(cracking !== undefined ? { cracking } : {}),
+  };
+}
+
 /**
  * Lit un modele depuis sa representation JSON, en validant tout. Un fichier
  * s'edite au bloc-notes, se tronque a la copie, se produit par un autre
@@ -473,6 +527,7 @@ export function parseModel(json: string): SectionModel {
   const shear = optionnel(o.shear, 'shear', tranchant);
   const restraint = optionnel(o.restraint, 'restraint', gene);
   const meyerLu = optionnel(o.meyer, 'meyer', meyer);
+  const checks = optionnel(o.checks, 'checks', verifications);
 
   return {
     formatVersion,
@@ -489,6 +544,7 @@ export function parseModel(json: string): SectionModel {
     ...(shear !== undefined ? { shear } : {}),
     ...(restraint !== undefined ? { restraint } : {}),
     ...(meyerLu !== undefined ? { meyer: meyerLu } : {}),
+    ...(checks !== undefined ? { checks } : {}),
   };
 }
 
@@ -613,6 +669,27 @@ function meyerOrdonne(m: MeyerModel) {
   };
 }
 
+function verificationsOrdonnees(c: ChecksModel) {
+  return {
+    ...(c.service !== undefined ? { service: c.service } : {}),
+    ...(c.shear !== undefined ? { shear: c.shear } : {}),
+    ...(c.detailing !== undefined ? { detailing: c.detailing } : {}),
+    ...(c.restraint !== undefined ? { restraint: c.restraint } : {}),
+    ...(c.sectionState !== undefined ? { sectionState: c.sectionState } : {}),
+    ...(c.restraintReferential !== undefined
+      ? { restraintReferential: c.restraintReferential }
+      : {}),
+    ...(c.cracking !== undefined ? { cracking: fissurationOrdonnee(c.cracking) } : {}),
+  };
+}
+
+function fissurationOrdonnee(c: CrackingModel) {
+  return {
+    ...(c.mode !== undefined ? { mode: c.mode } : {}),
+    ...(c.fctEff !== undefined ? { fctEff: c.fctEff } : {}),
+  };
+}
+
 export function serializeModel(model: SectionModel): string {
   const ordonne = {
     // La version ECRITE est toujours la courante, jamais celle que portait
@@ -644,6 +721,10 @@ export function serializeModel(model: SectionModel): string {
     ...(model.shear !== undefined ? { shear: tranchantOrdonne(model.shear) } : {}),
     ...(model.restraint !== undefined ? { restraint: geneOrdonnee(model.restraint) } : {}),
     ...(model.meyer !== undefined ? { meyer: meyerOrdonne(model.meyer) } : {}),
+    // Bloc de la version 4, ecrit en dernier pour la meme raison : l'ordre
+    // suit l'histoire du format, et deux enregistrements successifs restent
+    // comparables ligne a ligne.
+    ...(model.checks !== undefined ? { checks: verificationsOrdonnees(model.checks) } : {}),
   };
 
   return `${JSON.stringify(ordonne, null, 2)}\n`;

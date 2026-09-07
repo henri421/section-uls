@@ -41,6 +41,8 @@ export type {
   ServiceActionModel, ServiceActionsModel,
   // Version 3 : ce qui se saisit et se sauvegarde depuis la session 14.
   ElementTypeModel, ShearModel, ShearLinksModel, RestraintModel, MeyerModel,
+  // Version 4 : les verifications retenues et le referentiel de la gene.
+  ChecksModel, CrackingModel, RestraintReferentialModel, CrackingModeModel,
 } from './persistence/model-format';
 export {
   FORMAT_VERSION, ENGINE_VERSION, SUPPORTED_FORMAT_VERSIONS,
@@ -49,9 +51,9 @@ export {
 export { parseModel, serializeModel, ModelParseError } from './persistence/parse';
 
 export type {
-  ResolvedModel, ResolvedServiceActions, ResolvedShear, ResolvedRestraint,
+  ResolvedModel, ResolvedServiceActions, ResolvedShear, ResolvedRestraint, ResolvedChecks,
 } from './persistence/resolve';
-export { resolveModel } from './persistence/resolve';
+export { resolveModel, resolveChecks } from './persistence/resolve';
 
 export type { MomentPoint, AxialMomentPoint, DiagramPointNM } from './domains/interaction';
 export { interactionCurveAtN, interactionCurveNM, interactionDiagramNM } from './domains/interaction';

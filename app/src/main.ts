@@ -10,6 +10,8 @@ import {
   verifyDetailing,
   minimumRestraintArea,
   meyerRestraintReinforcement,
+  verifyServiceState,
+  sectionStateAt,
   FORMAT_VERSION,
   ENGINE_VERSION,
 } from '../../src/index';
@@ -17,6 +19,7 @@ import type {
   SectionModel, VerificationResult, ResolvedModel, NeutralAxisState,
   Section, Action, ServiceResult, CrackResult, CurvatureResult,
   ShearResult, DetailingResult, RestraintResult, MeyerResult,
+  ServiceStateResult, ResolvedChecks,
 } from '../../src/index';
 import {
   formToModel,
@@ -48,6 +51,7 @@ import {
   obstacleZwang,
 } from './checks-view';
 import { blocMeyer } from './meyer-view';
+import { blocEtatSection, blocEtatFissuration } from './state-view';
 import { interactionDiagramNM, interactionCurveAtN } from '../../src/index';
 import { outlineOf, boundingBox, neutralAxisSegment, barRadius, splitByLine, zetaOf } from './draw';
 import { plotSvg } from './plot';
@@ -111,6 +115,24 @@ function modeleParDefaut(): SectionModel {
     serviceActions: {
       characteristic: { N: 370, M: 59 },
       quasiPermanent: { N: 300, M: 45 },
+    },
+    // AU PREMIER CHARGEMENT, L OUTIL EST UN OUTIL D ELU, et rien d autre.
+    //
+    // Les verifications de service, de tranchant, du §9 et de deformation
+    // genee restent a un clic, avec leurs champs deja plausibles — c est
+    // pourquoi les sollicitations de service ci-dessus sont conservees. Mais
+    // les afficher toutes d entree noyait la flexion sous des blocs que
+    // personne n avait demandes, et faisait double emploi avec les outils
+    // dedies de la suite. Ce qu on voit en ouvrant la page est ce qu on est
+    // venu chercher ; le reste se coche.
+    checks: {
+      service: false,
+      shear: false,
+      detailing: false,
+      restraint: false,
+      sectionState: true,
+      restraintReferential: 'both',
+      cracking: { mode: 'auto' },
     },
   };
 }
@@ -295,6 +317,96 @@ function blocFerraillage(): string {
   return champZone('bars', 'Barres, une par ligne : y ; z ; aire', etat.bars, 8);
 }
 
+/**
+ * Une case a cocher qui CHANGE LA STRUCTURE du formulaire.
+ *
+ * `data-structure="1"` : cocher ou decocher fait apparaitre ou disparaitre
+ * des cadres entiers, il faut donc reconstruire le formulaire — a la
+ * difference d'une case ordinaire, ou reconstruire ferait perdre le focus.
+ */
+function champCaseStructurante(champ: keyof FormState, libelle: string, coche: boolean): string {
+  return (
+    `<label class="case"><input type="checkbox" data-champ="${champ}" data-structure="1"` +
+    `${coche ? ' checked' : ''} /><span>${libelle}</span></label>`
+  );
+}
+
+/**
+ * LE CADRE QUI COMMANDE TOUS LES AUTRES.
+ *
+ * Decocher retire A LA FOIS les champs de saisie et le bloc de resultat, et
+ * retire aussi la verification de la note de calcul et du CSV. C'est ce qui
+ * donne un sens a la case : une verification cachee mais toujours calculee
+ * reapparaitrait dans la note et ferait mentir l'ecran.
+ *
+ * La flexion a l'ELU n'a pas de case — c'est l'objet meme de l'outil, et une
+ * case qu'on ne peut pas decocher n'est pas une case.
+ */
+function blocVerifications(): string {
+  const referentiel = etat.checkRestraint
+    ? champChoix('restraintReferential', 'Referentiel retenu', etat.restraintReferential, [
+        ['both', 'Comparatif : les deux cote a cote'],
+        ['ec2', 'EN 1992-1-1 §7.3.2'],
+        ['meyer', 'DIN 1045, methode Meyer'],
+      ])
+    : '';
+
+  return `
+  <fieldset class="verifications">
+    <legend>Verifications ${info(
+      `La <strong>flexion composee a l ELU</strong> est toujours calculee : c est l objet de
+       l outil. Tout le reste se coche. Une verification decochee disparait de la saisie,
+       du resultat, du CSV <strong>et de la note de calcul</strong> — elle n est pas
+       seulement cachee, elle n est pas faite.`
+    )}</legend>
+    ${champCaseStructurante(
+      'checkSectionState',
+      `Etat sous sollicitation, contrainte des aciers ${info(
+        `Sous un <em>M_Ed</em> inferieur a <em>M_Rd</em>, la section n est pas a l ultime et
+         ses armatures ne travaillent pas a <em>f_yd</em>. Ce bloc donne la contrainte
+         <strong>reelle</strong> de chaque barre a la sollicitation appliquee.`
+      )}`,
+      etat.checkSectionState
+    )}
+    ${champCaseStructurante(
+      'checkService',
+      `Service : contraintes §7.2, fissuration §7.3, courbure §7.4.3`,
+      etat.checkService
+    )}
+    ${champCaseStructurante('checkShear', 'Effort tranchant §6.2', etat.checkShear)}
+    ${champCaseStructurante(
+      'checkDetailing',
+      `Dispositions constructives §9 (dont A_s,min de non-fragilite)`,
+      etat.checkDetailing
+    )}
+    ${champCaseStructurante(
+      'checkRestraint',
+      `Armature minimale sous deformation genee (Zwang) ${info(
+        `Deux methodes repondent a cette question et ne se remplacent pas : le
+         <strong>§7.3.2</strong> de l EN 1992-1-1 et la methode <strong>Meyer / DIN 1045</strong>.
+         Le comparatif montre laquelle surarme ; la note de calcul <strong>nomme</strong> celle
+         qui a servi, parce qu en Belgique et au Luxembourg la justification reglementaire
+         reste l EN 1992-1-1.`,
+        'decisif'
+      )}`,
+      etat.checkRestraint
+    )}
+    ${referentiel}
+  </fieldset>`;
+}
+
+/**
+ * Un cadre de saisie qui n'existe que si sa verification est cochee.
+ *
+ * Rend la CHAINE VIDE quand elle ne l'est pas — le cadre n'est pas masque en
+ * CSS, il n'est pas construit. Un champ masque reste dans le document, garde
+ * sa valeur et continue d'alimenter le modele : la case n'aurait alors change
+ * que l'apparence.
+ */
+function cadreSiCoche(coche: boolean, html: string): string {
+  return coche ? html : '';
+}
+
 function htmlFormulaire(): string {
   // Les identifiants des bulles sont uniques DANS un rendu : le compteur
   // repart a chaque reconstruction du formulaire, sinon il croitrait sans fin
@@ -306,6 +418,8 @@ function htmlFormulaire(): string {
     <legend>Identification</legend>
     <label><span>Nom</span><input type="text" data-champ="name" value="${echapper(etat.name)}" /></label>
   </fieldset>
+
+  ${blocVerifications()}
 
   <fieldset>
     <legend>Materiaux</legend>
@@ -349,7 +463,9 @@ function htmlFormulaire(): string {
     <button type="button" data-action="tracer-domaine">Tracer le domaine My-Mz (une fraction de seconde)</button>
   </fieldset>
 
-  <fieldset>
+  ${cadreSiCoche(
+    etat.checkShear || etat.checkDetailing,
+    `<fieldset>
     <legend>Effort tranchant et dispositions (§6.2, §9) ${info(
       `Sections <strong>rectangulaires</strong> seulement ; ni precontrainte, ni torsion,
        ni bielles inclinees, ni verification au droit de l appui. Les valeurs du §9 sont
@@ -382,9 +498,12 @@ function htmlFormulaire(): string {
       )}`,
       etat.cotTheta
     )}
-  </fieldset>
+  </fieldset>`
+  )}
 
-  <fieldset>
+  ${cadreSiCoche(
+    etat.checkService,
+    `<fieldset>
     <legend>Sollicitations de service (ELS) ${info(
       `Combinaisons EN 1990 <strong>differentes de l ELU</strong> et differentes entre
        elles : reprendre le moment de l ELU serait faux d un facteur 1,35 a 1,5. Flexion
@@ -428,9 +547,38 @@ function htmlFormulaire(): string {
       )}`,
       etat.curvatureBeta
     )}
-  </fieldset>
+    ${champChoix(
+      'crackingMode',
+      `Etat de fissuration ${info(
+        `Le <strong>§7.1(2)</strong> tranche : la section est non fissuree tant que la traction
+         du beton reste sous <em>f_ct,eff</em>. En <strong>etat I</strong> le beton tendu
+         travaille et soulage les armatures ; en <strong>etat II</strong> il est integralement
+         neglige et toute la traction passe dans l acier. Forcer un etat sert a l EXAMINER —
+         ce n est alors plus le choix de la norme, et la note le dira.`,
+        'decisif'
+      )}`,
+      etat.crackingMode,
+      [
+        ['auto', 'Automatique : critere du §7.1(2)'],
+        ['uncracked', 'Forcer l etat I : beton tendu actif'],
+        ['cracked', 'Forcer l etat II : beton tendu neglige'],
+      ]
+    )}
+    ${champTexte(
+      'crackingFctEff',
+      `f_ct,eff du critere (MPa, vide = f_ctm a 28 jours) ${info(
+        `⚠ A ne pas confondre avec le <em>f_ct,eff</em> du §7.3.2 plus bas, qui porte le meme nom
+         et joue le role <strong>inverse</strong> : ici une valeur elevee <strong>retarde</strong>
+         la fissuration, la-bas elle <strong>augmente</strong> l armature exigee.`
+      )}`,
+      etat.crackingFctEff
+    )}
+  </fieldset>`
+  )}
 
-  <fieldset>
+  ${cadreSiCoche(
+    etat.checkRestraint && etat.restraintReferential !== 'meyer',
+    `<fieldset>
     <legend>Deformation genee — Zwang (§7.3.2)</legend>
     ${champChoix('restraintType', 'Nature de la gene', etat.restraintType, [
       ['central', 'Centree (retrait ou refroidissement empeches)'],
@@ -454,9 +602,12 @@ function htmlFormulaire(): string {
       )}`,
       etat.zoneEfficace
     )}
-  </fieldset>
+  </fieldset>`
+  )}
 
-  <fieldset>
+  ${cadreSiCoche(
+    etat.checkRestraint && etat.restraintReferential !== 'ec2',
+    `<fieldset>
     <legend>Elements massifs, methode Meyer (DIN 1045) ${info(
       `Methode <strong>allemande</strong>, distincte du §7.3.2 ci-dessus et qui ne le
        remplace pas : elle sert au <strong>pre-dimensionnement</strong> et au controle d ordre
@@ -503,7 +654,8 @@ function htmlFormulaire(): string {
       ['lineaire', 'Lineaire (0,80 a 0,50 entre 300 et 800 mm)'],
       ['parabolique', 'Parabolique (proposition de Meyer)'],
     ])}
-  </fieldset>
+  </fieldset>`
+  )}
 
   <fieldset>
     <legend>Coefficients normatifs</legend>
@@ -1097,7 +1249,30 @@ function blocsDeService(resolu: ResolvedModel, parametres: ParametresService): B
           sectionCurvature(section, quasiPermanent, { n: parametres.n, beta: parametres.beta })
         );
 
+  // Etat de fissuration : l'option `beton tendu` du service. Il conclut sur
+  // la combinaison CARACTERISTIQUE, celle que le §7.2 limite, et rapporte a
+  // cote l'etat sous quasi-permanente, qui est la combinaison du §7.3.
+  const optionsFissuration = {
+    n: parametres.n,
+    mode: parametres.crackingMode,
+    ...(parametres.crackingFctEff !== undefined ? { fctEff: parametres.crackingFctEff } : {}),
+  };
+
+  const etatCaracteristique: Issue<ServiceStateResult> =
+    caracteristique === undefined
+      ? { motif: SANS_CARACTERISTIQUE }
+      : tenter(() => verifyServiceState(section, caracteristique, optionsFissuration));
+
+  const etatQuasiPermanent: Issue<ServiceStateResult> | undefined =
+    quasiPermanent === undefined
+      ? undefined
+      : tenter(() => verifyServiceState(section, quasiPermanent, optionsFissuration));
+
   return [
+    {
+      cle: 'etat-fissuration',
+      bloc: blocEtatFissuration(etatCaracteristique, etatQuasiPermanent),
+    },
     { cle: 'contraintes', bloc: blocContraintes(contraintes) },
     {
       cle: 'fissuration',
@@ -1105,6 +1280,43 @@ function blocsDeService(resolu: ResolvedModel, parametres: ParametresService): B
     },
     { cle: 'courbure', bloc: blocCourbure(courbure) },
   ];
+}
+
+/**
+ * Etat d'equilibre sous la sollicitation ELU, et contrainte de chaque barre.
+ *
+ * FLEXION DROITE SEULEMENT. `sectionStateAt` resout un champ de deformation
+ * a deux inconnues dans le plan de flexion ; un `M_z` non nul le sort de son
+ * domaine, et le bloc le dit plutot que de rendre une contrainte calculee
+ * sur la seule composante `M_y` — qui serait un nombre juste pour une
+ * sollicitation qui n'est pas celle qu'on a saisie.
+ */
+function blocDeLEtatSection(resolu: ResolvedModel): BlocAffiche {
+  const action: Action = { N: resolu.action.N, M: resolu.action.My };
+
+  if (resolu.action.Mz !== 0) {
+    return {
+      cle: 'etat-section',
+      bloc: blocEtatSection(
+        {
+          motif:
+            `Sollicitation deviee (Mz = ${formatNumber(resolu.action.Mz, 1)} kN·m). ` +
+            "L'equilibre sous sollicitation donnee est resolu en flexion DROITE : il " +
+            'faudrait une orientation d axe neutre supplementaire, que ce module ne cherche ' +
+            'pas. Le moment resistant, lui, reste calcule en flexion deviee par le bloc de flexion.',
+        },
+        action
+      ),
+    };
+  }
+
+  return {
+    cle: 'etat-section',
+    bloc: blocEtatSection(
+      tenter(() => sectionStateAt(resolu.section, action, resolu.norm)),
+      action
+    ),
+  };
 }
 
 function htmlService(MzElu: number, blocs: BlocAffiche[]): string {
@@ -1116,6 +1328,15 @@ function htmlService(MzElu: number, blocs: BlocAffiche[]): string {
 
   return (
     `<div id="service"><h2>Verifications de service (ELS)</h2>${deviee}` +
+    blocs.map((b) => htmlBlocService(b.bloc, b.cle)).join('') +
+    '</div>'
+  );
+}
+
+function htmlEtatSection(blocs: BlocAffiche[]): string {
+  if (blocs.length === 0) return '';
+  return (
+    '<div id="etat-section"><h2>Etat sous sollicitation</h2>' +
     blocs.map((b) => htmlBlocService(b.bloc, b.cle)).join('') +
     '</div>'
   );
@@ -1138,7 +1359,8 @@ function htmlService(MzElu: number, blocs: BlocAffiche[]): string {
 function blocsDeVerifications(
   resolu: ResolvedModel,
   parametres: Issue<ParametresVerifications>,
-  parametresMeyer: Issue<ParametresMeyer>
+  parametresMeyer: Issue<ParametresMeyer>,
+  checks: ResolvedChecks
 ): BlocAffiche[] {
   const section = resolu.section;
 
@@ -1231,17 +1453,56 @@ function blocsDeVerifications(
     meyer = tenter(() => meyerRestraintReinforcement(m));
   }
 
-  return [
-    { cle: 'tranchant', bloc: blocTranchant(tranchant, VEd) },
-    { cle: 'dispositions', bloc: blocDispositions(dispositions) },
-    { cle: 'zwang', bloc: blocZwang(zwang) },
-    { cle: 'meyer', bloc: blocMeyer(meyer, dsMeyer) },
-  ];
+  // Seuls les blocs COCHES sont produits. Ne pas les produire, plutot que ne
+  // pas les afficher : c'est le meme objet `blocs` qui alimente l'ecran, le
+  // CSV et la note de calcul, et un bloc construit finirait dans la note.
+  const blocs: BlocAffiche[] = [];
+
+  if (checks.shear) blocs.push({ cle: 'tranchant', bloc: blocTranchant(tranchant, VEd) });
+  if (checks.detailing) blocs.push({ cle: 'dispositions', bloc: blocDispositions(dispositions) });
+  if (checks.restraint && checks.restraintReferential !== 'meyer') {
+    blocs.push({ cle: 'zwang', bloc: blocZwang(zwang) });
+  }
+  if (checks.restraint && checks.restraintReferential !== 'ec2') {
+    blocs.push({ cle: 'meyer', bloc: blocMeyer(meyer, dsMeyer) });
+  }
+
+  return blocs;
 }
 
-function htmlVerifications(blocs: BlocAffiche[]): string {
+/**
+ * Le titre suit ce qui est REELLEMENT verifie.
+ *
+ * « Effort tranchant, dispositions et deformation genee » au-dessus du seul
+ * bloc de tranchant annoncerait deux verifications absentes — exactement ce
+ * qu'une case decochee est censee supprimer.
+ */
+function htmlVerifications(blocs: BlocAffiche[], checks: ResolvedChecks): string {
+  if (blocs.length === 0) return '';
+
+  const familles: string[] = [];
+  if (checks.shear) familles.push('effort tranchant');
+  if (checks.detailing) familles.push('dispositions constructives');
+  if (checks.restraint) familles.push('deformation genee');
+
+  const titre = familles.join(', ').replace(/^./, (c) => c.toUpperCase());
+
+  // Le referentiel de la gene est NOMME au-dessus des blocs, et pas seulement
+  // dans la note : Meyer est une methode DIN, alors qu'en Belgique et au
+  // Luxembourg la justification reglementaire reste l'EN 1992-1-1. Qui lit
+  // l'ecran doit savoir laquelle il regarde.
+  const referentiel = checks.restraint
+    ? `<p class="legende"><span>deformation genee — referentiel : ${
+        checks.restraintReferential === 'ec2'
+          ? 'EN 1992-1-1 §7.3.2'
+          : checks.restraintReferential === 'meyer'
+            ? 'DIN 1045, methode Meyer'
+            : 'comparatif §7.3.2 / Meyer'
+      }</span></p>`
+    : '';
+
   return (
-    '<div id="verifications"><h2>Effort tranchant, dispositions et deformation genee</h2>' +
+    `<div id="verifications"><h2>${titre}</h2>${referentiel}` +
     blocs.map((b) => htmlBlocService(b.bloc, b.cle)).join('') +
     '</div>'
   );
@@ -1301,17 +1562,25 @@ function recalculer(mode?: 'proportional'): void {
     // frappe en cours dans l'un ne doit pas priver l'autre de son bloc.
     const parametresMeyer = tenter(() => parametresDeMeyer(etat));
 
-    const blocsService = blocsDeService(resolu, parametres);
+    // Une verification decochee n'est PAS calculee. C'est ce qui donne son
+    // sens a la case : elle disparait de l'ecran, du CSV et de la note, et le
+    // temps de calcul suit.
+    const checks = resolu.checks;
+
+    const blocsEtat = checks.sectionState ? [blocDeLEtatSection(resolu)] : [];
+    const blocsService = checks.service ? blocsDeService(resolu, parametres) : [];
     const blocsVerifications = blocsDeVerifications(
       resolu,
       parametresVerifications,
-      parametresMeyer
+      parametresMeyer,
+      checks
     );
 
     dernierResultat =
       htmlResultat(resolu, resultat, etatAxe) +
-      htmlService(resolu.action.Mz, blocsService) +
-      htmlVerifications(blocsVerifications);
+      htmlEtatSection(blocsEtat) +
+      (checks.service ? htmlService(resolu.action.Mz, blocsService) : '') +
+      htmlVerifications(blocsVerifications, checks);
     const svgSection = dessiner(resolu, resultat, etatAxe);
     zoneResultat.innerHTML = dernierResultat;
     zoneSection.innerHTML = svgSection + LEGENDE_SECTION;
@@ -1329,7 +1598,7 @@ function recalculer(mode?: 'proportional'): void {
       modele,
       resolu,
       parametres,
-      blocs: [...blocsService, ...blocsVerifications].map((b) => b.bloc),
+      blocs: [...blocsEtat, ...blocsService, ...blocsVerifications].map((b) => b.bloc),
       dessins: [
         { suffixe: 'section', svg: svgSection },
         { suffixe: 'diagramme-n-my', svg: diagramme.svg },

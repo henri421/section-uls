@@ -1,4 +1,8 @@
-import type { SectionModel } from './model-format';
+import type {
+  SectionModel,
+  RestraintReferentialModel,
+  CrackingModeModel,
+} from './model-format';
 import type { Section, RebarLayer, Action } from '../model/section';
 import type { NormProfile } from '../model/norm-profile';
 import type { ConcreteMaterial } from '../model/concrete';
@@ -82,6 +86,70 @@ export interface ResolvedModel {
   restraint?: ResolvedRestraint;
   /** Parametres de la methode Meyer, prets pour `meyerRestraintReinforcement`. */
   meyer?: MeyerParams;
+  /** Verifications retenues, defauts appliques. Voir `ResolvedChecks`. */
+  checks: ResolvedChecks;
+}
+
+/**
+ * Verifications retenues, TOUS LES CHAMPS RENSEIGNES.
+ *
+ * Contrairement aux autres blocs resolus, celui-ci n'est jamais absent : il
+ * y a toujours une reponse a « qu'est-ce qu'on verifie », et la rendre
+ * optionnelle obligerait chaque appelant a rejouer les defauts — donc a les
+ * dupliquer, donc a les faire diverger.
+ */
+export interface ResolvedChecks {
+  service: boolean;
+  shear: boolean;
+  detailing: boolean;
+  restraint: boolean;
+  sectionState: boolean;
+  restraintReferential: RestraintReferentialModel;
+  cracking: { mode: CrackingModeModel; fctEff?: number };
+}
+
+/**
+ * Applique les defauts des verifications retenues.
+ *
+ * REGLE DE RETROCOMPATIBILITE, et c'est tout l'enjeu de la fonction : un
+ * fichier anterieur a la version 4 ne porte aucun drapeau. Les inventer a
+ * `false` effacerait des verifications que l'utilisateur avait sous les yeux
+ * la veille ; les inventer a `true` en ferait apparaitre qu'il n'a jamais
+ * demandees. On deduit donc de ce que le fichier CONTIENT : des
+ * sollicitations de service veulent dire qu'on verifiait le service, un bloc
+ * `shear` qu'on verifiait le tranchant. Un fichier ancien se rouvre ainsi
+ * identique a lui-meme.
+ *
+ * `sectionState` fait exception et part a `true` : la verification est
+ * nouvelle, aucun fichier ancien ne peut en porter la trace, et elle ne
+ * reclame aucune saisie supplementaire — elle lit la sollicitation ELU deja
+ * presente.
+ */
+export function resolveChecks(model: SectionModel): ResolvedChecks {
+  const c = model.checks;
+
+  const parDefaut = {
+    service: model.serviceActions !== undefined,
+    shear: model.shear !== undefined,
+    detailing: model.elementType !== undefined,
+    restraint: model.restraint !== undefined || model.meyer !== undefined,
+    sectionState: true,
+  };
+
+  return {
+    service: c?.service ?? parDefaut.service,
+    shear: c?.shear ?? parDefaut.shear,
+    detailing: c?.detailing ?? parDefaut.detailing,
+    restraint: c?.restraint ?? parDefaut.restraint,
+    sectionState: c?.sectionState ?? parDefaut.sectionState,
+    // Le comparatif par defaut : c'est lui qui montre laquelle des deux
+    // methodes surarme, et c'est la question qui a motive leur coexistence.
+    restraintReferential: c?.restraintReferential ?? 'both',
+    cracking: {
+      mode: c?.cracking?.mode ?? 'auto',
+      ...(c?.cracking?.fctEff !== undefined ? { fctEff: c.cracking.fctEff } : {}),
+    },
+  };
 }
 
 /**
@@ -260,5 +328,6 @@ export function resolveModel(model: SectionModel): ResolvedModel {
     ...(shear !== undefined ? { shear } : {}),
     ...(restraint !== undefined ? { restraint } : {}),
     ...(meyer !== undefined ? { meyer } : {}),
+    checks: resolveChecks(model),
   };
 }
