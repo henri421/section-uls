@@ -109,7 +109,158 @@ export function rebarRow(params: {
   };
 }
 
+/**
+ * Un nombre de barres CANDIDAT pour un lit saisi en espacement maximal, avec
+ * l'espacement reel qu'il produit.
+ *
+ * `strict` marque le plus petit nombre qui respecte le maximum demande —
+ * exactement ce que `rebarRow` retiendrait.
+ */
+export interface RowOption {
+  count: number;
+  /** Espacement REEL entre axes (mm) que ce nombre produit. */
+  spacing: number;
+  /** L'espacement reel respecte-t-il le maximum demande ? */
+  ok: boolean;
+  /** Le choix de `rebarRow` : le plus petit nombre conforme. */
+  strict: boolean;
+}
+
+/**
+ * Les nombres de barres envisageables pour un lit saisi « Ø12 tous les 150 ».
+ *
+ * POURQUOI CETTE FONCTION EXISTE. `rebarRow` en mode espacement rend UN
+ * nombre, le plus petit qui respecte le maximum. C'est juste, et c'est
+ * trompeur : sur une largeur de 1000 avec un enrobage d'axe de 45, la
+ * longueur utile vaut 910, et « tous les 150 » donne 8 barres a 130 mm —
+ * alors que 1000/150 se lit spontanement « 6 ou 7 ». Les deux lectures
+ * different exactement de l'enrobage, aucune n'est fausse, mais l'ecart
+ * passe inapercu tant qu'un seul nombre est affiche.
+ *
+ * Sur une dalle au metre, le nombre non entier se moyenne sans dommage. Sur
+ * une POUTRE, il n'existe pas de demi-barre : c'est l'ingenieur qui tranche
+ * entre 6 et 7, et pour trancher il lui faut voir l'espacement reel de
+ * chacun — y compris ceux qui depassent le maximum de deux millimetres,
+ * qu'aucune regle ne dit d'exclure et que lui seul peut accepter.
+ *
+ * Cette fonction NE CHOISIT PAS : elle enumere. Le nombre `strict` reste
+ * marque, il reste le defaut de l'appelant, et rien ne devient
+ * silencieusement moins sur.
+ *
+ * `below` et `above` bornent l'enumeration autour du nombre strict.
+ */
+export function spacingOptions(params: {
+  /** Longueur du segment portant le lit (mm). */
+  length: number;
+  /** Espacement maximal demande (mm). */
+  maxSpacing: number;
+  endpoints?: 'include' | 'exclude';
+  /** Nombres a enumerer sous le strict. Defaut 2. */
+  below?: number;
+  /** Nombres a enumerer au-dessus du strict. Defaut 1. */
+  above?: number;
+}): RowOption[] {
+  const { length, maxSpacing } = params;
+  const endpoints = params.endpoints ?? 'include';
+  const below = params.below ?? 2;
+  const above = params.above ?? 1;
+
+  if (!(maxSpacing > 0)) {
+    throw new Error(`spacingOptions : maxSpacing doit etre strictement positif (${maxSpacing})`);
+  }
+  if (!(length > 0)) {
+    throw new Error(`spacingOptions : longueur nulle ou negative (${length}), aucun lit a proposer`);
+  }
+
+  // Meme arithmetique que `rebarRow`, et c'est une condition de coherence :
+  // le nombre marque `strict` doit etre celui que `rebarRow` poserait.
+  const intervallesStricts = Math.ceil(length / maxSpacing);
+  const nombreDeBarres = (intervalles: number): number =>
+    endpoints === 'include' ? intervalles + 1 : intervalles - 1;
+
+  const countStrict = nombreDeBarres(intervallesStricts);
+  const minimum = endpoints === 'include' ? 2 : 1;
+
+  const options: RowOption[] = [];
+
+  for (let count = countStrict - below; count <= countStrict + above; count++) {
+    if (count < minimum) continue;
+    const intervalles = endpoints === 'include' ? count - 1 : count + 1;
+    const spacing = length / intervalles;
+    options.push({
+      count,
+      spacing,
+      // Tolerance relative : un espacement calcule a 150,0000000001 mm par
+      // l'arithmetique flottante respecte « tous les 150 ».
+      ok: spacing <= maxSpacing * (1 + 1e-9),
+      strict: count === countStrict,
+    });
+  }
+
+  return options;
+}
+
 export type RowFace = 'top' | 'bottom' | 'left' | 'right';
+
+/**
+ * Le segment qui porte un lit sur une face d'un rectangle, avec le mode
+ * d'extremites qui lui convient.
+ *
+ * SOURCE UNIQUE, extraite de `rectangularRebarLayout` : la longueur utile
+ * `b − 2a` sert aussi a `spacingOptions`, et deux versions de cette
+ * arithmetique finiraient par diverger — l'app proposerait alors des
+ * nombres de barres que la pose ne produirait pas.
+ *
+ * Repere barycentrique, z vers le bas.
+ */
+export function faceSegment(params: {
+  width: number;
+  height: number;
+  cover: number;
+  stirrupDiameter?: number;
+  /** Diametre du lit concerne : la distance d'axe en depend. */
+  diameter: number;
+  face: RowFace;
+}): { from: Vertex; to: Vertex; length: number; endpoints: 'include' | 'exclude' } {
+  const { width: b, height: h, cover, diameter, face } = params;
+  const a = cover + (params.stirrupDiameter ?? 0) + diameter / 2;
+
+  const yGauche = -b / 2 + a;
+  const yDroite = b / 2 - a;
+  const zHaut = -h / 2 + a;
+  const zBas = h / 2 - a;
+
+  let from: Vertex;
+  let to: Vertex;
+  let endpoints: 'include' | 'exclude';
+
+  switch (face) {
+    case 'bottom':
+      from = { y: yGauche, z: zBas };
+      to = { y: yDroite, z: zBas };
+      endpoints = 'include';
+      break;
+    case 'top':
+      from = { y: yGauche, z: zHaut };
+      to = { y: yDroite, z: zHaut };
+      endpoints = 'include';
+      break;
+    // Les lits lateraux excluent leurs extremites : ce seraient les barres
+    // d'angle, deja posees par les lits inferieur et superieur.
+    case 'left':
+      from = { y: yGauche, z: zHaut };
+      to = { y: yGauche, z: zBas };
+      endpoints = 'exclude';
+      break;
+    case 'right':
+      from = { y: yDroite, z: zHaut };
+      to = { y: yDroite, z: zBas };
+      endpoints = 'exclude';
+      break;
+  }
+
+  return { from, to, length: Math.hypot(to.y - from.y, to.z - from.z), endpoints };
+}
 
 /**
  * Ferraillage d'une section rectangulaire dans l'idiome de saisie usuel :
@@ -149,38 +300,14 @@ export function rectangularRebarLayout(params: {
   const summaries: RowSummary[] = [];
 
   for (const row of params.rows) {
-    const a = cover + stirrup + row.bars.diameter / 2;
-    const yGauche = -b / 2 + a;
-    const yDroite = b / 2 - a;
-    const zHaut = -h / 2 + a;
-    const zBas = h / 2 - a;
-
-    let from: Vertex;
-    let to: Vertex;
-    let endpoints: 'include' | 'exclude';
-
-    switch (row.face) {
-      case 'bottom':
-        from = { y: yGauche, z: zBas };
-        to = { y: yDroite, z: zBas };
-        endpoints = 'include';
-        break;
-      case 'top':
-        from = { y: yGauche, z: zHaut };
-        to = { y: yDroite, z: zHaut };
-        endpoints = 'include';
-        break;
-      case 'left':
-        from = { y: yGauche, z: zHaut };
-        to = { y: yGauche, z: zBas };
-        endpoints = 'exclude';
-        break;
-      case 'right':
-        from = { y: yDroite, z: zHaut };
-        to = { y: yDroite, z: zBas };
-        endpoints = 'exclude';
-        break;
-    }
+    const { from, to, endpoints } = faceSegment({
+      width: b,
+      height: h,
+      cover,
+      stirrupDiameter: stirrup,
+      diameter: row.bars.diameter,
+      face: row.face,
+    });
 
     const built = rebarRow({ from, to, bars: row.bars, steel, endpoints });
     bars.push(...built.bars);

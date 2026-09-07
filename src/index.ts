@@ -24,8 +24,10 @@ export { polygonSection, polygonArea, polygonCentroid } from './geometry/polygon
 export { rectangleToPolygon } from './geometry/rectangle';
 export { circularSection, circularRebarCage } from './geometry/circle';
 
-export type { BarSpec, BarCount, BarSpacing, RowSummary, RebarRow, RowFace } from './geometry/rebar-layout';
-export { rebarRow, rectangularRebarLayout, formatRow } from './geometry/rebar-layout';
+export type { BarSpec, BarCount, BarSpacing, RowSummary, RebarRow, RowFace, RowOption } from './geometry/rebar-layout';
+export {
+  rebarRow, rectangularRebarLayout, formatRow, spacingOptions, faceSegment,
+} from './geometry/rebar-layout';
 
 export type { Resultant, BiaxialResultant } from './integration/fiber-polygon-biaxial';
 export { integratePolygonBiaxial } from './integration/fiber-polygon-biaxial';
@@ -76,6 +78,18 @@ export type { CrackOptions, CrackResult } from './service/crack-width';
 export { verifyCrackWidth } from './service/crack-width';
 
 export { uncrackedProperties } from './service/uncracked-section';
+
+// --- Etat de fissuration en service (§7.1(2)) : etat I ou etat II ---
+export type {
+  CrackingState, CrackingMode, CrackingStateOptions, UncrackedState,
+  CrackingStateResult, ServiceStateResult,
+} from './service/cracking-state';
+export { crackingState, verifyServiceState } from './service/cracking-state';
+
+// --- Etat d'equilibre sous sollicitation donnee (ELU), contrainte des aciers ---
+export type { BarState, SectionStateResult, SectionStateOptions } from './solvers/section-state';
+export { sectionStateAt, concreteStressAt } from './solvers/section-state';
+
 export type { CurvatureOptions, CurvatureResult } from './service/curvature';
 export { sectionCurvature } from './service/curvature';
 
