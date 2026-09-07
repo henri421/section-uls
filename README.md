@@ -25,9 +25,75 @@ Deux diagrammes d'interaction y sont tracés, et leurs coûts n'ont rien de comp
 - le **diagramme N–My**, avec le point sollicitant, est recalculé en continu — il ne demande aucune résolution, seulement une intégration par point. Son contour reste **ouvert du côté traction** : seule la branche du pivot béton est parcourue, et refermer dessinerait un domaine qui n'a pas été calculé. En flexion déviée, le point sollicitant sort du plan de ce graphe, qui l'annonce alors explicitement ;
 - le **domaine My–Mz** à effort normal constant part **sur bouton seulement** : il enchaîne une résolution par point. On y lit le taux d'exploitation géométriquement, comme le rapport entre le point sollicitant et le rayon du domaine dans sa direction.
 
+### Choisir ce qu'on vérifie
+
+**Au premier chargement, l'outil ne vérifie que la flexion composée à l'ELU.** Tout le reste — service, effort tranchant, §9, déformation gênée — se coche dans un cadre en tête de la saisie. La flexion, elle, n'a pas de case : c'est l'objet même de l'outil, et une case qu'on ne peut pas décocher n'est pas une case.
+
+Décocher retire **à la fois** les champs de saisie, le bloc de résultat, la ligne du CSV et la section de la note de calcul — et le temps de calcul suit. C'est ce qui donne son sens à la case : une vérification cachée mais toujours calculée ressortirait dans la note et ferait mentir l'écran. Deux tests de câblage le verrouillent dans les deux sens.
+
+L'armature minimale sous déformation gênée porte en plus un **référentiel** : EN 1992-1-1 §7.3.2, DIN 1045 (méthode Meyer), ou le **comparatif des deux** — c'est lui qui montre laquelle surarme, et c'est la question qui a motivé leur coexistence. Le référentiel retenu est **nommé** au-dessus des blocs et dans la note : Meyer est une méthode allemande, alors qu'en Belgique et au Luxembourg la justification réglementaire reste l'EN 1992-1-1.
+
+Cette sélection est **enregistrée** (version 4 du format). C'est une **exception assumée** à la règle de frontière rappelée plus bas — elle décrit bien une hypothèse de vérification, pas l'ouvrage. Ce qui fait pencher dans l'autre sens : elle gouverne ce que la **note de calcul affirme**, et une note qui annoncerait d'autres vérifications que son fichier ne serait pas relisable six mois plus tard. Même arbitrage que `cot θ`.
+
+Un fichier antérieur à la version 4 ne porte aucun de ces drapeaux : il retrouve à l'ouverture les vérifications que ses **données impliquent** — des sollicitations de service veulent dire qu'on vérifiait le service — et se rouvre donc identique à lui-même.
+
+### L'état sous sollicitation, et la contrainte réelle des aciers
+
+Une section dont le `M_Rd` vaut 200 kN·m et qui porte 100 kN·m **n'est pas à l'ultime** : ses armatures ne travaillent pas à `f_yd`. Le bloc « état sous sollicitation » donne la contrainte **réelle de chaque barre** à la sollicitation appliquée, avec la déformation des fibres extrêmes, la position de l'axe neutre et le taux `σ_s / f_yd`.
+
+Il demande un second solveur, `sectionStateAt` : `verifyUniaxial` cale toujours la fibre extrême comprimée à `ε_cu2`, ce qui ne laisse qu'**une** inconnue et donne le moment **résistant**. Hors de l'ultime, le champ de déformation garde ses **deux** degrés de liberté, et il faut satisfaire `N = N_Ed` et `M = M_Ed` simultanément — par bissection imbriquée, sur les intégrateurs de fibres existants. Porté à `M_Rd`, ce solveur retrouve l'axe neutre que `verifyUniaxial` trouve de son côté : c'est la validation croisée qui le tient.
+
+Deux refus explicites plutôt qu'un nombre : au-delà de `M_Rd` il n'existe aucun état d'équilibre, et un effort normal hors de la plage résistante n'en a pas davantage. Une contrainte d'acier rendue sur une section qui ne tient pas aurait l'apparence d'une réponse.
+
+**Le `σ_s` de ce bloc n'est pas celui des §7.2 et §7.3.** Il sort des lois de calcul de l'ELU (`f_cd`, `f_yd`, parabole-rectangle) sous la sollicitation ELU ; celui du service sort de la méthode `n` sous combinaison de service, avec `f_ck` et `f_yk`. Deux nombres différents pour deux questions différentes — le bloc le rappelle systématiquement, sans quoi leur écart passerait pour une incohérence.
+
+Flexion **droite** seulement : un `Mz` non nul affiche le motif, le moment résistant restant calculé en flexion déviée par le bloc de flexion.
+
+### Béton tendu : la section fissure-t-elle ?
+
+Le module de service supposait **toujours** la section fissurée — béton tendu intégralement négligé, ce qui est l'état II. L'état I existait dans le code mais ne servait qu'à la courbure.
+
+Le bloc « état de fissuration » applique le critère du **§7.1(2)** : la section est non fissurée tant que la traction extrême du béton reste sous `f_ct,eff`. Il rend le **moment de fissuration `M_cr`** — la marge se lit alors directement, et pas seulement un oui/non — l'état retenu, et les contraintes **de cet état**.
+
+Trois branches, au choix :
+
+- **automatique** (défaut), par le critère du §7.1(2) ;
+- **état I forcé**, béton tendu actif — pour examiner les contraintes non fissurées même quand la section fissure ;
+- **état II forcé**, béton tendu négligé — le cas enveloppe, et le comportement historique de l'outil.
+
+Un état **forcé qui contredit le critère** est signalé comme tel : c'est un examen, pas une justification.
+
+Bénéfice de fond : les limites du §7.2 s'appliquent désormais à l'**état retenu**. Elles portaient jusqu'ici sur l'état II quoi qu'il arrive, ce qui reportait toute la traction sur les armatures et **surestimait `σ_s`** sur une section qui ne fissure pas.
+
+Le bloc conclut sous la combinaison **caractéristique**, celle que le §7.2 limite, et rapporte à côté l'état sous **quasi-permanente**, qui est la combinaison du §7.3. Le `f_ct,eff` du critère est éditable — et il ne faut pas le confondre avec celui du §7.3.2, qui porte le même nom et joue le rôle **inverse** : ici une valeur élevée retarde la fissuration, là-bas elle augmente l'armature exigée.
+
+### Poser les armatures où l'on veut
+
+Le bouton **« Optimisation de la disposition »** ouvre un panneau où les armatures deviennent des **coordonnées**.
+
+Le mode « barres libres » est un **tableau** — `y`, `z`, `Ø` par ligne — et non plus une zone de texte : une cellule se modifie sans retaper la ligne, ce qui est tout l'intérêt quand on cherche l'effet d'un déplacement de dix millimètres. On y saisit un **diamètre** : on pose des HA20, pas des 314 mm². Le modèle continue de stocker l'aire, que le noyau intègre ; la conversion est exacte dans les deux sens.
+
+Ouvrir le panneau **matérialise** le ferraillage courant en barres explicites, **sans retour**, et le dit. L'intention de saisie — « 4 HA20 en face inférieure » — disparaît alors : les deux ne peuvent pas coexister sans qu'on ait à décider laquelle gagne quand elles se contredisent, et c'est la liberté de placement qui sert ici.
+
+La **disposition de référence est figée à l'ouverture**, et tout s'affiche en écart : `ΔM_Rd`, `ΔA_s`. C'est ce qui répond à « est-ce que j'ai le même moment résistant en posant autrement ». Elle vit hors du modèle — ce n'est pas une donnée de l'ouvrage, c'est un point de comparaison de la session ; fermer puis rouvrir la refige.
+
+Un **générateur d'armatures de peau** pose `n` barres par face entre deux cotes, en paires symétriques, **ajoutées** aux barres en place — le geste étant justement de voir ce qu'elles changent, ou ne changent pas, au moment résistant.
+
+Deux gardes, **géométriques** : une barre hors du contour (testée par les intervalles pleins, donc valable sur un contour quelconque — l'âme d'un T, un contour concave) et deux barres qui se chevauchent, selon leurs diamètres. Ils **signalent sans bloquer** : une barre hors du béton donne un résultat parfaitement calculable et parfaitement faux, et c'est pour cela qu'il faut le dire fort. Les **distances libres du §8.2** et l'**enrobage du §4.4.1 ne sont pas vérifiés**, et le panneau l'écrit.
+
+**Aucun optimiseur automatique** : l'outil recalcule et compare, il ne propose aucun ferraillage. C'est la règle que le code tient partout ailleurs. Le déplacement à la souris sur le dessin n'est pas non plus implémenté — c'est le tableau qui est le mode de référence, parce qu'il est reproductible.
+
+### Le nombre de barres se propose, il ne s'impose plus
+
+« Ø14 tous les 150 » sur une largeur de 1000 pose **8 barres à 130 mm**. Le calcul est juste : l'espacement se mesure entre les **axes des barres extrêmes**, donc sur `b − 2a` = 910 mm et non sur 1000, et 8 est le plus petit nombre qui respecte le maximum. L'écart avec la lecture spontanée `1000/150 ≈ 6,7`, c'est l'**enrobage** — et il était invisible.
+
+Un lit saisi en espacement affiche désormais les nombres voisins avec leur espacement **réel** : 6 à 182 mm, 7 à 152 mm, 8 à 130 mm. Le nombre conforme reste marqué et reste celui qui est posé ; rien ne devient silencieusement moins sûr. Cliquer bascule le lit en saisie **par nombre** — l'espacement cesse d'être une consigne pour devenir une conséquence.
+
+Sur une dalle au mètre, un nombre non entier se moyenne sans dommage. Sur une **poutre**, il n'existe pas de demi-barre, et un dépassement de deux millimètres se refuse ou s'assume : c'est l'ingénieur qui tranche, pas l'outil.
+
 ### Les vérifications de service dans la page
 
-Le panneau de résultats porte, **après l'ELU et séparément de lui**, les trois vérifications de service : limitation des contraintes (§7.2), ouverture de fissures (§7.3), courbure (§7.4.3). Elles sont calculées **au chargement et à chaque frappe**, sans bouton : 9 à 24 ms chacune, contre 25 à 120 ms pour le recalcul ELU.
+Le panneau de résultats porte, **après l'ELU et séparément de lui**, les vérifications de service : état de fissuration (§7.1), limitation des contraintes (§7.2), ouverture de fissures (§7.3), courbure (§7.4.3). Une fois la case cochée, elles sont calculées **à chaque frappe**, sans bouton : 9 à 24 ms chacune, contre 25 à 120 ms pour le recalcul ELU.
 
 Elles se saisissent dans un cadre à part, parce qu'elles portent sur des **combinaisons EN 1990 différentes de l'ELU** et différentes entre elles — caractéristique pour le §7.2, quasi-permanente pour les §7.3 et §7.4.3. Reprendre le moment de l'ELU serait faux d'un facteur 1,35 à 1,5. Chacune des deux combinaisons est indépendamment optionnelle ; laisser ses deux champs vides la désactive, et une combinaison à demi remplie est refusée plutôt que complétée par un zéro.
 
@@ -54,7 +120,7 @@ Le panneau porte, **après le service et séparément de lui**, trois familles d
 - les **dispositions constructives** (§9.2, §9.3, §9.5) : `A_s` en place entre `A_s,min` et `A_s,max`, plus le taux d'armature d'âme du §9.2.2(5). Le **type d'élément est déclaré**, jamais deviné — un 300×500 est une poutre ou un poteau selon son rôle. Une dalle est dispensée du minimum d'âme (§6.2.1(4)) et cela n'est **pas** compté comme un échec ;
 - l'**armature minimale sous déformation gênée** (§7.3.2), qui gouverne les voiles et radiers massifs. Elle **ne rend aucun verdict** : elle donne une aire exigée, elle ne la compare à rien.
 
-**Ces saisies sont enregistrées** depuis la version 3 du format : l'effort tranchant, les cadres, `cot θ`, le type d'élément, les paramètres de déformation gênée et ceux de la méthode Meyer partent dans le fichier et reviennent tels quels au rechargement. L'avertissement contraire que la page portait jusque-là a disparu avec la raison qui l'avait fait écrire.
+**Ces saisies sont enregistrées** depuis la version 3 du format, et les vérifications retenues depuis la version 4 : l'effort tranchant, les cadres, `cot θ`, le type d'élément, les paramètres de déformation gênée et ceux de la méthode Meyer partent dans le fichier et reviennent tels quels au rechargement. L'avertissement contraire que la page portait jusque-là a disparu avec la raison qui l'avait fait écrire.
 
 C'est **la règle de frontière du format** qui décide de ce qui part dans le fichier : *ce qui décrit l'ouvrage et son chargement se sauvegarde ; ce qui décrit une hypothèse de vérification se re-choisit.* Les cadres et le type d'élément décrivent l'ouvrage — ils s'enregistrent. Le coefficient d'équivalence `n`, l'ouverture admissible `w_max` et le coefficient `β` du service ne disent rien de l'ouvrage, seulement de la manière dont on l'examine ce jour-là : ils **se re-choisissent** à chaque ouverture plutôt que de ressortir des mois plus tard sans que personne se souvienne de les avoir choisis. `cot θ` est le **cas limite, tranché dans l'autre sens et assumé** : c'est un choix d'ingénieur, mais il conditionne le ferraillage retenu et voyage avec lui.
 
@@ -325,11 +391,13 @@ Cet outil est une aide au calcul ; la vérification finale et la responsabilité
 - une section circulaire est approximée par un polygone régulier (32 côtés par défaut, paramétrable) ;
 - pas de précontrainte, pas de contrôle de ductilité ;
 - un modèle ne porte qu'un seul acier, appliqué à toutes les barres — le mélange d'aciers (sections existantes renforcées) n'est pas encore représentable ;
-- le format est en version 3 ; la lecture accepte les versions 1, 2 et 3 (`SUPPORTED_FORMAT_VERSIONS`), l'écriture produit toujours la version courante. Il n'existe pas de migration au sens propre : la compatibilité tient à ce que les champs ajoutés soient optionnels et à ce que la lecture n'exige jamais l'égalité avec la version courante. Une évolution qui ne pourrait pas se dire par un champ optionnel exigerait, elle, une vraie reprise des fichiers existants ;
+- le format est en version 4 ; la lecture accepte les versions 1 à 4 (`SUPPORTED_FORMAT_VERSIONS`), l'écriture produit toujours la version courante. Il n'existe pas de migration au sens propre : la compatibilité tient à ce que les champs ajoutés soient optionnels et à ce que la lecture n'exige jamais l'égalité avec la version courante. Une évolution qui ne pourrait pas se dire par un champ optionnel exigerait, elle, une vraie reprise des fichiers existants ;
 - le câblage de l'interface est couvert par des tests de bout en bout dans un DOM simulé (`tests/app/cablage.test.ts`) : saisir une valeur doit changer le résultat affiché. Ces tests ont été ajoutés après une régression réelle que la seule couverture des fonctions pures n'avait pas vue ;
 - les diagrammes d'interaction sont calculés par la bibliothèque (`interactionCurveAtN`, `interactionCurveNM`, `interactionDiagramNM`) mais ne sont pas encore tracés par l'interface ;
 - le mode de chargement proportionnel est nettement plus coûteux que le mode « N constant » (quelques secondes contre quelques dizaines de millisecondes) : il ne se déclenche que sur demande explicite ;
-- la vérification en service ne couvre que la **flexion droite** et la section **fissurée** : une section entièrement comprimée est détectée et signalée, non calculée ;
+- la vérification en service ne couvre que la **flexion droite**. La section **non fissurée** (état I) est désormais traitée — c'est ce que le bloc « état de fissuration » a apporté — y compris la section entièrement comprimée, que la méthode `n` refusait faute d'axe neutre. Les §7.3 (ouverture de fissures) et §7.4.3 (courbure), eux, gardent leurs hypothèses propres ;
+- l'**état sous sollicitation** ne couvre que la **flexion droite** : un `Mz` non nul affiche le motif. Sa bissection imbriquée s'appuie sur la monotonie des lois EC2 telles qu'elles sont écrites aujourd'hui ; le résidu d'équilibre est **vérifié en fin de course** et le module rend `converged: false` plutôt qu'un état approximatif, précaution qui vaudra encore si une loi plus raide est introduite ;
+- le panneau de disposition ne vérifie que la géométrie — barre hors du contour, barres qui se chevauchent. Les **distances libres du §8.2** et l'**enrobage du §4.4.1** ne le sont pas. Il n'offre pas non plus le déplacement à la souris : le tableau de coordonnées est le mode de saisie, parce qu'il est reproductible ;
 - l'ouverture de fissures ne couvre que les sections **rectangulaires** en flexion droite ; une autre géométrie lève une erreur plutôt que d'être approximée ;
 - la limite `w_max` vaut 0,3 mm par défaut, valeur du cas courant XC2–XC4 : elle dépend de la classe d'exposition et doit être ajustée au projet ;
 - la **courbure** est rendue au niveau de la section (§7.4.3) ; le calcul de **flèche** proprement dit, qui exige la portée, les appuis et le chargement, reste à la charge de l'appelant ;
