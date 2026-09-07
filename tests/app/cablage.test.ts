@@ -942,6 +942,113 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
   });
 });
 
+/**
+ * « Ø14 tous les 150 » sur une largeur de 1000 pose 8 barres a 130 mm : la
+ * longueur utile vaut 910 et non 1000, l'ecart etant l'enrobage. Le nombre
+ * est juste, il est surprenant, et il l'etait en silence.
+ */
+describe('nombres de barres proposes', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function options(dom: JSDOM): string[] {
+    return [...dom.window.document.querySelectorAll('.option-barres')].map(
+      (b) => b.textContent ?? ''
+    );
+  }
+
+  /** Passe le lit inferieur en saisie par espacement, sur une section 1000 × 500. */
+  async function litEnEspacement(): Promise<JSDOM> {
+    const dom = await monterApplication();
+    saisir(dom, 'width', '1000');
+    saisir(dom, 'height', '500');
+    saisir(dom, 'cover', '30');
+    saisir(dom, 'stirrupDiameter', '8');
+    vi.advanceTimersByTime(500);
+
+    const useSpacing = dom.window.document.querySelector(
+      'input[data-lit="0"][data-champ="useSpacing"]'
+    ) as HTMLInputElement;
+    useSpacing.checked = true;
+    useSpacing.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+
+    const diametre = dom.window.document.querySelector(
+      'input[data-lit="0"][data-champ="diameter"]'
+    ) as HTMLInputElement;
+    diametre.value = '14';
+    diametre.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+
+    const espacement = dom.window.document.querySelector(
+      'input[data-lit="0"][data-champ="maxSpacing"]'
+    ) as HTMLInputElement;
+    espacement.value = '150';
+    espacement.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(500);
+
+    return dom;
+  }
+
+  it('propose les nombres voisins avec leur espacement reel', async () => {
+    const dom = await litEnEspacement();
+    const proposes = options(dom);
+
+    expect(proposes.some((t) => /6 barres.*182/.test(t))).toBe(true);
+    expect(proposes.some((t) => /7 barres.*152/.test(t))).toBe(true);
+    expect(proposes.some((t) => /8 barres.*130/.test(t))).toBe(true);
+  });
+
+  it('marque celui qui est reellement pose, et signale ceux qui depassent', async () => {
+    const dom = await litEnEspacement();
+    const stricts = [...dom.window.document.querySelectorAll('.option-barres.strict')];
+    expect(stricts).toHaveLength(1);
+    expect(stricts[0].textContent).toMatch(/8 barres/);
+
+    const depassent = [...dom.window.document.querySelectorAll('.option-barres.depasse')].map(
+      (b) => b.textContent ?? ''
+    );
+    expect(depassent.some((t) => /6 barres/.test(t))).toBe(true);
+    expect(depassent.some((t) => /7 barres/.test(t))).toBe(true);
+  });
+
+  /**
+   * Le geste qui compte : choisir 7 sur une poutre. Le lit bascule en saisie
+   * PAR NOMBRE, sans quoi le nombre conforme reviendrait au recalcul suivant.
+   */
+  it('choisir un nombre bascule le lit en saisie par nombre', async () => {
+    const dom = await litEnEspacement();
+
+    const sept = [...dom.window.document.querySelectorAll('.option-barres')].find((b) =>
+      /7 barres/.test(b.textContent ?? '')
+    );
+    expect(sept).toBeDefined();
+    (sept as HTMLElement).click();
+    vi.advanceTimersByTime(500);
+
+    const nombre = dom.window.document.querySelector(
+      'input[data-lit="0"][data-champ="count"]'
+    ) as HTMLInputElement;
+    expect(nombre).not.toBeNull();
+    expect(nombre.value).toBe('7');
+
+    // Le champ d espacement a disparu : il n est plus une consigne.
+    expect(
+      dom.window.document.querySelector('input[data-lit="0"][data-champ="maxSpacing"]')
+    ).toBeNull();
+    // Et le recapitulatif du lit annonce bien 7 barres.
+    expect(dom.window.document.querySelector('#saisie')?.textContent).toMatch(/7 HA14/);
+  });
+
+  it('aucune proposition tant que le lit est saisi par nombre', async () => {
+    const dom = await monterApplication();
+    expect(options(dom)).toHaveLength(0);
+  });
+});
+
 describe('les sorties : dessins, resultats, note de calcul', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());

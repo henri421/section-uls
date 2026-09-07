@@ -412,6 +412,59 @@ label.large > input {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+  Les nombres de barres proposes pour un lit saisi en espacement maximal.
+
+  Trois etats a distinguer d'un coup d'oeil, et le choix des signaux n'est pas
+  decoratif : le nombre POSE est en gras (c'est celui qui vaut tant qu'on ne
+  clique pas), le conforme est neutre, celui qui depasse le maximum porte la
+  couleur d'alerte — jamais celle du refus. Un espacement a 152 mm pour un
+  maximum de 150 n'est pas une faute : c'est un arbitrage qui appartient a
+  l'ingenieur, et le peindre en rouge le lui retirerait.
+*/
+.options-barres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.3rem;
+}
+
+.options-barres .sous-titre {
+  flex-basis: 100%;
+  margin: 0.4rem 0 0.1rem;
+}
+
+.option-barres {
+  width: auto;
+  margin: 0;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.75rem;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit);
+  background: var(--surface);
+  color: var(--texte-doux);
+  cursor: pointer;
+}
+
+.option-barres:hover {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+}
+
+.option-barres.depasse {
+  color: var(--alerte);
+  background: var(--alerte-fond);
+  border-color: var(--alerte);
+}
+
+.option-barres.strict {
+  font-weight: 700;
+  color: var(--texte);
+  border-color: var(--texte-faible);
+}
+
 .sous-titre {
   margin: 0.6rem 0 0.1rem;
   font-size: 0.72rem;

@@ -29,7 +29,9 @@ import {
   parametresDeMeyer,
   FormError,
 } from './form';
-import { rectangularRebarLayout, rebarRow, formatRow } from '../../src/index';
+import { rectangularRebarLayout, rebarRow, formatRow, spacingOptions, faceSegment } from '../../src/index';
+import type { RowOption } from '../../src/index';
+import { evaluateExpression } from './expression';
 import type {
   FormState, RowInput, FreeRowInput, ParametresService, ParametresVerifications,
   ParametresMeyer,
@@ -220,6 +222,170 @@ function champChoix(
   return `<label class="large"><span>${libelle}</span><select data-champ="${champ}" data-structure="1">${items}</select></label>`;
 }
 
+/**
+ * LES NOMBRES DE BARRES PROPOSES pour un lit saisi en espacement maximal.
+ *
+ * Pourquoi ces boutons existent. « Ø14 tous les 150 » sur une largeur de
+ * 1000 donne 8 barres a 130 mm, parce que la longueur utile vaut 910 et non
+ * 1000 : l'ecart, c'est l'enrobage. La lecture spontanee « 1000/150 » suggere
+ * 6 ou 7, et le desaccord est invisible tant qu'un seul nombre s'affiche.
+ *
+ * Sur une dalle au metre, un nombre non entier se moyenne sans dommage. Sur
+ * une POUTRE il n'existe pas de demi-barre, et c'est l'ingenieur qui tranche
+ * entre 6 et 7 — y compris pour accepter un depassement de deux millimetres,
+ * qu'aucune regle n'oblige a refuser et que lui seul peut assumer.
+ *
+ * Le nombre CONFORME reste marque et reste celui qui est pose tant qu'on ne
+ * choisit rien : rien ne devient silencieusement moins sur. Cliquer bascule
+ * le lit en saisie par nombre — l'espacement cesse alors d'etre une consigne
+ * pour devenir une consequence, ce qui est exactement ce qu'on voulait voir.
+ */
+function boutonsDeNombre(options: RowOption[], attribut: string, index: number): string {
+  return options
+    .map((o) => {
+      const classes = ['option-barres', o.ok ? 'conforme' : 'depasse', o.strict ? 'strict' : '']
+        .filter((c) => c !== '')
+        .join(' ');
+      return (
+        `<button type="button" class="${classes}" data-action="choisir-nombre"` +
+        ` data-${attribut}="${index}" data-count="${o.count}">` +
+        `${o.count} barres — ${formatNumber(o.spacing, 0)} mm${o.ok ? '' : ' ⚠'}</button>`
+      );
+    })
+    .join('');
+}
+
+/**
+ * Le CONTENANT des propositions, vide a la construction du formulaire.
+ *
+ * Il est rempli par `rafraichirOptionsDeLits()` APRES chaque recalcul, et
+ * jamais par une reconstruction du formulaire. La raison est le focus : un
+ * espacement se tape chiffre par chiffre, et reconstruire le formulaire a
+ * chaque frappe arracherait le curseur du champ. Le titre et sa note restent
+ * en revanche dans le balisage statique — les regenerer ferait croitre sans
+ * fin le compteur d'identifiants des bulles.
+ */
+function contenantDesOptions(attribut: string, index: number): string {
+  return `<div class="options-barres">
+    <p class="sous-titre">Nombres possibles ${info(
+      `L espacement se mesure entre les <strong>axes des barres extremes</strong>, sur
+       <em>b &minus; 2a</em> et non sur la largeur brute : l ecart, c est l enrobage. Le
+       nombre en gras est le plus petit qui respecte le maximum demande, et c est celui qui
+       est pose. Les autres sont la parce que sur une <strong>poutre</strong> il n existe pas
+       de demi-barre, et qu un depassement de deux millimetres se refuse ou s assume — pas
+       en silence.`
+    )}</p>
+    <span data-options="${attribut}-${index}"></span>
+  </div>`;
+}
+
+/**
+ * Remplit les propositions de tous les lits, sans toucher au reste du
+ * formulaire.
+ *
+ * Silencieuse par construction : un lit dont la saisie n'est pas encore
+ * exploitable se vide, il ne produit pas de message. C'est la meme discipline
+ * que le recapitulatif des lits — une frappe en cours n'est pas une erreur.
+ */
+function rafraichirOptionsDeLits(): void {
+  document.querySelectorAll<HTMLElement>('[data-options]').forEach((contenant) => {
+    const cle = contenant.dataset.options ?? '';
+    const [attribut, brut] = cle.split('-');
+    const index = Number(brut);
+
+    const options =
+      attribut === 'lit'
+        ? (etat.rows[index] !== undefined ? optionsDuLitRectangulaire(etat.rows[index]) : null)
+        : etat.freeRows[index] !== undefined
+          ? optionsDuLitLibre(etat.freeRows[index])
+          : null;
+
+    contenant.innerHTML = options === null ? '' : boutonsDeNombre(options, attribut, index);
+  });
+
+  // Le recapitulatif suit le meme chemin, et pour la meme raison : « 7 HA14
+  // @ 152 mm » doit se lire PENDANT qu'on tape le diametre, pas au prochain
+  // changement de structure.
+  const recapitulatifs = recapitulatifDesLits();
+  document.querySelectorAll<HTMLElement>('[data-recap]').forEach((element) => {
+    const index = Number(element.dataset.recap);
+    element.textContent = recapitulatifs?.[index] ?? '';
+  });
+}
+
+/**
+ * Les nombres candidats d'un lit rectangulaire, ou `null` quand la saisie
+ * n'est pas encore exploitable.
+ *
+ * Meme discipline que `recapitulatifDesLits` : une saisie en cours de frappe
+ * ne produit rien plutot qu'un message d'erreur.
+ */
+function optionsDuLitRectangulaire(lit: RowInput): RowOption[] | null {
+  if (!lit.useSpacing) return null;
+
+  try {
+    const modele = formToModel(etat);
+    if (modele.geometry.kind !== 'rectangle') return null;
+    if (modele.reinforcement.kind !== 'rectangular-layout') return null;
+
+    const diametre = nombreDeChamp(lit.diameter);
+    const espacement = nombreDeChamp(lit.maxSpacing);
+    if (diametre === null || espacement === null) return null;
+
+    const segment = faceSegment({
+      width: modele.geometry.width,
+      height: modele.geometry.height,
+      cover: modele.reinforcement.cover,
+      ...(modele.reinforcement.stirrupDiameter !== undefined
+        ? { stirrupDiameter: modele.reinforcement.stirrupDiameter }
+        : {}),
+      diameter: diametre,
+      face: lit.face,
+    });
+
+    return spacingOptions({
+      length: segment.length,
+      maxSpacing: espacement,
+      endpoints: segment.endpoints,
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Les nombres candidats d'un lit libre, dont le segment est saisi en clair. */
+function optionsDuLitLibre(lit: FreeRowInput): RowOption[] | null {
+  if (!lit.useSpacing) return null;
+
+  const cotes = [lit.fromY, lit.fromZ, lit.toY, lit.toZ].map(nombreDeChamp);
+  const espacement = nombreDeChamp(lit.maxSpacing);
+  if (cotes.some((c) => c === null) || espacement === null) return null;
+
+  const [fromY, fromZ, toY, toZ] = cotes as number[];
+  const longueur = Math.hypot(toY - fromY, toZ - fromZ);
+  if (!(longueur > 0)) return null;
+
+  try {
+    return spacingOptions({
+      length: longueur,
+      maxSpacing: espacement,
+      endpoints: lit.excludeEndpoints ? 'exclude' : 'include',
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Un champ evalue, ou `null` s'il n'est pas encore exploitable. */
+function nombreDeChamp(valeur: string): number | null {
+  try {
+    const n = evaluateExpression(valeur);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
 function litRectangulaire(lit: RowInput, index: number, recapitulatif?: string): string {
   const faces: Array<[string, string]> = [
     ['bottom', 'inferieure'],
@@ -241,7 +407,8 @@ function litRectangulaire(lit: RowInput, index: number, recapitulatif?: string):
         ? `<label><span>Espacement max (mm)</span><input type="text" inputmode="decimal" data-lit="${index}" data-champ="maxSpacing" value="${echapper(lit.maxSpacing)}" /></label>`
         : `<label><span>Nombre de barres</span><input type="text" inputmode="numeric" data-lit="${index}" data-champ="count" value="${echapper(lit.count)}" /></label>`
     }
-    ${recapitulatif ? `<p class="aire-lit">${echapper(recapitulatif)}</p>` : ''}
+    ${lit.useSpacing ? contenantDesOptions('lit', index) : ''}
+    <p class="aire-lit" data-recap="${index}">${echapper(recapitulatif ?? '')}</p>
     <button type="button" data-action="supprimer-lit" data-lit="${index}">Supprimer ce lit</button>
   </fieldset>`;
 }
@@ -265,7 +432,8 @@ function litLibre(lit: FreeRowInput, index: number, recapitulatif?: string): str
         : `<label><span>Nombre de barres</span><input type="text" inputmode="numeric" data-libre="${index}" data-champ="count" value="${echapper(lit.count)}" /></label>`
     }
     <label class="case"><input type="checkbox" data-libre="${index}" data-champ="excludeEndpoints"${lit.excludeEndpoints ? ' checked' : ''} /><span>Exclure les extremites (barres intermediaires seules)</span></label>
-    ${recapitulatif ? `<p class="aire-lit">${echapper(recapitulatif)}</p>` : ''}
+    ${lit.useSpacing ? contenantDesOptions('libre', index) : ''}
+    <p class="aire-lit" data-recap="${index}">${echapper(recapitulatif ?? '')}</p>
     <button type="button" data-action="supprimer-libre" data-libre="${index}">Supprimer ce lit</button>
   </fieldset>`;
 }
@@ -1610,6 +1778,11 @@ function recalculer(mode?: 'proportional'): void {
       derives.textContent = `fcd = ${formatNumber(resolu.concrete.fcd, 2)} MPa — fyd = ${formatNumber(resolu.steel.fyd, 1)} MPa`;
     }
 
+    // Les propositions de nombres de barres et les recapitulatifs de lits
+    // sont remplis ICI, hors de la construction du formulaire : ils doivent
+    // suivre la frappe, et reconstruire le formulaire arracherait le curseur.
+    rafraichirOptionsDeLits();
+
     sauvegarderLocalement(modele);
   } catch (e) {
     afficherErreur(e instanceof Error ? e.message : String(e));
@@ -1652,6 +1825,9 @@ function recalculerBientot(): void {
 function rendreFormulaire(): void {
   if (!zoneSaisie) return;
   zoneSaisie.innerHTML = htmlFormulaire();
+  // Le formulaire sort avec ses contenants de propositions VIDES : on les
+  // remplit tout de suite, sans attendre le prochain recalcul.
+  rafraichirOptionsDeLits();
 }
 
 // --- Sorties ----------------------------------------------------------------
@@ -1916,6 +2092,31 @@ document.addEventListener('click', (evenement) => {
       diameter: '20', useSpacing: false, count: '2', maxSpacing: '',
       excludeEndpoints: false,
     });
+    rendreFormulaire();
+    recalculer();
+  } else if (action === 'choisir-nombre') {
+    // Choisir un nombre bascule le lit en saisie PAR NOMBRE : l'espacement
+    // cesse d'etre une consigne pour devenir une consequence, et il s'affiche
+    // aussitot dans le recapitulatif du lit. Rester en mode espacement aurait
+    // fait revenir le nombre conforme au premier recalcul.
+    const nombre = cible.dataset.count ?? '';
+    const indexLit = cible.dataset.lit;
+    const indexLibre = cible.dataset.libre;
+
+    if (indexLit !== undefined) {
+      const lit = etat.rows[Number(indexLit)];
+      if (lit) {
+        lit.useSpacing = false;
+        lit.count = nombre;
+      }
+    } else if (indexLibre !== undefined) {
+      const lit = etat.freeRows[Number(indexLibre)];
+      if (lit) {
+        lit.useSpacing = false;
+        lit.count = nombre;
+      }
+    }
+
     rendreFormulaire();
     recalculer();
   } else if (action === 'supprimer-libre') {
