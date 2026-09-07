@@ -7,7 +7,8 @@ import type {
 import type { LoadingMode, ElementType, RestraintType, ShearReinforcement } from '../../src/index';
 import type { MeyerCas, MeyerBridage, MeyerModeK } from '../../src/index';
 import {
-  ec2Recommended, fctmDepuisFck, resolveChecks, FORMAT_VERSION, ENGINE_VERSION,
+  ec2Recommended, fctmDepuisFck, resolveChecks, barArea, barDiameterOf,
+  FORMAT_VERSION, ENGINE_VERSION,
 } from '../../src/index';
 import { evaluateExpression, ExpressionError } from './expression';
 import { formatNumber } from './format';
@@ -54,8 +55,15 @@ export interface FormState {
   rows: RowInput[];
   cageBarDiameter: string; cageCount: string; cageRotationOffset: string;
   freeRows: FreeRowInput[];
-  /** Une barre par ligne, « y ; z ; aire ». */
-  bars: string;
+  /**
+   * Barres posees une a une par leurs COORDONNEES.
+   *
+   * C'est le mode de la disposition parametrique : celui ou l'on deplace une
+   * barre, en ajoute une, pose des armatures de peau, et regarde ce que le
+   * moment resistant devient. Un tableau et non une zone de texte, parce
+   * qu'une cellule se modifie sans retaper la ligne.
+   */
+  barList: BarInput[];
 
   N: string; My: string; Mz: string;
   mode: LoadingMode;
@@ -160,7 +168,24 @@ export interface FormState {
    */
   crackingMode: 'auto' | 'uncracked' | 'cracked';
   crackingFctEff: string;
+
+  /**
+   * Generateur d'armatures de peau du panneau de disposition.
+   *
+   * Ce sont des parametres de GESTE, pas des donnees de l'ouvrage : une fois
+   * les barres posees, ce sont leurs coordonnees qui font foi et qui
+   * s'enregistrent. Ils ne vont donc pas dans le modele, et reprennent leurs
+   * valeurs de depart a chaque chargement — comme `n`, `w_max` et `beta`.
+   */
+  peauCount: string;
+  peauDiameter: string;
+  peauZFrom: string;
+  peauZTo: string;
 }
+
+/** Valeurs de depart du generateur d'armatures de peau. */
+export const PEAU_COUNT_PAR_DEFAUT = '2';
+export const PEAU_DIAMETER_PAR_DEFAUT = '12';
 
 /** Valeurs de depart des trois parametres assumes, telles qu'elles s'affichent. */
 export const SERVICE_N_PAR_DEFAUT = '15';
@@ -564,12 +589,95 @@ export function formatPoints(points: PointModel[]): string {
   return points.map((p) => `${p.y} ; ${p.z}`).join('\n');
 }
 
-function parseBarsText(texte: string, champ: string): Array<{ y: number; z: number; area: number }> {
-  return parseLignes(texte, champ, 3).map(([y, z, area]) => ({ y, z, area }));
+/**
+ * Une barre libre telle qu'elle se saisit : trois champs, en CHAINES.
+ *
+ * Le DIAMETRE et non l'aire, alors que le modele stocke l'aire. C'est le
+ * sens de la saisie qui commande : on pose des HA20, on ne pose pas des
+ * 314 mm². La conversion est exacte dans les deux sens — `barArea` et
+ * `barDiameterOf` sont inverses l'une de l'autre — donc rien ne se degrade a
+ * l'aller-retour.
+ */
+export interface BarInput {
+  y: string;
+  z: string;
+  diameter: string;
 }
 
-function formatBarsText(bars: Array<{ y: number; z: number; area: number }>): string {
-  return bars.map((b) => `${b.y} ; ${b.z} ; ${b.area}`).join('\n');
+/** Une barre libre evaluee, prete pour le modele et pour les gardes de placement. */
+export interface BarreSaisie {
+  y: number;
+  z: number;
+  diameter: number;
+}
+
+/**
+ * Les barres libres evaluees, ou `null` si l'une d'elles n'est pas encore
+ * exploitable.
+ *
+ * `null` PLUTOT QU'UNE ERREUR : le tableau de barres se modifie cellule par
+ * cellule, et un champ momentanement vide — ou reduit au signe moins qu'on
+ * vient de taper — est un etat normal de la frappe, pas une faute. Les
+ * appelants qui doivent refuser (la conversion vers le modele) le font avec
+ * leur propre message.
+ */
+export function barresEvaluees(barres: BarInput[]): BarreSaisie[] | null {
+  const evaluees: BarreSaisie[] = [];
+
+  for (const barre of barres) {
+    try {
+      const y = evaluateExpression(barre.y);
+      const z = evaluateExpression(barre.z);
+      const diameter = evaluateExpression(barre.diameter);
+      if (![y, z, diameter].every(Number.isFinite) || !(diameter > 0)) return null;
+      evaluees.push({ y, z, diameter });
+    } catch {
+      return null;
+    }
+  }
+
+  return evaluees;
+}
+
+/**
+ * Remet des barres sous forme de saisie SANS RIEN ARRONDIR.
+ *
+ * ⚠ C'est la fonction du CHEMIN DE RELECTURE, et l'absence d'arrondi y est
+ * la regle, pas un oubli. Un fichier peut porter une aire quelconque —
+ * 314 mm² ronds, une valeur venue d'un autre outil — dont le diametre exact
+ * est 19,9943... Arrondir a 20 reecrirait l'aire a 314,159 au premier
+ * enregistrement : une donnee de l'utilisateur, modifiee en silence parce
+ * qu'elle s'affichait mal. Un diametre qui n'est pas rond se LIT comme tel,
+ * et c'est une information.
+ *
+ * Les barres que l'outil FABRIQUE passent par `barresGenerees`, qui arrondit :
+ * la, l'arrondi ne trahit personne.
+ */
+export function barresEnSaisie(barres: readonly BarreSaisie[]): BarInput[] {
+  return barres.map((b) => ({
+    y: texteDe(b.y),
+    z: texteDe(b.z),
+    diameter: texteDe(b.diameter),
+  }));
+}
+
+/**
+ * Remet sous forme de saisie des barres que l'OUTIL vient de fabriquer —
+ * materialisation d'un lit, generateur d'armatures de peau — en arrondissant
+ * au dixieme de millimetre.
+ *
+ * Aucune donnee de l'utilisateur n'est en jeu ici : ces coordonnees viennent
+ * d'etre calculees, et un « 104,99999999999999 » issu d'une interpolation est
+ * un nombre juste que personne n'oserait plus modifier a la main. Le dixieme
+ * de millimetre est en deca de toute tolerance de pose.
+ */
+export function barresGenerees(barres: readonly BarreSaisie[]): BarInput[] {
+  const arrondi = (valeur: number): number => Math.round(valeur * 10) / 10;
+  return barres.map((b) => ({
+    y: texteDe(arrondi(b.y)),
+    z: texteDe(arrondi(b.z)),
+    diameter: texteDe(arrondi(b.diameter)),
+  }));
 }
 
 // --- Lits d'armatures : nombre de barres OU espacement maximal ---
@@ -685,9 +793,23 @@ export function formToModel(form: FormState): SectionModel {
         })),
       };
       break;
-    case 'bars':
-      reinforcement = { kind: 'bars', bars: parseBarsText(form.bars, 'bars') };
+    case 'bars': {
+      const barres = barresEvaluees(form.barList);
+      if (barres === null) {
+        throw new FormError(
+          'Barres libres : une coordonnee ou un diametre n est pas evaluable, ou le diametre ' +
+            'est nul. Chaque barre demande un y, un z et un diametre strictement positif.'
+        );
+      }
+      reinforcement = {
+        kind: 'bars',
+        // Le modele stocke l'AIRE : c'est ce que le noyau integre, et le
+        // diametre n'y ajouterait qu'une grandeur derivee de plus a tenir
+        // coherente. La saisie, elle, reste en diametres.
+        bars: barres.map((b) => ({ y: b.y, z: b.z, area: barArea(b.diameter) })),
+      };
       break;
+    }
   }
 
   // Les deux combinaisons sont INDEPENDANTES : saisir la seule
@@ -796,7 +918,7 @@ export function modelToForm(model: SectionModel): FormState {
     rows: [],
     cageBarDiameter: '', cageCount: '', cageRotationOffset: '',
     freeRows: [],
-    bars: '',
+    barList: [],
 
     N: texteDe(model.action.N),
     My: texteDe(model.action.My),
@@ -883,6 +1005,14 @@ export function modelToForm(model: SectionModel): FormState {
     restraintReferential: verifications.restraintReferential,
     crackingMode: verifications.cracking.mode,
     crackingFctEff: texteDe(verifications.cracking.fctEff),
+
+    // Les cotes de depart et d'arrivee restent VIDES : elles dependent de la
+    // hauteur de la section, que le panneau pre-remplit a son ouverture — le
+    // seul moment ou elles ont un sens.
+    peauCount: PEAU_COUNT_PAR_DEFAUT,
+    peauDiameter: PEAU_DIAMETER_PAR_DEFAUT,
+    peauZFrom: '',
+    peauZTo: '',
   };
 
   switch (model.geometry.kind) {
@@ -924,7 +1054,13 @@ export function modelToForm(model: SectionModel): FormState {
       }));
       break;
     case 'bars':
-      form.bars = formatBarsText(model.reinforcement.bars);
+      form.barList = barresEnSaisie(
+        model.reinforcement.bars.map((b) => ({
+          y: b.y,
+          z: b.z,
+          diameter: barDiameterOf(b.area),
+        }))
+      );
       break;
   }
 

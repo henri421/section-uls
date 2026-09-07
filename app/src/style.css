@@ -413,6 +413,106 @@ label.large > input {
 }
 
 /*
+  Le tableau des barres posees une a une.
+
+  Colonnes etroites et chiffres tabulaires : on lit une colonne de `z` de haut
+  en bas pour reperer un lit, et des chiffres de largeur variable rendraient
+  cette lecture penible. Les champs perdent leur cadre au repos — trente
+  cellules encadrees seraient une grille illisible — et le retrouvent au
+  survol et au focus.
+*/
+.barres {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.3rem 0 0.2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.barres th,
+.barres td {
+  padding: 0.1rem 0.15rem;
+  text-align: left;
+}
+
+.barres thead th {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--texte-faible);
+  border-bottom: 1px solid var(--bordure);
+}
+
+.barres tbody th {
+  width: 1.5rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--texte-faible);
+}
+
+.barres input {
+  width: 100%;
+  padding: 0.15rem 0.25rem;
+  font-size: 0.8rem;
+  font-family: var(--mono);
+  border-color: transparent;
+  background: transparent;
+}
+
+.barres input:hover {
+  border-color: var(--bordure);
+  background: var(--surface);
+}
+
+.barres .vide {
+  padding: 0.5rem 0.15rem;
+  font-size: 0.78rem;
+  color: var(--texte-faible);
+}
+
+.barres .retirer {
+  width: 1.4rem;
+  margin: 0;
+  padding: 0.1rem;
+  line-height: 1;
+  color: var(--texte-faible);
+}
+
+.barres .retirer:hover {
+  color: var(--refus);
+  border-color: var(--refus);
+}
+
+/*
+  Le panneau d'optimisation de la disposition.
+
+  L'ecart a la reference est ce qu'on vient y lire : il est en tete de la
+  partie basse, en chiffres tabulaires, et les defauts de placement le suivent
+  immediatement — un chevauchement change le sens du ΔM_Rd affiche au-dessus.
+*/
+.disposition {
+  margin-top: 0.5rem;
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.disposition .comparaison {
+  margin: 0.2rem 0 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.defauts {
+  margin: 0.3rem 0;
+  padding-left: 1.1rem;
+  font-size: 0.78rem;
+  color: var(--refus);
+}
+
+.defauts li {
+  margin-bottom: 0.25rem;
+}
+
+/*
   Les nombres de barres proposes pour un lit saisi en espacement maximal.
 
   Trois etats a distinguer d'un coup d'oeil, et le choix des signaux n'est pas

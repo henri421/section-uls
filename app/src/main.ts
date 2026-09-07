@@ -29,8 +29,12 @@ import {
   parametresDeMeyer,
   FormError,
 } from './form';
-import { rectangularRebarLayout, rebarRow, formatRow, spacingOptions, faceSegment } from '../../src/index';
+import {
+  rectangularRebarLayout, rebarRow, formatRow, spacingOptions, faceSegment,
+  barArea, barDiameterOf, checkBarPlacement, skinBars,
+} from '../../src/index';
 import type { RowOption } from '../../src/index';
+import { barresEvaluees, barresGenerees } from './form';
 import { evaluateExpression } from './expression';
 import type {
   FormState, RowInput, FreeRowInput, ParametresService, ParametresVerifications,
@@ -311,6 +315,17 @@ function rafraichirOptionsDeLits(): void {
     const index = Number(element.dataset.recap);
     element.textContent = recapitulatifs?.[index] ?? '';
   });
+
+  // Meme raison pour le total du tableau de barres : il doit suivre la frappe
+  // d'un diametre, sans reconstruire le tableau sous le curseur.
+  const total = document.querySelector<HTMLElement>('[data-total-barres]');
+  if (total !== null) {
+    const aire = aireDesBarresSaisies();
+    total.textContent =
+      aire === null
+        ? ''
+        : `${etat.barList.length} barres — ${formatNumber(aire, 0)} mm² au total`;
+  }
 }
 
 /**
@@ -438,6 +453,51 @@ function litLibre(lit: FreeRowInput, index: number, recapitulatif?: string): str
   </fieldset>`;
 }
 
+/**
+ * LE TABLEAU DES BARRES POSEES UNE A UNE.
+ *
+ * C'est le mode de reference de la disposition parametrique : des
+ * COORDONNEES, pas un lit par face. Il remplace la zone de texte
+ * « y ; z ; aire » qui tenait ce role, pour deux raisons.
+ *
+ * D'abord parce qu'une cellule se modifie sans retaper la ligne, ce qui est
+ * tout l'interet quand on cherche l'effet d'un deplacement de dix
+ * millimetres. Ensuite parce qu'on y saisit un DIAMETRE : on pose des HA20,
+ * on ne pose pas des 314 mm². Le modele continue de stocker l'aire, que le
+ * noyau integre ; la conversion est exacte dans les deux sens.
+ *
+ * Chaque cellule porte `data-barre` et son nom de champ, et passe donc par
+ * le meme chemin de saisie que tous les autres champs de la page.
+ */
+function tableauDeBarres(): string {
+  const lignes = etat.barList
+    .map(
+      (barre, index) => `<tr>
+      <th scope="row">${index + 1}</th>
+      ${(['y', 'z', 'diameter'] as const)
+        .map(
+          (champ) =>
+            `<td><input type="text" inputmode="decimal" data-barre="${index}" data-champ="${champ}" value="${echapper(barre[champ])}" aria-label="barre ${index + 1}, ${champ}" /></td>`
+        )
+        .join('')}
+      <td><button type="button" class="retirer" data-action="supprimer-barre" data-barre="${index}" aria-label="supprimer la barre ${index + 1}">×</button></td>
+    </tr>`
+    )
+    .join('');
+
+  const vide =
+    etat.barList.length === 0
+      ? '<tr><td colspan="5" class="vide">Aucune barre. La section est calculee sans armature.</td></tr>'
+      : '';
+
+  return `<table class="barres">
+    <thead><tr><th>#</th><th>y (mm)</th><th>z (mm)</th><th>Ø (mm)</th><th></th></tr></thead>
+    <tbody>${lignes}${vide}</tbody>
+  </table>
+  <p class="aire-lit" data-total-barres></p>
+  <button type="button" data-action="ajouter-barre">Ajouter une barre</button>`;
+}
+
 function blocGeometrie(): string {
   if (etat.geometryKind === 'rectangle') {
     return champTexte('width', 'Largeur (mm)', etat.width) + champTexte('height', 'Hauteur (mm)', etat.height);
@@ -482,7 +542,7 @@ function blocFerraillage(): string {
     );
   }
 
-  return champZone('bars', 'Barres, une par ligne : y ; z ; aire', etat.bars, 8);
+  return tableauDeBarres();
 }
 
 /**
@@ -563,6 +623,308 @@ function blocVerifications(): string {
   </fieldset>`;
 }
 
+// --- Panneau de disposition -------------------------------------------------
+
+/**
+ * LA DISPOSITION DE REFERENCE, figee a l'ouverture du panneau.
+ *
+ * C'est elle qui fait de ce panneau un outil d'OPTIMISATION plutot qu'un
+ * simple editeur : chaque modification s'affiche en ECART — ΔM_Rd, ΔA_s —
+ * contre la disposition d'ou l'on est parti. « Est-ce que j'ai le meme
+ * moment resistant en posant autrement » est une question de difference,
+ * pas de valeur absolue.
+ *
+ * Volontairement HORS du modele et hors de `FormState` : ce n'est pas une
+ * donnee de l'ouvrage, c'est un point de comparaison de la session en cours.
+ * Fermer puis rouvrir le panneau refige la reference sur ce qu'on a alors —
+ * ce qui est le comportement attendu, et qui se dit en une phrase.
+ */
+interface DispositionDeReference {
+  MRd: number;
+  As: number;
+  nombreDeBarres: number;
+}
+
+let panneauDisposition = false;
+let referenceDisposition: DispositionDeReference | null = null;
+
+/** Magnitude du moment resistant, ou `null` si la section ne resout pas. */
+function momentResistantCourant(): number | null {
+  try {
+    const resolu = resolveModel(formToModel(etat));
+    const resultat = verifySection(resolu.section, resolu.action, resolu.norm, {
+      mode: 'constant-N',
+    });
+    return resultat.M_Rd === null ? null : Math.hypot(resultat.M_Rd.y, resultat.M_Rd.z);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ouvre le panneau, en MATERIALISANT le ferraillage en barres explicites.
+ *
+ * CONVERSION SANS RETOUR, et annoncee comme telle. La saisie par lits retient
+ * une INTENTION — « 4 HA20 en face inferieure » — que le fichier relit telle
+ * quelle. Une liste de coordonnees ne la porte plus : elle porte le resultat.
+ * Les deux ne peuvent pas coexister sans qu'on ait a decider laquelle gagne
+ * quand elles se contredisent, et c'est la liberte de placement qui a ete
+ * choisie ici — c'est ce que le panneau sert.
+ */
+function ouvrirDisposition(): void {
+  const MRd = momentResistantCourant();
+
+  try {
+    const resolu = resolveModel(formToModel(etat));
+    // `barresGenerees` et non `barresEnSaisie` : ces coordonnees viennent
+    // d'etre calculees par le generateur de lits, pas lues dans un fichier.
+    etat.barList = barresGenerees(
+      resolu.section.rebars.map((r) => ({
+        y: r.y,
+        z: r.z,
+        diameter: barDiameterOf(r.area),
+      }))
+    );
+    etat.reinforcementKind = 'bars';
+  } catch (e) {
+    afficherErreur(
+      'Le ferraillage actuel n est pas exploitable, il ne peut pas etre converti en barres : ' +
+        (e instanceof Error ? e.message : String(e))
+    );
+    return;
+  }
+
+  const As = etat.barList.length === 0 ? 0 : (aireDesBarresSaisies() ?? 0);
+
+  referenceDisposition = MRd === null ? null : { MRd, As, nombreDeBarres: etat.barList.length };
+  panneauDisposition = true;
+
+  // Les cotes du generateur sont pre-remplies sur la hauteur reelle de la
+  // section, moins un enrobage d'axe : c'est l'intervalle ou des armatures de
+  // peau ont un sens, et il n'a de valeur qu'ici — la ou la section est connue.
+  prerremplirArmaturesDePeau();
+
+  rendreFormulaire();
+  recalculer();
+}
+
+/**
+ * La distance d'axe laterale, deduite de l'enrobage deja saisi.
+ *
+ * `enrobage + Ø etrier + Ø/2`, exactement comme `faceSegment` : deux regles
+ * differentes pour la meme distance produiraient des armatures de peau
+ * decalees des lits d'angle, sur un dessin ou l'ecart se verrait.
+ *
+ * L'enrobage reste dans `FormState` apres le passage en barres libres, meme
+ * si son champ n'est plus affiche : c'est ce qui permet de le retrouver ici.
+ * A defaut, 30 mm — une valeur courante, et le panneau montre aussitot ou les
+ * barres sont tombees.
+ */
+function distanceDAxeLaterale(diametre: number): number {
+  const enrobage = nombreDeChamp(etat.cover) ?? 30;
+  const etrier = nombreDeChamp(etat.stirrupDiameter) ?? 0;
+  return enrobage + etrier + diametre / 2;
+}
+
+/** Cotes de depart et d'arrivee plausibles pour les armatures de peau. */
+function prerremplirArmaturesDePeau(): void {
+  const contour = contourCourant();
+  if (contour === null) return;
+
+  const zValues = contour.map((p) => p.z);
+  const marge = distanceDAxeLaterale(nombreDeChamp(etat.peauDiameter) ?? 12);
+
+  etat.peauZFrom = formatNumber(Math.min(...zValues) + marge, 0);
+  etat.peauZTo = formatNumber(Math.max(...zValues) - marge, 0);
+}
+
+/**
+ * Pose les armatures de peau demandees, en les AJOUTANT aux barres en place.
+ *
+ * Elles s'ajoutent et ne remplacent rien : c'est le geste — voir ce que des
+ * armatures de peau changent, ou ne changent pas, au moment resistant. Les
+ * chevauchements eventuels avec les barres d'angle sont signales par les
+ * gardes plutot qu'evites en silence : l'intervalle est un choix, et le
+ * corriger a la place de l'ingenieur lui cacherait qu'il l'a mal pose.
+ */
+function ajouterArmaturesDePeau(): void {
+  const contour = contourCourant();
+  const modele = (() => {
+    try {
+      return formToModel(etat);
+    } catch {
+      return null;
+    }
+  })();
+
+  if (contour === null || modele === null || modele.geometry.kind !== 'rectangle') {
+    afficherErreur(
+      'Les armatures de peau ne sont posees que sur une section RECTANGULAIRE : sur un contour ' +
+        'quelconque, « les deux faces laterales » n a pas de definition unique. Poser les barres ' +
+        'une a une dans le tableau reste possible.'
+    );
+    return;
+  }
+
+  const nombre = nombreDeChamp(etat.peauCount);
+  const diametre = nombreDeChamp(etat.peauDiameter);
+  const zFrom = nombreDeChamp(etat.peauZFrom);
+  const zTo = nombreDeChamp(etat.peauZTo);
+
+  if (nombre === null || diametre === null || zFrom === null || zTo === null) {
+    afficherErreur(
+      'Armatures de peau : le nombre par face, le diametre et les deux cotes doivent tous etre ' +
+        'renseignes.'
+    );
+    return;
+  }
+
+  try {
+    const nouvelles = skinBars({
+      width: modele.geometry.width,
+      axisDistance: distanceDAxeLaterale(diametre),
+      zFrom,
+      zTo,
+      countPerFace: nombre,
+      diameter: diametre,
+    });
+
+    etat.barList = [...etat.barList, ...barresGenerees(nouvelles)];
+    rendreFormulaire();
+    recalculer();
+  } catch (e) {
+    afficherErreur(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/** Aire totale des barres saisies (mm²), ou `null` si la saisie n'est pas prete. */
+function aireDesBarresSaisies(): number | null {
+  const barres = barresEvaluees(etat.barList);
+  if (barres === null) return null;
+  return barres.reduce((somme, b) => somme + barArea(b.diameter), 0);
+}
+
+/** Le contour de la section courante, pour les gardes de placement. */
+function contourCourant(): Array<{ y: number; z: number }> | null {
+  try {
+    return outlineOf(resolveModel(formToModel(etat)).section);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Les defauts de placement, mis en forme.
+ *
+ * Ils ne BLOQUENT pas le calcul : une barre hors du contour donne un resultat
+ * parfaitement calculable et parfaitement faux, et c'est justement pour cela
+ * qu'il faut le dire fort. Refuser de calculer priverait en plus l'ingenieur
+ * du reste de la page pendant qu'il corrige.
+ */
+function htmlDefautsDePlacement(): string {
+  const barres = barresEvaluees(etat.barList);
+  const contour = contourCourant();
+  if (barres === null || contour === null) return '';
+
+  const defauts = checkBarPlacement(contour, barres);
+  if (defauts.length === 0) return '';
+
+  return (
+    '<ul class="defauts">' +
+    defauts.map((d) => `<li>${echapper(d.message)}</li>`).join('') +
+    '</ul>'
+  );
+}
+
+/**
+ * L'ecart a la disposition de reference — le coeur du panneau.
+ *
+ * `MRd` est PASSE et non recalcule : `recalculer()` vient de le determiner,
+ * et une seconde verification complete couterait ici une centaine de
+ * millisecondes a chaque frappe, pour rendre exactement le meme nombre.
+ */
+function htmlComparaison(MRd: number | null): string {
+  if (referenceDisposition === null) {
+    return `<p class="note">Aucune disposition de reference : le moment resistant n etait pas
+      calculable a l ouverture du panneau. Les modifications s affichent alors en valeur
+      absolue, sans ecart.</p>`;
+  }
+
+  const reference = referenceDisposition;
+  const As = aireDesBarresSaisies();
+
+  const ecart = (courant: number | null, initial: number, unite: string): string => {
+    if (courant === null) return 'non calculable';
+    const delta = courant - initial;
+    const signe = delta > 0 ? '+' : '';
+    const relatif = initial === 0 ? '' : ` (${signe}${formatNumber((100 * delta) / initial, 1)} %)`;
+    return `${formatNumber(courant, 1)} ${unite} — ${signe}${formatNumber(delta, 1)}${relatif}`;
+  };
+
+  return `<div class="comparaison">
+    ${ligne('Reference M_Rd', `${formatNumber(reference.MRd, 1)} kN.m`)}
+    ${ligne('Actuel M_Rd', ecart(MRd, reference.MRd, 'kN.m'))}
+    ${ligne('Reference A_s', `${formatNumber(reference.As, 0)} mm² — ${reference.nombreDeBarres} barres`)}
+    ${ligne('Actuel A_s', `${ecart(As, reference.As, 'mm²')} — ${etat.barList.length} barres`)}
+  </div>`;
+}
+
+/**
+ * Le panneau de disposition.
+ *
+ * Il s'ajoute au cadre de ferraillage, qui porte deja le tableau des barres :
+ * le panneau n'est donc pas un second editeur, c'est l'OUTILLAGE de celui qui
+ * existe — le generateur d'armatures de peau, la comparaison a la reference,
+ * et les gardes de placement.
+ */
+function blocDisposition(): string {
+  if (!panneauDisposition) {
+    return `<button type="button" data-action="ouvrir-disposition">Optimisation de la disposition</button>`;
+  }
+
+  return `<fieldset class="disposition">
+    <legend>Optimisation de la disposition ${info(
+      `Les armatures sont desormais des <strong>coordonnees</strong> : l intention de saisie
+       (« 4 HA20 en face inferieure ») a ete materialisee et n est pas restituable. Chaque
+       modification est comparee a la disposition figee a l <strong>ouverture</strong> du
+       panneau. Fermer puis rouvrir refige la reference sur l etat courant.<br /><br />
+       Les gardes sont <strong>geometriques</strong> : barre hors du contour, barres qui se
+       chevauchent. Les distances libres du §8.2 et l enrobage du §4.4.1 ne sont
+       <strong>pas</strong> verifies.`,
+      'decisif'
+    )}</legend>
+
+    <p class="sous-titre">Armatures de peau</p>
+    <div class="paire">
+      ${champTexte('peauCount', 'Nombre par face', etat.peauCount)}
+      ${champTexte('peauDiameter', 'Diametre (mm)', etat.peauDiameter)}
+      ${champTexte('peauZFrom', 'z de (mm)', etat.peauZFrom)}
+      ${champTexte('peauZTo', 'z a (mm)', etat.peauZTo)}
+    </div>
+    <button type="button" data-action="ajouter-peau">Ajouter les armatures de peau</button>
+
+    <p class="sous-titre">Ecart a la disposition de reference</p>
+    <div data-panneau-vivant></div>
+
+    <button type="button" data-action="fermer-disposition">Fermer le panneau</button>
+  </fieldset>`;
+}
+
+/**
+ * Remplit la partie VIVANTE du panneau : l'ecart a la reference et les
+ * defauts de placement.
+ *
+ * Hors de la construction du formulaire, et pour la meme raison que les
+ * propositions de nombres de barres : une coordonnee se tape chiffre par
+ * chiffre, et reconstruire le tableau arracherait le curseur de la cellule.
+ * C'est justement pendant cette frappe que l'ecart doit se lire.
+ */
+function rafraichirPanneauDisposition(MRd: number | null): void {
+  const contenant = document.querySelector<HTMLElement>('[data-panneau-vivant]');
+  if (contenant === null) return;
+  contenant.innerHTML = htmlComparaison(MRd) + htmlDefautsDePlacement();
+}
+
 /**
  * Un cadre de saisie qui n'existe que si sa verification est cochee.
  *
@@ -616,6 +978,7 @@ function htmlFormulaire(): string {
       ['bars', 'Barres libres'],
     ])}
     ${blocFerraillage()}
+    ${blocDisposition()}
   </fieldset>
 
   <fieldset>
@@ -1783,6 +2146,12 @@ function recalculer(mode?: 'proportional'): void {
     // suivre la frappe, et reconstruire le formulaire arracherait le curseur.
     rafraichirOptionsDeLits();
 
+    // Le moment resistant est celui qui vient d'etre calcule, jamais un
+    // second calcul : le panneau lit ce que la page vient d'etablir.
+    rafraichirPanneauDisposition(
+      resultat.M_Rd === null ? null : Math.hypot(resultat.M_Rd.y, resultat.M_Rd.z)
+    );
+
     sauvegarderLocalement(modele);
   } catch (e) {
     afficherErreur(e instanceof Error ? e.message : String(e));
@@ -1990,6 +2359,7 @@ function appliquerSaisie(cible: HTMLInputElement | HTMLSelectElement | HTMLTextA
 
   const indexLit = cible.dataset.lit;
   const indexLibre = cible.dataset.libre;
+  const indexBarre = cible.dataset.barre;
 
   if (indexLit !== undefined) {
     const lit = etat.rows[Number(indexLit)];
@@ -1997,6 +2367,12 @@ function appliquerSaisie(cible: HTMLInputElement | HTMLSelectElement | HTMLTextA
   } else if (indexLibre !== undefined) {
     const lit = etat.freeRows[Number(indexLibre)];
     if (lit) Object.assign(lit, { [champ]: valeur });
+  } else if (indexBarre !== undefined) {
+    // Une CELLULE du tableau de barres. La valeur reste une chaine : un champ
+    // momentanement vide, ou reduit au signe moins qu'on vient de taper, est
+    // un etat normal de la frappe et ne doit pas effacer la barre.
+    const barre = etat.barList[Number(indexBarre)];
+    if (barre) Object.assign(barre, { [champ]: valeur });
   } else {
     Object.assign(etat, { [champ]: valeur });
   }
@@ -2092,6 +2468,27 @@ document.addEventListener('click', (evenement) => {
       diameter: '20', useSpacing: false, count: '2', maxSpacing: '',
       excludeEndpoints: false,
     });
+    rendreFormulaire();
+    recalculer();
+  } else if (action === 'ouvrir-disposition') {
+    ouvrirDisposition();
+  } else if (action === 'fermer-disposition') {
+    // Les barres restent : la conversion etait sans retour, et fermer le
+    // panneau ne rend pas les lits par face. Seul l'outillage se retire.
+    panneauDisposition = false;
+    rendreFormulaire();
+    recalculer();
+  } else if (action === 'ajouter-peau') {
+    ajouterArmaturesDePeau();
+  } else if (action === 'ajouter-barre') {
+    // La nouvelle barre nait au centroide, avec le diametre du generateur de
+    // peau : deux valeurs visibles et manifestement a corriger, plutot qu'une
+    // position plausible qu'on oublierait de revoir.
+    etat.barList.push({ y: '0', z: '0', diameter: etat.peauDiameter || '12' });
+    rendreFormulaire();
+    recalculer();
+  } else if (action === 'supprimer-barre') {
+    etat.barList.splice(Number(cible.dataset.barre), 1);
     rendreFormulaire();
     recalculer();
   } else if (action === 'choisir-nombre') {

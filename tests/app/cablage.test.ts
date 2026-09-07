@@ -1049,6 +1049,212 @@ describe('nombres de barres proposes', () => {
   });
 });
 
+/**
+ * Le panneau qui permet de poser les armatures ou l'on veut, et de voir ce
+ * que le deplacement change au moment resistant.
+ */
+describe('optimisation de la disposition', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function cliquer(dom: JSDOM, action: string): void {
+    const bouton = dom.window.document.querySelector(`[data-action="${action}"]`);
+    if (bouton === null) throw new Error(`bouton "${action}" absent de la page`);
+    (bouton as HTMLElement).click();
+    vi.advanceTimersByTime(500);
+  }
+
+  function barres(dom: JSDOM): Array<{ y: string; z: string; diameter: string }> {
+    const lignes = [...dom.window.document.querySelectorAll('.barres tbody tr')];
+    return lignes
+      .map((tr) => {
+        const valeur = (champ: string) =>
+          (tr.querySelector(`input[data-champ="${champ}"]`) as HTMLInputElement | null)?.value;
+        return { y: valeur('y'), z: valeur('z'), diameter: valeur('diameter') };
+      })
+      .filter((b): b is { y: string; z: string; diameter: string } => b.y !== undefined);
+  }
+
+  async function panneauOuvert(): Promise<JSDOM> {
+    const dom = await monterApplication();
+    cliquer(dom, 'ouvrir-disposition');
+    return dom;
+  }
+
+  /**
+   * LA CONVERSION. Le modele de depart est un poteau 400 × 400 ferraille par
+   * lits, « 3 HA20 en bas, 3 HA20 en haut ». Ouvrir le panneau materialise
+   * ces six barres en coordonnees.
+   */
+  it('materialise les lits en barres explicites', async () => {
+    const dom = await panneauOuvert();
+    const posees = barres(dom);
+
+    expect(posees).toHaveLength(6);
+    expect(posees.every((b) => b.diameter === '20')).toBe(true);
+
+    // Enrobage 30 + etrier 8 + Ø/2 = 48, sur une section de 400 : z = ±152.
+    expect(posees.filter((b) => b.z === '152')).toHaveLength(3);
+    expect(posees.filter((b) => b.z === '-152')).toHaveLength(3);
+  });
+
+  it('le mode de saisie devient « barres libres », et les lits ont disparu', async () => {
+    const dom = await panneauOuvert();
+
+    expect(liste(dom, 'reinforcementKind').value).toBe('bars');
+    expect(dom.window.document.querySelector('select[data-lit="0"]')).toBeNull();
+  });
+
+  /** Le verdict de flexion ne doit pas bouger : c'est le meme ferraillage. */
+  it('la conversion ne change pas le moment resistant', async () => {
+    const dom = await monterApplication();
+    const avant = resultat(dom);
+    cliquer(dom, 'ouvrir-disposition');
+
+    const momentDe = (texte: string) => /Moment resistant\s*([\d ,.]+)/.exec(texte)?.[1]?.trim();
+    expect(momentDe(resultat(dom))).toBe(momentDe(avant));
+  });
+
+  it('deplacer une barre change le moment resistant', async () => {
+    const dom = await panneauOuvert();
+    const avant = resultat(dom);
+
+    // On remonte une barre tendue vers le centre : le bras de levier diminue.
+    const z = dom.window.document.querySelector(
+      'input[data-barre="0"][data-champ="z"]'
+    ) as HTMLInputElement;
+    z.value = '0';
+    z.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(500);
+
+    expect(resultat(dom)).not.toBe(avant);
+  });
+
+  it('ajouter et supprimer une barre suit', async () => {
+    const dom = await panneauOuvert();
+    expect(barres(dom)).toHaveLength(6);
+
+    cliquer(dom, 'ajouter-barre');
+    expect(barres(dom)).toHaveLength(7);
+
+    const supprimer = dom.window.document.querySelector(
+      '[data-action="supprimer-barre"][data-barre="6"]'
+    ) as HTMLElement;
+    supprimer.click();
+    vi.advanceTimersByTime(500);
+    expect(barres(dom)).toHaveLength(6);
+  });
+
+  it('le generateur pose les armatures de peau par paires symetriques', async () => {
+    const dom = await panneauOuvert();
+
+    saisir(dom, 'peauCount', '2');
+    saisir(dom, 'peauDiameter', '12');
+    saisir(dom, 'peauZFrom', '-80');
+    saisir(dom, 'peauZTo', '80');
+    vi.advanceTimersByTime(500);
+
+    cliquer(dom, 'ajouter-peau');
+
+    const posees = barres(dom);
+    expect(posees).toHaveLength(10); // 6 + 2 par face
+    const peau = posees.filter((b) => b.diameter === '12');
+    expect(peau).toHaveLength(4);
+    // Enrobage 30 + etrier 8 + 12/2 = 44, sur 400 : y = ±156.
+    expect(peau.filter((b) => b.y === '-156')).toHaveLength(2);
+    expect(peau.filter((b) => b.y === '156')).toHaveLength(2);
+  });
+
+  /**
+   * LE GESTE QUI A MOTIVE LE PANNEAU : poser des armatures de peau et voir
+   * si le moment resistant bouge. L acier augmente franchement, le moment a
+   * peine — c est exactement ce qu on cherche a montrer.
+   */
+  it('l ecart a la reference se lit sur M_Rd et sur A_s', async () => {
+    const dom = await panneauOuvert();
+
+    saisir(dom, 'peauCount', '2');
+    saisir(dom, 'peauDiameter', '12');
+    saisir(dom, 'peauZFrom', '-80');
+    saisir(dom, 'peauZTo', '80');
+    vi.advanceTimersByTime(500);
+    cliquer(dom, 'ajouter-peau');
+
+    const panneau = dom.window.document.querySelector('.disposition')?.textContent ?? '';
+    expect(panneau).toMatch(/Reference M_Rd/);
+    expect(panneau).toMatch(/Actuel M_Rd/);
+    // 4 HA12 = 452 mm² de plus, et le signe doit etre affiche.
+    expect(panneau).toMatch(/Actuel A_s.*\+45[0-9]/);
+    expect(panneau).toMatch(/10 barres/);
+  });
+
+  it('une barre hors du contour est SIGNALEE, sans bloquer le calcul', async () => {
+    const dom = await panneauOuvert();
+
+    const z = dom.window.document.querySelector(
+      'input[data-barre="0"][data-champ="z"]'
+    ) as HTMLInputElement;
+    z.value = '5000';
+    z.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(500);
+
+    const defauts = dom.window.document.querySelector('.defauts')?.textContent ?? '';
+    expect(defauts).toMatch(/hors du contour/);
+    // Le resultat de flexion reste affiche : on doit voir a la fois le
+    // probleme et l etat de la section.
+    expect(resultat(dom)).toMatch(/taux/i);
+  });
+
+  it('deux barres au meme endroit sont signalees comme chevauchantes', async () => {
+    const dom = await panneauOuvert();
+
+    const y = dom.window.document.querySelector(
+      'input[data-barre="0"][data-champ="y"]'
+    ) as HTMLInputElement;
+    const cible = dom.window.document.querySelector(
+      'input[data-barre="1"][data-champ="y"]'
+    ) as HTMLInputElement;
+    y.value = cible.value;
+    y.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(500);
+
+    expect(dom.window.document.querySelector('.defauts')?.textContent).toMatch(/chevauchement/i);
+  });
+
+  it('fermer le panneau garde les barres : la conversion etait sans retour', async () => {
+    const dom = await panneauOuvert();
+    expect(barres(dom)).toHaveLength(6);
+
+    cliquer(dom, 'fermer-disposition');
+
+    expect(dom.window.document.querySelector('.disposition')).toBeNull();
+    expect(liste(dom, 'reinforcementKind').value).toBe('bars');
+    expect(barres(dom)).toHaveLength(6);
+  });
+
+  it('les barres survivent a un enregistrement et a un rechargement', async () => {
+    const premier = await panneauOuvert();
+    const z = premier.window.document.querySelector(
+      'input[data-barre="0"][data-champ="z"]'
+    ) as HTMLInputElement;
+    z.value = '100';
+    z.dispatchEvent(new premier.window.Event('input', { bubbles: true }));
+    vi.advanceTimersByTime(500);
+
+    const second = await monterApplication(stockageDe(premier));
+
+    expect(liste(second, 'reinforcementKind').value).toBe('bars');
+    const rechargees = barres(second);
+    expect(rechargees).toHaveLength(6);
+    expect(rechargees.some((b) => b.z === '100')).toBe(true);
+  });
+});
+
 describe('les sorties : dessins, resultats, note de calcul', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());

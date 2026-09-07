@@ -19,6 +19,13 @@ export { integrateRectangle } from './integration/fiber-rectangle';
 export type { UniaxialResult } from './solvers/uls-uniaxial';
 export { verifyUniaxial } from './solvers/uls-uniaxial';
 
+// --- Placement libre des armatures : poser, deplacer, verifier ---
+export type { BarPlacement, PlacementIssue, PlacementIssueKind } from './geometry/bar-placement';
+// `barDiameterOf` n'est PAS reexporte ici : `bar-placement` le reexporte
+// lui-meme depuis `service/effective-area`, ou il vit, et le sortir deux fois
+// de l'entree publique donnerait deux noms pour une seule fonction.
+export { barArea, isInsideOutline, checkBarPlacement, skinBars } from './geometry/bar-placement';
+
 export type { PolygonGeometry, Vertex } from './geometry/polygon';
 export { polygonSection, polygonArea, polygonCentroid } from './geometry/polygon';
 export { rectangleToPolygon } from './geometry/rectangle';
