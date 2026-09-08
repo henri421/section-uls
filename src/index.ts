@@ -33,7 +33,7 @@ export { circularSection, circularRebarCage } from './geometry/circle';
 
 export type { BarSpec, BarCount, BarSpacing, RowSummary, RebarRow, RowFace, RowOption } from './geometry/rebar-layout';
 export {
-  rebarRow, rectangularRebarLayout, formatRow, spacingOptions, faceSegment,
+  rebarRow, rectangularRebarLayout, formatRow, spacingOptions, faceSegment, barsAtPitch,
 } from './geometry/rebar-layout';
 
 export type { Resultant, BiaxialResultant } from './integration/fiber-polygon-biaxial';

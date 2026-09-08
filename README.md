@@ -83,13 +83,21 @@ Deux gardes, **géométriques** : une barre hors du contour (testée par les int
 
 **Aucun optimiseur automatique** : l'outil recalcule et compare, il ne propose aucun ferraillage. C'est la règle que le code tient partout ailleurs. Le déplacement à la souris sur le dessin n'est pas non plus implémenté — c'est le tableau qui est le mode de référence, parce qu'il est reproductible.
 
-### Le nombre de barres se propose, il ne s'impose plus
+### Le pas se compte sur la largeur, pas sur la longueur de pose
 
-« Ø14 tous les 150 » sur une largeur de 1000 pose **8 barres à 130 mm**. Le calcul est juste : l'espacement se mesure entre les **axes des barres extrêmes**, donc sur `b − 2a` = 910 mm et non sur 1000, et 8 est le plus petit nombre qui respecte le maximum. L'écart avec la lecture spontanée `1000/150 ≈ 6,7`, c'est l'**enrobage** — et il était invisible.
+« Ø14 tous les 150 » sur une largeur de 1000 fait `1000/150 = 6,67` barres : **6 ou 7, jamais 8**.
 
-Un lit saisi en espacement affiche désormais les nombres voisins avec leur espacement **réel** : 6 à 182 mm, 7 à 152 mm, 8 à 130 mm. Le nombre conforme reste marqué et reste celui qui est posé ; rien ne devient silencieusement moins sûr. Cliquer bascule le lit en saisie **par nombre** — l'espacement cesse d'être une consigne pour devenir une conséquence.
+L'application en posait 8. Elle comptait les intervalles sur la longueur de **pose** — `b − 2a` = 910 mm, entre les axes des barres extrêmes — puis ajoutait une barre pour les deux extrémités. Dès que `2a < s`, le cas courant (90 contre 150), cette formule dépasse le plafond d'une unité.
 
-Sur une dalle au mètre, un nombre non entier se moyenne sans dommage. Sur une **poutre**, il n'existe pas de demi-barre, et un dépassement de deux millimètres se refuse ou s'assume : c'est l'ingénieur qui tranche, pas l'outil.
+**Ce n'était pas un défaut de lisibilité mais une erreur de modèle.** Sur une bande de dalle d'un mètre, 8 barres au lieu de 6,67 mettent **20 % d'acier de trop** dans la section, et **surestiment donc le moment résistant** : l'erreur est du mauvais côté. La bande d'un mètre n'est pas une pièce bornée par deux enrobages, c'est une découpe arbitraire d'une nappe continue — il n'y a pas de barre extrême à 45 mm d'un bord qui n'existe pas.
+
+Le nombre se compte désormais sur l'**étendue de la face** : `barsAtPitch(extent, pitch)` rend le nombre le plus proche de `extent/pitch`, plafonné à `ceil(extent/pitch)`. Les barres restent posées entre les axes extrêmes ; seul leur **nombre** change.
+
+**Conséquence assumée :** l'espacement réel qui en résulte peut dépasser le pas demandé de quelques millimètres — `910/6 = 151,7` pour « 150 ». C'est un arbitrage d'ingénieur, il s'affiche, et le nombre voisin reste à un clic. Le lit saisi en espacement propose le plancher et le plafond avec leur espacement réel — 6 à 182 mm, 7 à 152 mm — et le nombre posé est marqué. Cliquer bascule le lit en saisie **par nombre**.
+
+Un **lit latéral** compte son pas sur la hauteur, et retranche **deux** barres : ses extrémités sont les barres d'angle, déjà posées par les lits inférieur et supérieur. En retrancher une seule ferait franchir le plafond à la face entière.
+
+Un **lit libre**, tracé d'axe à axe entre deux points, garde la lecture d'origine : son segment est déjà la fenêtre, ses deux extrémités sont des barres réelles, et « tous les 150 » y reste un maximum entre axes. Aucune ambiguïté à lever, donc aucune proposition n'y est offerte.
 
 ### Les vérifications de service dans la page
 

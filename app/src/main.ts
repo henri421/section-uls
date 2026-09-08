@@ -247,13 +247,15 @@ function champChoix(
 function boutonsDeNombre(options: RowOption[], attribut: string, index: number): string {
   return options
     .map((o) => {
-      const classes = ['option-barres', o.ok ? 'conforme' : 'depasse', o.strict ? 'strict' : '']
-        .filter((c) => c !== '')
-        .join(' ');
+      // Plus de couleur d'alerte sur un espacement superieur au pas : depuis
+      // que le nombre se compte sur l'etendue de la face, un ecart de
+      // quelques millimetres (910/6 = 151,7 pour « 150 ») est le cas NORMAL,
+      // et le peindre en alerte crierait au loup a chaque saisie.
+      const classes = `option-barres${o.strict ? ' strict' : ''}`;
       return (
         `<button type="button" class="${classes}" data-action="choisir-nombre"` +
         ` data-${attribut}="${index}" data-count="${o.count}">` +
-        `${o.count} barres — ${formatNumber(o.spacing, 0)} mm${o.ok ? '' : ' ⚠'}</button>`
+        `${o.count} barres — ${formatNumber(o.spacing, 0)} mm</button>`
       );
     })
     .join('');
@@ -298,11 +300,9 @@ function rafraichirOptionsDeLits(): void {
     const index = Number(brut);
 
     const options =
-      attribut === 'lit'
-        ? (etat.rows[index] !== undefined ? optionsDuLitRectangulaire(etat.rows[index]) : null)
-        : etat.freeRows[index] !== undefined
-          ? optionsDuLitLibre(etat.freeRows[index])
-          : null;
+      attribut === 'lit' && etat.rows[index] !== undefined
+        ? optionsDuLitRectangulaire(etat.rows[index])
+        : null;
 
     contenant.innerHTML = options === null ? '' : boutonsDeNombre(options, attribut, index);
   });
@@ -359,6 +359,7 @@ function optionsDuLitRectangulaire(lit: RowInput): RowOption[] | null {
     });
 
     return spacingOptions({
+      extent: segment.extent,
       length: segment.length,
       maxSpacing: espacement,
       endpoints: segment.endpoints,
@@ -368,28 +369,15 @@ function optionsDuLitRectangulaire(lit: RowInput): RowOption[] | null {
   }
 }
 
-/** Les nombres candidats d'un lit libre, dont le segment est saisi en clair. */
-function optionsDuLitLibre(lit: FreeRowInput): RowOption[] | null {
-  if (!lit.useSpacing) return null;
+/*
+  PAS DE PROPOSITION SUR UN LIT LIBRE, et c'est un choix.
 
-  const cotes = [lit.fromY, lit.fromZ, lit.toY, lit.toZ].map(nombreDeChamp);
-  const espacement = nombreDeChamp(lit.maxSpacing);
-  if (cotes.some((c) => c === null) || espacement === null) return null;
-
-  const [fromY, fromZ, toY, toZ] = cotes as number[];
-  const longueur = Math.hypot(toY - fromY, toZ - fromZ);
-  if (!(longueur > 0)) return null;
-
-  try {
-    return spacingOptions({
-      length: longueur,
-      maxSpacing: espacement,
-      endpoints: lit.excludeEndpoints ? 'exclude' : 'include',
-    });
-  } catch {
-    return null;
-  }
-}
+  La regle du pas — « Ø14 tous les 150 sur 1000 de large fait 6,67 barres » —
+  se compte sur l'ETENDUE D'UNE FACE. Un lit libre, lui, est trace d'AXE A
+  AXE : ses deux extremites sont des barres reelles, le segment est deja la
+  fenetre, et « tous les 150 » y garde sa lecture de maximum entre axes.
+  Aucune ambiguite a lever, donc rien a proposer.
+*/
 
 /** Un champ evalue, ou `null` s'il n'est pas encore exploitable. */
 function nombreDeChamp(valeur: string): number | null {
@@ -447,7 +435,6 @@ function litLibre(lit: FreeRowInput, index: number, recapitulatif?: string): str
         : `<label><span>Nombre de barres</span><input type="text" inputmode="numeric" data-libre="${index}" data-champ="count" value="${echapper(lit.count)}" /></label>`
     }
     <label class="case"><input type="checkbox" data-libre="${index}" data-champ="excludeEndpoints"${lit.excludeEndpoints ? ' checked' : ''} /><span>Exclure les extremites (barres intermediaires seules)</span></label>
-    ${lit.useSpacing ? contenantDesOptions('libre', index) : ''}
     <p class="aire-lit" data-recap="${index}">${echapper(recapitulatif ?? '')}</p>
     <button type="button" data-action="supprimer-libre" data-libre="${index}">Supprimer ce lit</button>
   </fieldset>`;

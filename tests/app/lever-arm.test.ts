@@ -64,12 +64,23 @@ describe('bras de levier simplifie', () => {
     // Entre les deux regles de pouce usuelles : 0,9d = 227,7 et 0,8h = 240.
     expect(z).toBeGreaterThan(0.9 * 253);
     expect(z).toBeLessThan(0.8 * 300);
-    expect(z).toBeCloseTo(235.5, 1);
+    // 236,4 et non plus 235,5 depuis que « HA14/150 » pose 7 barres par
+    // nappe et non 8 : 1000/150 = 6,67, donc 7 au plus. La nappe est passee
+    // de 1231 a 1078 mm²/m — l'ancienne valeur mettait 14 % d'acier de trop
+    // dans la section. Moins d'acier, axe neutre plus haut, bras de levier
+    // legerement plus long : le sens de l'ecart est celui qu'on attend.
+    expect(z).toBeCloseTo(236.4, 1);
 
     // Et bien SUPERIEUR a la distance entre resultantes, qui est raccourcie
-    // par la nappe superieure faiblement tendue.
+    // par la nappe superieure faiblement tendue. C'est la PROPRIETE qui
+    // compte ici — les deux bras de levier ne mesurent pas la meme chose.
     expect(z).toBeGreaterThan(v.leverArm!);
-    expect(v.leverArm!).toBeCloseTo(212.3, 1);
+    // 199,1 et non plus 212,3, pour la meme raison que ci-dessus : sept
+    // barres par nappe et non huit. La distance entre resultantes bouge plus
+    // que le bras des abaques parce qu'elle depend, elle, de la part relative
+    // de la nappe superieure dans la traction totale — que le deplacement de
+    // l'axe neutre modifie directement.
+    expect(v.leverArm!).toBeCloseTo(199.1, 1);
   });
 
   it('rend null sans armature tendue, plutot qu un nombre depourvu de sens', () => {

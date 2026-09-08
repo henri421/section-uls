@@ -218,7 +218,57 @@ describe('rectangularRebarLayout', () => {
     expect(layout.rows[0].count).toBe(3);
     expect(layout.rows[0].diameter).toBe(20);
     expect(layout.rows[1].diameter).toBe(12);
-    expect(layout.rows[1].spacing).toBeLessThanOrEqual(150);
+
+    // REGLE DU PAS, comptee sur l'ETENDUE de la face : 400/150 = 2,67, donc
+    // 3 barres et jamais 4. L'espacement REEL qui en resulte, mesure entre
+    // les axes extremes sur 400 − 2·36 = 328, vaut 164 mm — au-dela du pas
+    // demande, et c'est la consequence assumee de la regle.
+    expect(layout.rows[1].count).toBe(3);
+    expect(layout.rows[1].spacing).toBeCloseTo(328 / 2, 6);
+  });
+
+  /**
+   * LE CAS QUI A FAIT CHANGER LA REGLE. « Ø14 tous les 150 » sur une bande
+   * de dalle d'un metre : 1000/150 = 6,67, donc 7 barres au plus.
+   *
+   * L'ancienne formule comptait `ceil((b − 2a)/s)` intervalles puis ajoutait
+   * une barre pour les extremites, et rendait 8 — soit 20 % d'acier de trop
+   * dans une section dont le moment resistant s'en trouvait surestime.
+   */
+  it('« Ø14 tous les 150 » sur 1000 de large donne 7 barres, jamais 8', () => {
+    const layout = rectangularRebarLayout({
+      width: 1000,
+      height: 250,
+      cover: 30,
+      stirrupDiameter: 8,
+      steel,
+      rows: [{ face: 'bottom', bars: { diameter: 14, maxSpacing: 150 } }],
+    });
+
+    expect(layout.rows[0].count).toBe(7);
+    expect(layout.bars).toHaveLength(7);
+
+    // Plafond de la regle : jamais plus que ceil(1000/150).
+    expect(layout.rows[0].count).toBeLessThanOrEqual(Math.ceil(1000 / 150));
+
+    // Longueur de pose 1000 − 2·45 = 910, sur 6 intervalles : 151,7 mm.
+    expect(layout.rows[0].spacing).toBeCloseTo(910 / 6, 6);
+  });
+
+  it('un lit lateral compte son pas sur la HAUTEUR, extremites retranchees', () => {
+    const layout = rectangularRebarLayout({
+      width: 400,
+      height: 1000,
+      cover: 30,
+      stirrupDiameter: 8,
+      steel,
+      rows: [{ face: 'left', bars: { diameter: 12, maxSpacing: 200 } }],
+    });
+
+    // 1000/200 = 5 barres au pas sur la face, dont DEUX sont les barres
+    // d'angle deja posees par les lits inferieur et superieur : ce lit n'en
+    // pose que 3. La face en porte bien 5 au total, le plafond de la regle.
+    expect(layout.rows[0].count).toBe(3);
   });
 
   it('stirrupDiameter est optionnel et vaut 0 par defaut', () => {

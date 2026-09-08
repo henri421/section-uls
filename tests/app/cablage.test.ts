@@ -993,26 +993,32 @@ describe('nombres de barres proposes', () => {
     return dom;
   }
 
-  it('propose les nombres voisins avec leur espacement reel', async () => {
+  it('propose le plancher et le plafond, avec leur espacement reel', async () => {
     const dom = await litEnEspacement();
     const proposes = options(dom);
 
     expect(proposes.some((t) => /6 barres.*182/.test(t))).toBe(true);
     expect(proposes.some((t) => /7 barres.*152/.test(t))).toBe(true);
-    expect(proposes.some((t) => /8 barres.*130/.test(t))).toBe(true);
+    // 1000/150 = 6,67 : le 8 d'autrefois est le nombre meme que la regle
+    // ecarte, et il ne doit plus etre proposable.
+    expect(proposes.some((t) => /8 barres/.test(t))).toBe(false);
   });
 
-  it('marque celui qui est reellement pose, et signale ceux qui depassent', async () => {
+  it('marque celui qui est reellement pose', async () => {
     const dom = await litEnEspacement();
     const stricts = [...dom.window.document.querySelectorAll('.option-barres.strict')];
-    expect(stricts).toHaveLength(1);
-    expect(stricts[0].textContent).toMatch(/8 barres/);
 
-    const depassent = [...dom.window.document.querySelectorAll('.option-barres.depasse')].map(
-      (b) => b.textContent ?? ''
-    );
-    expect(depassent.some((t) => /6 barres/.test(t))).toBe(true);
-    expect(depassent.some((t) => /7 barres/.test(t))).toBe(true);
+    expect(stricts).toHaveLength(1);
+    expect(stricts[0].textContent).toMatch(/7 barres/);
+  });
+
+  /**
+   * Le nombre pose ne doit jamais depasser `ceil(b / s)` : c'est la regle,
+   * et c'est ce qui evitait 20 % d'acier de trop sur une bande de dalle.
+   */
+  it('la section calculee porte bien 7 barres, pas 8', async () => {
+    const dom = await litEnEspacement();
+    expect(dom.window.document.querySelector('#saisie')?.textContent).toMatch(/7 HA14/);
   });
 
   /**

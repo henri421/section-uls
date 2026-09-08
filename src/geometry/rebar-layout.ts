@@ -35,6 +35,61 @@ function barArea(diameter: number): number {
 }
 
 /**
+ * NOMBRE DE BARRES A UN PAS DONNE, SUR UNE ETENDUE DONNEE.
+ *
+ * C'est la regle « Ø14 tous les 150 sur 1000 de large » : `1000/150 = 6,67`,
+ * donc 6 ou 7 barres, et JAMAIS 8. Le nombre retenu est le plus proche —
+ * c'est celui qui represente le mieux la quantite d'acier reelle — et le
+ * plafond est `ceil(E/s)`, qu'aucune lecture ne depasse.
+ *
+ * POURQUOI CE N'EST PAS `ceil(L/s) + 1`, la formule qui servait ici. Celle-ci
+ * compte les INTERVALLES sur la longueur de POSE `L = b − 2a`, puis ajoute
+ * une barre pour les deux extremites. Des que `2a < s` — le cas courant, 90
+ * contre 150 — elle depasse le plafond d'une unite : 8 barres au lieu de 7.
+ *
+ * L'enjeu n'est pas la lisibilite mais la JUSTESSE DU MODELE. Sur une bande
+ * de dalle d'un metre, 8 barres au lieu de 6,67 mettent 20 % d'acier de trop
+ * dans la section, et surestiment donc le moment resistant : l'erreur est du
+ * mauvais cote. La bande d'un metre n'est pas une piece bornee par deux
+ * enrobages, c'est une decoupe arbitraire d'une nappe continue — il n'y a pas
+ * de barre extreme a 45 mm d'un bord qui n'existe pas.
+ *
+ * L'etendue `extent` est donc la dimension de la FACE, pas la longueur de
+ * pose : les barres restent posees entre les axes extremes, mais leur NOMBRE
+ * se compte sur la largeur. Consequence assumee : l'espacement reel qui en
+ * resulte peut depasser `s` de quelques millimetres (910/6 = 151,7 pour
+ * « 150 »). C'est un arbitrage d'ingenieur, il s'affiche, et le nombre
+ * voisin reste a un clic.
+ *
+ * En mode `exclude` — les lits lateraux, dont les extremites sont les barres
+ * d'angle deja posees — les deux barres d'extremite sont retranchees.
+ */
+export function barsAtPitch(
+  extent: number,
+  pitch: number,
+  endpoints: 'include' | 'exclude' = 'include'
+): number {
+  if (!(pitch > 0)) {
+    throw new Error(`barsAtPitch : pas invalide (${pitch})`);
+  }
+  if (!(extent > 0)) return endpoints === 'include' ? 1 : 0;
+
+  const plafond = Math.ceil(extent / pitch);
+  const proche = Math.min(Math.round(extent / pitch), plafond);
+
+  // Une face porte au moins une barre : `round` tomberait a zero des que le
+  // pas depasse le double de l'etendue, et un lit demande ne doit pas
+  // disparaitre en silence.
+  if (endpoints === 'include') return Math.max(proche, 1);
+
+  // Mode `exclude` : la face porte toujours `proche` barres au total, mais
+  // DEUX d'entre elles sont les barres d'angle, deja posees par les lits
+  // inferieur et superieur. Ce lit-ci n'en pose que les intermediaires.
+  // Retrancher une seule ferait franchir le plafond a la face entiere.
+  return Math.max(proche - 2, 0);
+}
+
+/**
  * Un lit d'armatures le long d'un segment quelconque du plan.
  *
  * Chaque barre devient un `RebarLayer` distinct : c'est une condition de
@@ -54,6 +109,13 @@ export function rebarRow(params: {
   bars: BarSpec;
   steel: SteelMaterial;
   endpoints?: 'include' | 'exclude';
+  /**
+   * ETENDUE sur laquelle le pas est compte (mm), quand elle differe du
+   * segment de pose. Voir `barsAtPitch` : c'est la largeur de la FACE pour
+   * un lit de section rectangulaire, alors que le segment ne va que d'axe a
+   * axe. Absente, le pas est compte sur le segment lui-meme.
+   */
+  pitchExtent?: number;
 }): RebarRow {
   const { from, to, steel } = params;
   const endpoints = params.endpoints ?? 'include';
@@ -77,6 +139,9 @@ export function rebarRow(params: {
     if (length === 0) {
       intervals = 0;
       count = endpoints === 'include' ? 1 : 0;
+    } else if (params.pitchExtent !== undefined) {
+      count = barsAtPitch(params.pitchExtent, maxSpacing, endpoints);
+      intervals = endpoints === 'include' ? Math.max(count - 1, 0) : count + 1;
     } else {
       intervals = Math.ceil(length / maxSpacing);
       count = endpoints === 'include' ? intervals + 1 : intervals - 1;
@@ -150,20 +215,19 @@ export interface RowOption {
  * `below` et `above` bornent l'enumeration autour du nombre strict.
  */
 export function spacingOptions(params: {
-  /** Longueur du segment portant le lit (mm). */
+  /**
+   * ETENDUE sur laquelle le pas est compte (mm) : la largeur de la face.
+   * C'est elle qui borne le nombre de barres a `ceil(extent / maxSpacing)`.
+   */
+  extent: number;
+  /** Longueur de POSE, entre les axes des barres extremes (mm). */
   length: number;
-  /** Espacement maximal demande (mm). */
+  /** Pas demande (mm). */
   maxSpacing: number;
   endpoints?: 'include' | 'exclude';
-  /** Nombres a enumerer sous le strict. Defaut 2. */
-  below?: number;
-  /** Nombres a enumerer au-dessus du strict. Defaut 1. */
-  above?: number;
 }): RowOption[] {
-  const { length, maxSpacing } = params;
+  const { extent, length, maxSpacing } = params;
   const endpoints = params.endpoints ?? 'include';
-  const below = params.below ?? 2;
-  const above = params.above ?? 1;
 
   if (!(maxSpacing > 0)) {
     throw new Error(`spacingOptions : maxSpacing doit etre strictement positif (${maxSpacing})`);
@@ -171,33 +235,43 @@ export function spacingOptions(params: {
   if (!(length > 0)) {
     throw new Error(`spacingOptions : longueur nulle ou negative (${length}), aucun lit a proposer`);
   }
-
-  // Meme arithmetique que `rebarRow`, et c'est une condition de coherence :
-  // le nombre marque `strict` doit etre celui que `rebarRow` poserait.
-  const intervallesStricts = Math.ceil(length / maxSpacing);
-  const nombreDeBarres = (intervalles: number): number =>
-    endpoints === 'include' ? intervalles + 1 : intervalles - 1;
-
-  const countStrict = nombreDeBarres(intervallesStricts);
-  const minimum = endpoints === 'include' ? 2 : 1;
-
-  const options: RowOption[] = [];
-
-  for (let count = countStrict - below; count <= countStrict + above; count++) {
-    if (count < minimum) continue;
-    const intervalles = endpoints === 'include' ? count - 1 : count + 1;
-    const spacing = length / intervalles;
-    options.push({
-      count,
-      spacing,
-      // Tolerance relative : un espacement calcule a 150,0000000001 mm par
-      // l'arithmetique flottante respecte « tous les 150 ».
-      ok: spacing <= maxSpacing * (1 + 1e-9),
-      strict: count === countStrict,
-    });
+  if (!(extent > 0)) {
+    throw new Error(`spacingOptions : etendue nulle ou negative (${extent})`);
   }
 
-  return options;
+  // Le PLAFOND et le PLANCHER de la regle du pas : sur 1000 de large a 150,
+  // on pose 6 ou 7 barres, jamais 8. Enumerer au-dela proposerait le nombre
+  // meme que la regle vient d'ecarter.
+  const plancher = Math.floor(extent / maxSpacing);
+  const plafond = Math.ceil(extent / maxSpacing);
+
+  // Le nombre pose par `rebarRow` : c'est une condition de coherence, l'app
+  // proposerait sinon un ferraillage different de celui qu'elle dessine.
+  const countStrict = barsAtPitch(extent, maxSpacing, endpoints);
+
+  const candidats = new Set<number>();
+  for (const nombre of [plancher, plafond]) {
+    candidats.add(endpoints === 'include' ? nombre : nombre - 1);
+  }
+  candidats.add(countStrict);
+
+  const minimum = endpoints === 'include' ? 1 : 0;
+
+  return [...candidats]
+    .filter((count) => count >= minimum)
+    .sort((a, b) => a - b)
+    .map((count) => {
+      const intervalles = endpoints === 'include' ? count - 1 : count + 1;
+      const spacing = intervalles > 0 ? length / intervalles : 0;
+      return {
+        count,
+        spacing,
+        // Tolerance relative : un espacement calcule a 150,0000000001 mm par
+        // l'arithmetique flottante respecte « tous les 150 ».
+        ok: spacing <= maxSpacing * (1 + 1e-9),
+        strict: count === countStrict,
+      };
+    });
 }
 
 export type RowFace = 'top' | 'bottom' | 'left' | 'right';
@@ -221,7 +295,22 @@ export function faceSegment(params: {
   /** Diametre du lit concerne : la distance d'axe en depend. */
   diameter: number;
   face: RowFace;
-}): { from: Vertex; to: Vertex; length: number; endpoints: 'include' | 'exclude' } {
+}): {
+  from: Vertex;
+  to: Vertex;
+  /** Longueur de POSE, entre les axes des barres extremes (mm). */
+  length: number;
+  /**
+   * ETENDUE de la face (mm) : la largeur pour un lit haut ou bas, la hauteur
+   * pour un lit lateral.
+   *
+   * C'est sur elle, et non sur `length`, que se compte un nombre de barres a
+   * un pas donne — voir `barsAtPitch`. Les deux different de `2a`, et la
+   * confusion coutait une barre de trop.
+   */
+  extent: number;
+  endpoints: 'include' | 'exclude';
+} {
   const { width: b, height: h, cover, diameter, face } = params;
   const a = cover + (params.stirrupDiameter ?? 0) + diameter / 2;
 
@@ -259,7 +348,9 @@ export function faceSegment(params: {
       break;
   }
 
-  return { from, to, length: Math.hypot(to.y - from.y, to.z - from.z), endpoints };
+  const extent = face === 'top' || face === 'bottom' ? b : h;
+
+  return { from, to, length: Math.hypot(to.y - from.y, to.z - from.z), extent, endpoints };
 }
 
 /**
@@ -300,7 +391,7 @@ export function rectangularRebarLayout(params: {
   const summaries: RowSummary[] = [];
 
   for (const row of params.rows) {
-    const { from, to, endpoints } = faceSegment({
+    const { from, to, extent, endpoints } = faceSegment({
       width: b,
       height: h,
       cover,
@@ -309,7 +400,11 @@ export function rectangularRebarLayout(params: {
       face: row.face,
     });
 
-    const built = rebarRow({ from, to, bars: row.bars, steel, endpoints });
+    // `pitchExtent` est l'ETENDUE DE LA FACE, pas la longueur de pose : « Ø14
+    // tous les 150 » sur 1000 de large fait 6,67 barres, donc 7 au plus.
+    // Compter sur `b − 2a` puis ajouter une barre en donnait 8, soit 20 %
+    // d'acier de trop sur une bande de dalle.
+    const built = rebarRow({ from, to, bars: row.bars, steel, endpoints, pitchExtent: extent });
     bars.push(...built.bars);
     summaries.push(built.summary);
   }
