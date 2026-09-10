@@ -311,7 +311,7 @@ describe('parseModel : les blocs de la version 3', () => {
   const blocsComplets = {
     elementType: 'beam',
     shear: { V_Ed: 180, links: { Asw: 100.5, s: 200, fywk: 500 }, cotTheta: 2.0 },
-    restraint: { type: 'central', fctEff: 1.8, sigmaS: 320, effectiveZoneOnly: true },
+    restraint: { type: 'central', fctEff: 1.8, sigmaS: 320, thicknessConvention: 'de' as const },
     meyer: {
       h: 800, d1: 50, ds: 16, wk: 0.2, fctm: 2.9, kzt: 0.5,
       cas: 'traction', bridage: 'exterieur', kmode: 'parabolique',
@@ -344,7 +344,7 @@ describe('parseModel : les blocs de la version 3', () => {
       type: 'central',
       fctEff: 1.8,
       sigmaS: 320,
-      effectiveZoneOnly: true,
+      thicknessConvention: 'de' as const,
     });
     expect(lu.meyer).toEqual({
       h: 800, d1: 50, ds: 16, wk: 0.2, fctm: 2.9, kzt: 0.5,
@@ -416,6 +416,13 @@ describe('parseModel : les blocs de la version 3', () => {
     expect(() =>
       parseModel(avecAlteration((m) => { m.restraint = { type: 'central', effectiveZoneOnly: 'oui' }; }))
     ).toThrow(/restraint\.effectiveZoneOnly/);
+
+    // Le champ n'a plus d'effet mais reste TYPE : un fichier corrompu ne doit
+    // pas passer sous couvert de retrocompatibilite.
+    expect(
+      parseModel(avecAlteration((m) => { m.restraint = { type: 'central', effectiveZoneOnly: true }; }))
+        .restraint
+    ).toEqual({ type: 'central' });
 
     expect(() => parseModel(avecAlteration((m) => { m.shear = 180; }))).toThrow(/shear/);
   });
@@ -594,7 +601,7 @@ describe('serializeModel', () => {
       ...modeleValide(),
       elementType: 'beam',
       shear: { V_Ed: 180, links: { Asw: 100.5, s: 200, fywk: 500 }, cotTheta: 2.0 },
-      restraint: { type: 'central', fctEff: 1.8, sigmaS: 320, effectiveZoneOnly: true },
+      restraint: { type: 'central', fctEff: 1.8, sigmaS: 320, thicknessConvention: 'de' as const },
       meyer: {
         h: 800, d1: 50, ds: 16, wk: 0.2, fctm: 2.9, kzt: 0.5,
         cas: 'traction', bridage: 'exterieur', kmode: 'parabolique',
@@ -628,7 +635,10 @@ describe('serializeModel', () => {
     expect(serializeModel({ ...modeleValide(), shear: { V_Ed: 120 } })).not.toContain('cotTheta');
     expect(serializeModel({ ...modeleValide(), shear: { V_Ed: 120 } })).not.toContain('links');
     expect(serializeModel({ ...modeleValide(), restraint: { type: 'bending' } })).not.toContain(
-      'effectiveZoneOnly'
+      'thicknessConvention'
+    );
+    expect(serializeModel({ ...modeleValide(), restraint: { type: 'bending' } })).not.toContain(
+      '"method"'
     );
   });
 
@@ -651,7 +661,7 @@ describe('serializeModel', () => {
       ...modeleValide(),
       elementType: 'beam',
       shear: { V_Ed: 180, links: { Asw: 100.5, s: 200, fywk: 500 }, cotTheta: 2.0 },
-      restraint: { type: 'central', fctEff: 1.8, sigmaS: 320, effectiveZoneOnly: true },
+      restraint: { type: 'central', fctEff: 1.8, sigmaS: 320, thicknessConvention: 'de' as const },
       meyer: {
         h: 800, d1: 50, ds: 16, wk: 0.2, fctm: 2.9, kzt: 0.5,
         cas: 'traction', bridage: 'exterieur', kmode: 'parabolique',
@@ -662,7 +672,7 @@ describe('serializeModel', () => {
         kmode: 'parabolique', bridage: 'exterieur', cas: 'traction',
         kzt: 0.5, fctm: 2.9, wk: 0.2, ds: 16, d1: 50, h: 800,
       },
-      restraint: { effectiveZoneOnly: true, sigmaS: 320, fctEff: 1.8, type: 'central' },
+      restraint: { thicknessConvention: 'de' as const, sigmaS: 320, fctEff: 1.8, type: 'central' },
       shear: { cotTheta: 2.0, links: { fywk: 500, s: 200, Asw: 100.5 }, V_Ed: 180 },
       elementType: 'beam',
       ...modeleValide(),

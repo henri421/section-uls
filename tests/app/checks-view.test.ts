@@ -288,16 +288,58 @@ describe('bloc de l armature minimale sous deformation genee', () => {
     expect(texte(massif)).not.toBe(texte(mince));
   });
 
-  it('distingue la zone tendue entiere du texte EN 1992-1-1 et la zone efficace', () => {
-    const norme = minimumRestraintArea(voile(1000), 'central');
-    const efficace = minimumRestraintArea(voile(1000), 'central', { effectiveZoneOnly: true });
+  it('nomme l approche retenue, les deux valeurs et le referentiel', () => {
+    const bloc = texte(blocZwang({ resultat: minimumRestraintArea(voile(1000), 'central') }));
 
-    // La variante des pieces epaisses reduit reellement l acier exige : c est
-    // pourquoi elle doit etre annoncee comme un ecart au texte, pas subie.
-    expect(efficace.AsMin).toBeLessThan(norme.AsMin);
+    expect(bloc).toMatch(/approche retenue/i);
+    expect(bloc).toMatch(/approche mince/i);
+    expect(bloc).toMatch(/approche epaisse/i);
+    expect(bloc).toMatch(/borne anti-plastification/i);
+    expect(bloc).toMatch(/methode de h_c,ef/i);
+    expect(bloc).toMatch(/convention du facteur k/i);
+  });
 
-    expect(texte(blocZwang({ resultat: norme }))).toMatch(/zone tendue entiere|EN 1992-1-1/i);
-    expect(texte(blocZwang({ resultat: efficace }))).toMatch(/efficace/i);
+  /**
+   * LE FACTEUR 2 : total et nappe different, et leur confusion est la cause
+   * classique d un ecart avec une feuille de calcul. Aucun des deux ne doit
+   * s afficher sans dire lequel il est.
+   */
+  it('nomme le TOTAL et la valeur PAR NAPPE, jamais un nombre nu', () => {
+    const bloc = texte(blocZwang({ resultat: minimumRestraintArea(voile(1000), 'central') }));
+
+    expect(bloc).toMatch(/par nappe/i);
+    expect(bloc).toMatch(/sur 2 nappe/i);
+  });
+
+  it('porte l ecart au texte de l EN 1992-1-1, a l ecran et pas seulement dans le code', () => {
+    const bloc = blocZwang({ resultat: minimumRestraintArea(voile(1000), 'central') });
+
+    expect(bloc.note).toMatch(/ECART DOCUMENTE AU TEXTE/);
+    expect(bloc.note).toMatch(/NBN \/ ILNAS/);
+  });
+
+  /**
+   * LA REGLE QUI REND LE FORCAGE ACCEPTABLE : une valeur imposee est marquee.
+   * Sans cette marque, la note presenterait une valeur forcee exactement
+   * comme une valeur calculee, et ne serait verifiable par personne.
+   */
+  it('marque les valeurs IMPOSEES, et elles seules', () => {
+    const force = minimumRestraintArea(voile(1000), 'central', {
+      overrides: { hcEff: 300 },
+    });
+    const bloc = texte(blocZwang({ resultat: force }));
+
+    expect(bloc).toMatch(/300 mm — IMPOSE/);
+    // `k` n a pas ete force : il ne porte pas la marque.
+    expect(bloc).not.toMatch(/0,650 — IMPOSE/);
+  });
+
+  it('affiche l avertissement d une valeur imposee hors du domaine physique', () => {
+    const bloc = blocZwang({
+      resultat: minimumRestraintArea(voile(1000), 'central', { overrides: { hcEff: 900 } }),
+    });
+
+    expect(bloc.note).toMatch(/depasse la section/);
   });
 
   it('un motif d indisponibilite donne un bloc SANS aucune ligne', () => {

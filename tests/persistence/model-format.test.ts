@@ -54,7 +54,7 @@ describe('format de modele', () => {
       action: { N: 0, My: 250, Mz: 0 },
       elementType: 'beam',
       shear: { V_Ed: 180, links: { Asw: 100.5, s: 200, fywk: 500 }, cotTheta: 2.5 },
-      restraint: { type: 'central', fctEff: 1.8, sigmaS: 320, effectiveZoneOnly: true },
+      restraint: { type: 'central', fctEff: 1.8, sigmaS: 320, thicknessConvention: 'de' as const },
       meyer: {
         h: 900, d1: 50, ds: 16, wk: 0.2, fctm: 2.9, kzt: 0.5,
         cas: 'traction', bridage: 'exterieur', kmode: 'lineaire',

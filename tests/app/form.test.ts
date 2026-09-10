@@ -79,7 +79,15 @@ describe('conversion formulaire <-> modele', () => {
     const reconstruit = formToModel(modelToForm(SEPT_FORMES[0]));
 
     expect(reconstruit.elementType).toBe(ELEMENT_TYPE_PAR_DEFAUT);
-    expect(reconstruit.restraint).toEqual({ type: RESTRAINT_TYPE_PAR_DEFAUT });
+    // La methode et la convention se choisissent dans des LISTES : elles
+    // portent toujours une valeur, donc elles s'ecrivent toujours — meme
+    // regle que `type` et `elementType`. Ce sont des referentiels, que la
+    // note de calcul doit pouvoir reaffirmer.
+    expect(reconstruit.restraint).toEqual({
+      type: RESTRAINT_TYPE_PAR_DEFAUT,
+      thicknessConvention: 'ec2',
+      method: 'din',
+    });
     expect(reconstruit.meyer?.h).toBe(600); // la hauteur de la section, pre-remplie
     expect(reconstruit.meyer?.kzt).toBe(0.5);
     // `V_Ed` part de « 0 » A L'ECRAN depuis la session 11, pour que V_Rd,c
@@ -282,7 +290,8 @@ describe('champs de verification vers le modele', () => {
     form.restraintType = 'bending';
     form.fctEff = '1,8';
     form.sigmaSZwang = '320';
-    form.zoneEfficace = true;
+    form.thicknessConvention = 'de';
+    form.restraintMethod = 'ec2';
     form.meyerH = '800';
     form.meyerD1 = '50';
     form.meyerDs = '20';
@@ -308,7 +317,8 @@ describe('champs de verification vers le modele', () => {
       type: 'bending',
       fctEff: 1.8,
       sigmaS: 320,
-      effectiveZoneOnly: true,
+      thicknessConvention: 'de' as const,
+      method: 'ec2' as const,
     });
     expect(modele.meyer).toEqual({
       h: 800, d1: 50, ds: 20, wk: 0.2, fctm: 2.9, kzt: 0.6,
@@ -347,7 +357,11 @@ describe('champs de verification vers le modele', () => {
     const form = modelToForm(SEPT_FORMES[0]);
     // `f_ct,eff` a zero annulerait l armature exigee ; « absent » veut dire
     // « f_ctm a 28 jours », ce qui est le cas defavorable et non le cas nul.
-    expect(formToModel(form).restraint).toEqual({ type: RESTRAINT_TYPE_PAR_DEFAUT });
+    expect(formToModel(form).restraint).toEqual({
+      type: RESTRAINT_TYPE_PAR_DEFAUT,
+      thicknessConvention: 'ec2',
+      method: 'din',
+    });
   });
 
   it('un parametre de Meyer vide laisse le bloc absent', () => {
@@ -385,7 +399,7 @@ describe('rechargement des champs de verification', () => {
     ...SEPT_FORMES[0],
     elementType: 'beam',
     shear: { V_Ed: 260, links: { Asw: 100, s: 200, fywk: 500 }, cotTheta: 2 },
-    restraint: { type: 'bending', fctEff: 1.8, sigmaS: 320, effectiveZoneOnly: true },
+    restraint: { type: 'bending', fctEff: 1.8, sigmaS: 320, thicknessConvention: 'de' as const },
     meyer: {
       h: 800, d1: 50, ds: 20, wk: 0.2, fctm: 2.9, kzt: 0.6,
       cas: 'flexion', bridage: 'interieur', kmode: 'parabolique',
@@ -427,7 +441,9 @@ describe('rechargement des champs de verification', () => {
     expect(form.restraintType).toBe('bending');
     expect(form.fctEff).toBe('1.8');
     expect(form.sigmaSZwang).toBe('320');
-    expect(form.zoneEfficace).toBe(true);
+    expect(form.thicknessConvention).toBe('de');
+    // COMPLET ne porte pas `method` : le champ repart a son defaut, `din`.
+    expect(form.restraintMethod).toBe('din');
 
     expect(form.meyerH).toBe('800');
     expect(form.meyerD1).toBe('50');
@@ -455,7 +471,12 @@ describe('rechargement des champs de verification', () => {
     expect(form.restraintType).toBe(RESTRAINT_TYPE_PAR_DEFAUT);
     expect(form.fctEff).toBe('');
     expect(form.sigmaSZwang).toBe('');
-    expect(form.zoneEfficace).toBe(false);
+    expect(form.thicknessConvention).toBe('ec2');
+    expect(form.restraintMethod).toBe('din');
+    // Le FORCAGE n'entre pas dans le modele : c'est une hypothese d'examen,
+    // pas une donnee d'ouvrage, et il se re-choisit a chaque ouverture.
+    expect(form.impHcEff).toBe('');
+    expect(form.impK).toBe('');
 
     expect(form.meyerH).toBe('600'); // pre-rempli avec la hauteur de la section
     expect(form.meyerD1).toBe(MEYER_D1_PAR_DEFAUT);
@@ -487,7 +508,12 @@ describe('rechargement des champs de verification', () => {
     const reconstruit = formToModel(form);
     expect(reconstruit).toMatchObject(partiel);
     expect(reconstruit.shear?.links).toBeUndefined();
-    expect(reconstruit.restraint).toEqual({ type: 'bending', sigmaS: 280 });
+    expect(reconstruit.restraint).toEqual({
+      type: 'bending',
+      sigmaS: 280,
+      thicknessConvention: 'ec2',
+      method: 'din',
+    });
   });
 
   it('un modele sans bloc de tranchant rend le champ a sa valeur de depart', () => {

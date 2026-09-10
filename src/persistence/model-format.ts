@@ -186,8 +186,25 @@ export interface RestraintModel {
   fctEff?: number;
   /** Contrainte d'acier admise (MPa). Absente : `f_yk`. */
   sigmaS?: number;
-  /** Calcul sur la seule zone efficace (pratique allemande). Absent : `false`. */
-  effectiveZoneOnly?: boolean;
+  /**
+   * Convention nationale du facteur `k`. Absent : `ec2`.
+   *
+   * Remplace `effectiveZoneOnly`, devenu sans objet : les deux approches sont
+   * desormais calculees et la plus petite retenue. Un fichier qui portait
+   * l'ancien champ reste LISIBLE — le parseur en verifie encore le type puis
+   * le jette — mais le resultat ne depend plus de lui.
+   */
+  thicknessConvention?: 'ec2' | 'de';
+  /**
+   * Famille de formules de `h_c,ef`. Absent : `din`.
+   *
+   * S'ENREGISTRE, contrairement au forcage des valeurs intermediaires : la
+   * methode decrit le REFERENTIEL retenu, que la note de calcul doit pouvoir
+   * reaffirmer six mois plus tard. Un forcage, lui, est une hypothese
+   * d'examen — la regle de frontiere du format s'y applique dans son sens
+   * habituel, et il se re-choisit.
+   */
+  method?: 'ec2' | 'din';
 }
 
 /**

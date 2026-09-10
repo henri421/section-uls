@@ -233,33 +233,84 @@ export function blocZwang(entree: Issue<RestraintResult>): BlocService {
 
   const r = entree.resultat;
 
+  const parNappe = r.nappes === 2 ? ' par nappe' : '';
+  const aire = (mm2: number): string => `${formatNumber(mm2 / 100, 2)} cm²/m${parNappe}`;
+
+  // Le suffixe « IMPOSE » n est pas decoratif : c est ce qui distingue une
+  // valeur que la chaine a calculee d une valeur que l ingenieur a forcee.
+  // Sans lui, la note de calcul presenterait les deux de la meme facon et ne
+  // serait verifiable par personne.
+  const marque = (nom: keyof typeof r.sources): string =>
+    r.sources[nom] === 'impose' ? ' — IMPOSE' : '';
+
   return {
     titre,
     lignes: [
-      { libelle: 'A_s,min', valeur: `${formatNumber(r.AsMin, 0)} mm²` },
-      { libelle: 'k (facteur d epaisseur)', valeur: formatNumber(r.k, 3) },
-      { libelle: 'k_c (distribution)', valeur: formatNumber(r.kc, 2) },
-      { libelle: 'A_ct (beton tendu)', valeur: `${formatNumber(r.Act, 0)} mm²` },
-      { libelle: 'f_ct,eff', valeur: `${formatNumber(r.fctEff, 2)} MPa` },
-      { libelle: 'sigma_s', valeur: `${formatNumber(r.sigmaS, 0)} MPa` },
+      // LE RESULTAT D ABORD, et nomme : total et nappe different d un facteur
+      // 2, et leur confusion est la cause classique d un ecart avec une
+      // feuille de calcul.
+      { libelle: 'A_s,min retenu', valeur: aire(r.AsMinParNappe) },
+      {
+        libelle: 'A_s,min total',
+        valeur: `${formatNumber(r.AsMin / 100, 2)} cm²/m sur ${r.nappes} nappe(s)`,
+      },
+      {
+        libelle: 'Approche retenue',
+        valeur:
+          r.approach === 'epaisse'
+            ? 'EPAISSE — zone de beton tendu efficace'
+            : 'MINCE — zone tendue entiere',
+      },
+      { libelle: 'A_s,min approche mince', valeur: aire(r.AsMinceParNappe) },
+      { libelle: 'A_s,min approche epaisse', valeur: aire(r.AsEpaisParNappe) },
+      { libelle: 'Borne anti-plastification', valeur: aire(r.BorneParNappe) },
+      {
+        libelle: 'Methode de h_c,ef',
+        valeur:
+          r.method === 'ec2'
+            ? 'texte EN 1992-1-1 §7.3.2(3) — 2,5·d1'
+            : 'pratique allemande — branches selon h/d1',
+      },
+      {
+        libelle: 'Convention du facteur k',
+        valeur:
+          r.thicknessConvention === 'de'
+            ? 'annexe allemande — 0,80 vers 0,50'
+            : 'EC2 recommande — 1,00 vers 0,65',
+      },
+      { libelle: 'k (facteur d epaisseur)', valeur: formatNumber(r.k, 3) + marque('k') },
+      { libelle: 'k_c (distribution)', valeur: formatNumber(r.kc, 2) + marque('kc') },
+      { libelle: 'd1 (enrobage d axe)', valeur: `${formatNumber(r.d1, 0)} mm${marque('d1')}` },
+      { libelle: 'h_c,ef (une face)', valeur: `${formatNumber(r.hcEff, 0)} mm${marque('hcEff')}` },
+      { libelle: 'A_c,ef (une face)', valeur: `${formatNumber(r.AcEff, 0)} mm²${marque('AcEff')}` },
+      { libelle: 'A_ct (zone tendue entiere)', valeur: `${formatNumber(r.Act, 0)} mm²${marque('Act')}` },
+      { libelle: 'f_ct,eff', valeur: `${formatNumber(r.fctEff, 2)} MPa${marque('fctEff')}` },
+      { libelle: 'sigma_s', valeur: `${formatNumber(r.sigmaS, 0)} MPa${marque('sigmaS')}` },
       {
         libelle: 'Element massif',
         // Le sens physique est un facteur REDUCTEUR, pas une penalite : les
         // contraintes d auto-equilibre reduisent l effort qui traverse la
         // section a l instant de la fissuration.
         valeur: r.massive
-          ? 'oui (h ≥ 800 mm) : k est a son plancher 0,65, l acier exige est reduit d autant'
+          ? 'oui (h ≥ 800 mm) : k est a son plancher, l acier exige est reduit d autant'
           : 'non (h < 800 mm)',
-      },
-      {
-        libelle: 'Base de calcul de A_ct',
-        valeur:
-          r.basis === 'zone-efficace'
-            ? 'zone de beton tendu EFFICACE — pratique des pieces epaisses, ECART assume au texte de l EN 1992-1-1'
-            : 'zone tendue entiere — texte de l EN 1992-1-1, cas enveloppe',
       },
     ],
     verdict: null,
-    note: AUCUN_VERDICT,
+    // Les avertissements de domaine passent AVANT les reserves generales :
+    // ils portent sur CE calcul-ci, pas sur la methode en general.
+    note: [...r.warnings, AUCUN_VERDICT, ECART_AU_TEXTE].join(' '),
   };
 }
+
+/**
+ * L ecart au texte de l EN 1992-1-1, AFFICHE et non seulement commente dans
+ * le code : c est a l ingenieur de savoir sur quoi repose le nombre qu il
+ * lit, pas au relecteur du depot.
+ */
+const ECART_AU_TEXTE =
+  'ECART DOCUMENTE AU TEXTE en methode « pratique allemande » : les branches de h_c,ef selon ' +
+  'h/d1 ne figurent pas dans l EN 1992-1-1, dont le §7.3.2(3) ecrit ' +
+  'h_c,ef = min(2,5(h−d) ; (h−x)/3 ; h/2). Le facteur k est un PARAMETRE NATIONAL. En Belgique ' +
+  'et au Luxembourg, la justification reglementaire reste l EN 1992-1-1 et ses annexes ' +
+  'NBN / ILNAS.';

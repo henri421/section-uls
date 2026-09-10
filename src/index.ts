@@ -147,8 +147,13 @@ export type { DetailingResult, WebCheckApplicable } from './detailing/verify-det
 export { verifyDetailing } from './detailing/verify-detailing';
 
 // --- Fissuration sous deformation genee (Zwang), §7.3.2 ---
-export type { RestraintType, RestraintOptions, RestraintResult } from './detailing/restraint';
-export { minimumRestraintArea, thicknessFactor } from './detailing/restraint';
+export type {
+  RestraintType, RestraintOptions, RestraintResult, RestraintOverrides,
+  RestraintMethod, ThicknessConvention, ValueSource,
+} from './detailing/restraint';
+export {
+  minimumRestraintArea, thicknessFactor, effectiveRestraintHeight,
+} from './detailing/restraint';
 
 // --- Zwang, methode Meyer / DIN 1045 (distincte du §7.3.2 ci-dessus) ---
 export type {

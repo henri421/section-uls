@@ -4,7 +4,9 @@ import type {
   ServiceActionModel, ServiceActionsModel,
   ShearModel, ShearLinksModel, RestraintModel, MeyerModel, ChecksModel,
 } from '../../src/index';
-import type { LoadingMode, ElementType, RestraintType, ShearReinforcement } from '../../src/index';
+import type {
+  LoadingMode, ElementType, RestraintType, ShearReinforcement, RestraintOverrides,
+} from '../../src/index';
 import type { MeyerCas, MeyerBridage, MeyerModeK } from '../../src/index';
 import {
   ec2Recommended, fctmDepuisFck, resolveChecks, barArea, barDiameterOf,
@@ -111,7 +113,35 @@ export interface FormState {
 
   restraintType: RestraintType;
   fctEff: string; sigmaSZwang: string;
-  zoneEfficace: boolean;
+  /**
+   * Convention nationale du facteur `k` du §7.3.2(2).
+   *
+   * Remplace la case « zone efficace », devenue sans objet : les deux
+   * approches sont desormais calculees et la plus petite retenue, la norme ne
+   * fixant pas de frontiere nette entre element mince et epais.
+   */
+  thicknessConvention: 'ec2' | 'de';
+
+  /**
+   * Famille de formules de `h_c,ef`. Choix INDEPENDANT du precedent : `k` est
+   * un parametre d'annexe nationale, `h_c,ef` est un choix de methode.
+   */
+  restraintMethod: 'ec2' | 'din';
+
+  /**
+   * FORCAGE des grandeurs intermediaires du §7.3.2.
+   *
+   * Un champ VIDE veut dire « calcule », jamais zero : un `0` imposerait une
+   * valeur nulle et annulerait l'armature en silence.
+   */
+  impFctEff: string;
+  impD1: string;
+  impHcEff: string;
+  impK: string;
+  impKc: string;
+  impAct: string;
+  impAcEff: string;
+  impSigmaS: string;
 
   /**
    * Elements massifs sous deformation genee, methode Meyer (DIN 1045).
@@ -347,7 +377,38 @@ export interface ParametresVerifications {
   fctEff: number | undefined;
   /** `undefined` : le module retient `f_yk`. */
   sigmaS: number | undefined;
-  zoneEfficace: boolean;
+  thicknessConvention: 'ec2' | 'de';
+  restraintMethod: 'ec2' | 'din';
+  /** Grandeurs imposees ; les champs vides sont absents, jamais a zero. */
+  restraintOverrides: RestraintOverrides;
+}
+
+/**
+ * Les grandeurs du §7.3.2 imposees a la main.
+ *
+ * `nombreOptionnel` rend `undefined` sur un champ vide : c'est exactement ce
+ * que le module lit comme « calcule ». Un `0` saisi, lui, est une valeur
+ * imposee A ZERO — et il doit le rester, sans quoi l'utilisateur ne pourrait
+ * pas annuler un terme volontairement.
+ */
+function forcagesDeLaGene(form: FormState): RestraintOverrides {
+  const champs: Array<[keyof RestraintOverrides, string, string]> = [
+    ['fctEff', form.impFctEff, 'f_ct,eff impose'],
+    ['d1', form.impD1, 'd1 impose'],
+    ['hcEff', form.impHcEff, 'h_c,ef impose'],
+    ['k', form.impK, 'k impose'],
+    ['kc', form.impKc, 'k_c impose'],
+    ['Act', form.impAct, 'A_ct impose'],
+    ['AcEff', form.impAcEff, 'A_c,ef impose'],
+    ['sigmaS', form.impSigmaS, 'sigma_s impose'],
+  ];
+
+  const forcages: RestraintOverrides = {};
+  for (const [cle, brut, libelle] of champs) {
+    const valeur = nombreOptionnel(brut, libelle);
+    if (valeur !== undefined) forcages[cle] = valeur;
+  }
+  return forcages;
 }
 
 const LIBELLE_CADRES = 'Armatures d effort tranchant';
@@ -394,7 +455,9 @@ export function parametresDeVerification(form: FormState): ParametresVerificatio
     restraintType: form.restraintType,
     fctEff: nombreOptionnel(form.fctEff, 'f_ct,eff'),
     sigmaS: nombreOptionnel(form.sigmaSZwang, 'sigma_s de la deformation genee'),
-    zoneEfficace: form.zoneEfficace,
+    thicknessConvention: form.thicknessConvention,
+    restraintMethod: form.restraintMethod,
+    restraintOverrides: forcagesDeLaGene(form),
   };
 }
 
@@ -517,7 +580,8 @@ function geneDuModele(form: FormState): RestraintModel {
     ...(sigmaS !== undefined ? { sigmaS } : {}),
     // Ecrit seulement quand il est vrai : `false` est deja ce que veut dire
     // son absence, et un fichier ne gagne rien a le repeter.
-    ...(form.zoneEfficace ? { effectiveZoneOnly: true } : {}),
+    thicknessConvention: form.thicknessConvention,
+    method: form.restraintMethod,
   };
 }
 
@@ -962,7 +1026,14 @@ export function modelToForm(model: SectionModel): FormState {
     restraintType: model.restraint?.type ?? RESTRAINT_TYPE_PAR_DEFAUT,
     fctEff: texteDe(model.restraint?.fctEff),
     sigmaSZwang: texteDe(model.restraint?.sigmaS),
-    zoneEfficace: model.restraint?.effectiveZoneOnly ?? false,
+    thicknessConvention: model.restraint?.thicknessConvention ?? 'ec2',
+    restraintMethod: model.restraint?.method ?? 'din',
+    // ⚠ CHAINES VIDES et non zeros : un « 0 » serait une valeur imposee a
+    // zero, qui annulerait l armature en silence. Le forcage n'entre pas dans
+    // le modele — c'est une hypothese d'examen, pas une donnee d'ouvrage — et
+    // se re-choisit donc a chaque ouverture.
+    impFctEff: '', impD1: '', impHcEff: '', impK: '',
+    impKc: '', impAct: '', impAcEff: '', impSigmaS: '',
 
     // Bloc Meyer du fichier quand il existe. A defaut seulement, les
     // pre-remplissages : `h` prend la hauteur de la section quand elle est

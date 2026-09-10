@@ -348,6 +348,8 @@ const CAS_MEYER: readonly MeyerModel['cas'][] = ['traction', 'flexion'];
 const BRIDAGES_MEYER: readonly MeyerModel['bridage'][] = ['exterieur', 'interieur'];
 const MODES_K_MEYER: readonly NonNullable<MeyerModel['kmode']>[] = ['lineaire', 'parabolique'];
 const REFERENTIELS_DE_GENE: readonly RestraintReferentialModel[] = ['ec2', 'meyer', 'both'];
+const CONVENTIONS_D_EPAISSEUR: readonly NonNullable<RestraintModel['thicknessConvention']>[] = ['ec2', 'de'];
+const METHODES_DE_GENE: readonly NonNullable<RestraintModel['method']>[] = ['ec2', 'din'];
 const MODES_DE_FISSURATION: readonly CrackingModeModel[] = ['auto', 'uncracked', 'cracked'];
 
 function cadres(v: unknown, chemin: string): ShearLinksModel {
@@ -381,16 +383,29 @@ function gene(v: unknown, chemin: string): RestraintModel {
   const o = objet(v, chemin);
   const fctEff = optionnel(o.fctEff, `${chemin}.fctEff`, positif);
   const sigmaS = optionnel(o.sigmaS, `${chemin}.sigmaS`, positif);
-  const effectiveZoneOnly = optionnel(
-    o.effectiveZoneOnly,
-    `${chemin}.effectiveZoneOnly`,
-    booleen
+  const thicknessConvention = optionnel(
+    o.thicknessConvention,
+    `${chemin}.thicknessConvention`,
+    (x, c) => enumere(x, c, CONVENTIONS_D_EPAISSEUR)
   );
+  const method = optionnel(o.method, `${chemin}.method`, (x, c) =>
+    enumere(x, c, METHODES_DE_GENE)
+  );
+
+  // `effectiveZoneOnly` est LU puis JETE : les fichiers enregistres avant la
+  // correction le portent, et refuser sa presence les rendrait illisibles du
+  // jour au lendemain. Il n'a plus d'effet — les deux approches sont
+  // desormais calculees de toute facon — mais on continue d'en verifier le
+  // type, pour ne pas laisser passer un fichier corrompu sous couvert de
+  // retrocompatibilite.
+  optionnel(o.effectiveZoneOnly, `${chemin}.effectiveZoneOnly`, booleen);
+
   return {
     type: enumere(o.type, `${chemin}.type`, TYPES_DE_GENE),
     ...(fctEff !== undefined ? { fctEff } : {}),
     ...(sigmaS !== undefined ? { sigmaS } : {}),
-    ...(effectiveZoneOnly !== undefined ? { effectiveZoneOnly } : {}),
+    ...(thicknessConvention !== undefined ? { thicknessConvention } : {}),
+    ...(method !== undefined ? { method } : {}),
   };
 }
 
@@ -651,7 +666,8 @@ function geneOrdonnee(r: RestraintModel) {
     type: r.type,
     ...(r.fctEff !== undefined ? { fctEff: r.fctEff } : {}),
     ...(r.sigmaS !== undefined ? { sigmaS: r.sigmaS } : {}),
-    ...(r.effectiveZoneOnly !== undefined ? { effectiveZoneOnly: r.effectiveZoneOnly } : {}),
+    ...(r.thicknessConvention !== undefined ? { thicknessConvention: r.thicknessConvention } : {}),
+    ...(r.method !== undefined ? { method: r.method } : {}),
   };
 }
 

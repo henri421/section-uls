@@ -636,7 +636,9 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
     choisir(premier, 'restraintType', 'bending');
     saisir(premier, 'fctEff', '1,8');
     saisir(premier, 'sigmaSZwang', '320');
-    cocher(premier, 'zoneEfficace', true);
+    choisir(premier, 'thicknessConvention', 'de');
+    choisir(premier, 'restraintMethod', 'ec2');
+    saisir(premier, 'impHcEff', '180');
 
     saisir(premier, 'meyerH', '800');
     saisir(premier, 'meyerD1', '50');
@@ -661,7 +663,13 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
     expect(liste(second, 'restraintType').value).toBe('bending');
     expect(nombreDuChamp(second, 'fctEff')).toBe(1.8);
     expect(nombreDuChamp(second, 'sigmaSZwang')).toBe(320);
-    expect(caseACocher(second, 'zoneEfficace').checked).toBe(true);
+    expect(liste(second, 'thicknessConvention').value).toBe('de');
+    expect(liste(second, 'restraintMethod').value).toBe('ec2');
+    // Le FORCAGE, lui, ne se sauvegarde PAS : c'est une hypothese d'examen,
+    // pas une donnee d'ouvrage. Le retrouver six mois plus tard sans que
+    // personne se souvienne de l'avoir impose est exactement ce que la regle
+    // de frontiere du format existe pour empecher.
+    expect(champ(second, 'impHcEff').value).toBe('');
 
     expect(nombreDuChamp(second, 'meyerH')).toBe(800);
     expect(nombreDuChamp(second, 'meyerD1')).toBe(50);
@@ -783,18 +791,76 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
     expect(verifications(dom).innerHTML).not.toContain('NaN');
   });
 
-  it('cocher la zone efficace REDUIT l armature exigee sous deformation genee', async () => {
-    // Ecart assume au texte de l EN 1992-1-1, retenu par la pratique pour
-    // les pieces epaisses : l ecart est considerable, il doit se voir.
+  it('changer la convention de k change l armature exigee sous deformation genee', async () => {
+    // `k` est un PARAMETRE NATIONAL : 1,00 vers 0,65 en EC2, 0,80 vers 0,50
+    // en annexe allemande. Le choix doit se voir sur le resultat.
     const dom = await monterAvecVerifications();
-    const avant = nombre(valeur(dom, 'zwang', 'A_s,min'));
+    const avant = nombre(valeur(dom, 'zwang', 'A_s,min retenu'));
 
-    cocher(dom, 'zoneEfficace', true);
+    choisir(dom, 'thicknessConvention', 'de');
     vi.advanceTimersByTime(500);
 
-    const apres = nombre(valeur(dom, 'zwang', 'A_s,min'));
+    const apres = nombre(valeur(dom, 'zwang', 'A_s,min retenu'));
     expect(apres).toBeLessThan(avant);
-    expect(bloc(dom, 'zwang').textContent).toMatch(/efficace/i);
+    expect(bloc(dom, 'zwang').textContent).toMatch(/annexe allemande/i);
+  });
+
+  /**
+   * Les deux choix sont INDEPENDANTS : `k` est un parametre d annexe
+   * nationale, `h_c,ef` une famille de formules. Les lier interdirait
+   * « branches allemandes, k de l annexe belge ».
+   */
+  it('changer la methode change h_c,ef sans toucher a k', async () => {
+    const dom = await monterAvecVerifications();
+    const kAvant = valeur(dom, 'zwang', 'k (facteur d epaisseur)');
+    const hAvant = nombre(valeur(dom, 'zwang', 'h_c,ef (une face)'));
+
+    choisir(dom, 'restraintMethod', 'ec2');
+    vi.advanceTimersByTime(500);
+
+    expect(nombre(valeur(dom, 'zwang', 'h_c,ef (une face)'))).not.toBe(hAvant);
+    expect(valeur(dom, 'zwang', 'k (facteur d epaisseur)')).toBe(kAvant);
+  });
+
+  /**
+   * LE FORCAGE, et la regle qui le rend acceptable : toute valeur imposee est
+   * MARQUEE. Une note qui presenterait une valeur forcee comme calculee ne
+   * serait verifiable par personne.
+   */
+  it('forcer h_c,ef change le resultat ET porte la marque « IMPOSE »', async () => {
+    const dom = await monterAvecVerifications();
+
+    saisir(dom, 'impHcEff', '300');
+    vi.advanceTimersByTime(500);
+
+    expect(valeur(dom, 'zwang', 'h_c,ef (une face)')).toMatch(/300 mm — IMPOSE/);
+    // Les grandeurs non forcees ne portent PAS la marque.
+    expect(valeur(dom, 'zwang', 'k (facteur d epaisseur)')).not.toMatch(/IMPOSE/);
+  });
+
+  it('une valeur imposee hors du domaine AVERTIT, sans ecreter ni bloquer', async () => {
+    const dom = await monterAvecVerifications();
+
+    saisir(dom, 'impHcEff', '5000');
+    vi.advanceTimersByTime(500);
+
+    expect(valeur(dom, 'zwang', 'h_c,ef (une face)')).toMatch(/5 ?000 mm — IMPOSE/);
+    expect(bloc(dom, 'zwang').textContent).toMatch(/depasse la section/);
+    // Le reste de la page reste calcule : un avertissement n est pas une panne.
+    expect(resultat(dom)).toMatch(/taux/i);
+  });
+
+  it('vider un champ de forcage rend la main au calcul', async () => {
+    const dom = await monterAvecVerifications();
+    const calcule = valeur(dom, 'zwang', 'h_c,ef (une face)');
+
+    saisir(dom, 'impHcEff', '300');
+    vi.advanceTimersByTime(500);
+    expect(valeur(dom, 'zwang', 'h_c,ef (une face)')).toMatch(/IMPOSE/);
+
+    saisir(dom, 'impHcEff', '');
+    vi.advanceTimersByTime(500);
+    expect(valeur(dom, 'zwang', 'h_c,ef (une face)')).toBe(calcule);
   });
 
   it('un poteau n explose pas : le N de l ELU sert d effort normal du §9.5.2', async () => {

@@ -282,18 +282,20 @@ describe('resolveModel : les blocs de la version 3', () => {
   it('rend une gene que minimumRestraintArea consomme telle quelle', () => {
     const r = resolveModel({
       ...poutre(),
-      restraint: { type: 'central', fctEff: 1.8, sigmaS: 320, effectiveZoneOnly: true },
+      restraint: { type: 'central', fctEff: 1.8, sigmaS: 320, thicknessConvention: 'de' as const },
     });
 
     const g = r.restraint;
     if (g === undefined) throw new Error('bloc de gene attendu');
     expect(g.type).toBe('central');
-    expect(g.options).toEqual({ fctEff: 1.8, sigmaS: 320, effectiveZoneOnly: true });
+    expect(g.options).toEqual({ fctEff: 1.8, sigmaS: 320, thicknessConvention: 'de' as const });
 
     const constat = minimumRestraintArea(r.section, g.type, g.options);
     expect(constat.fctEff).toBe(1.8);
     expect(constat.sigmaS).toBe(320);
-    expect(constat.basis).toBe('zone-efficace');
+    expect(constat.thicknessConvention).toBe('de');
+    // Convention allemande : k passe de 0,65 a 0,50 sur un element massif.
+    expect(constat.k).toBeCloseTo(0.5, 9);
   });
 
   it('rend une gene reduite a sa nature : les defauts restent ceux du §7.3.2', () => {

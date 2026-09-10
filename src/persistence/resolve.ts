@@ -296,9 +296,10 @@ export function resolveModel(model: SectionModel): ResolvedModel {
           options: {
             ...(model.restraint.fctEff !== undefined ? { fctEff: model.restraint.fctEff } : {}),
             ...(model.restraint.sigmaS !== undefined ? { sigmaS: model.restraint.sigmaS } : {}),
-            ...(model.restraint.effectiveZoneOnly !== undefined
-              ? { effectiveZoneOnly: model.restraint.effectiveZoneOnly }
+            ...(model.restraint.thicknessConvention !== undefined
+              ? { thicknessConvention: model.restraint.thicknessConvention }
               : {}),
+            ...(model.restraint.method !== undefined ? { method: model.restraint.method } : {}),
           },
         };
 

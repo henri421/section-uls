@@ -206,9 +206,6 @@ function champTexte(champ: keyof FormState, libelle: string, valeur: string): st
   return `<label><span>${libelle}</span><input type="text" inputmode="decimal" data-champ="${champ}" value="${echapper(valeur)}" /></label>`;
 }
 
-function champCase(champ: keyof FormState, libelle: string, coche: boolean): string {
-  return `<label class="case"><input type="checkbox" data-champ="${champ}"${coche ? ' checked' : ''} /><span>${libelle}</span></label>`;
-}
 
 function champZone(champ: keyof FormState, libelle: string, valeur: string, lignes: number): string {
   return `<label class="zone"><span>${libelle}</span><textarea rows="${lignes}" data-champ="${champ}">${echapper(valeur)}</textarea></label>`;
@@ -1111,15 +1108,58 @@ function htmlFormulaire(): string {
       etat.fctEff
     )}
     ${champTexte('sigmaSZwang', 'sigma_s (MPa, vide = f_yk)', etat.sigmaSZwang)}
-    ${champCase(
-      'zoneEfficace',
-      `Calculer sur la seule zone tendue efficace ${info(
-        `Ce n est <strong>pas le texte</strong> de l EN 1992-1-1, qui ecrit l eq. 7.1 sur toute
-         la zone tendue ; c est le raffinement retenu par la pratique pour les pieces epaisses,
-         et l ecart atteint un facteur plusieurs sur un voile d un metre.`
+    ${champChoix(
+      'restraintMethod',
+      `Methode de calcul de h_c,ef ${info(
+        `Deux familles de formules. Le <strong>texte</strong> de l EN 1992-1-1 §7.3.2(3) donne
+         <em>2,5·d1</em> ; la <strong>pratique allemande</strong> donne des branches selon
+         <em>h/d1</em>, qui croissent avec l epaisseur. Sur un radier de 1,30 m, l ecart entre
+         les deux vaut environ 43 % d armature.<br /><br />
+         Ce choix est <strong>independant</strong> de la convention de <em>k</em> ci-dessous :
+         <em>k</em> est un parametre d annexe nationale, <em>h_c,ef</em> est un choix de
+         methode. « Branches allemandes, <em>k</em> de l annexe belge » est un cas
+         parfaitement legitime.`,
+        'decisif'
       )}`,
-      etat.zoneEfficace
+      etat.restraintMethod,
+      [
+        ['din', 'Pratique allemande — branches selon h/d1'],
+        ['ec2', 'Texte EN 1992-1-1 §7.3.2(3) — 2,5·d1'],
+      ]
     )}
+    ${champChoix(
+      'thicknessConvention',
+      `Convention du facteur k ${info(
+        `<em>k</em> est un <strong>parametre national</strong> : 1,00 &rarr; 0,65 en valeurs
+         recommandees de l EC2, 0,80 &rarr; 0,50 en annexe allemande. En Belgique et au
+         Luxembourg, la justification reglementaire reste l EN 1992-1-1 et ses annexes
+         NBN / ILNAS.`,
+        'decisif'
+      )}`,
+      etat.thicknessConvention,
+      [
+        ['ec2', 'EC2 recommande — 1,00 vers 0,65'],
+        ['de', 'Annexe allemande — 0,80 vers 0,50'],
+      ]
+    )}
+    <p class="sous-titre">Forcer des valeurs intermediaires ${info(
+      `Un champ <strong>vide</strong> veut dire « calcule ». Une valeur saisie
+       <strong>court-circuite sa formule</strong> et alimente la suite de la chaine : imposer
+       <em>d1</em> change <em>h_c,ef</em>, imposer <em>f_ct,eff</em> change ce qui en depend.
+       Toute valeur imposee est <strong>marquee</strong> dans les resultats et dans la note de
+       calcul — une note qui presenterait une valeur forcee comme calculee ne serait
+       verifiable par personne.<br /><br />
+       Une valeur hors du domaine physique produit un <strong>avertissement</strong>, jamais un
+       ecretage silencieux : ecreter vous retirerait la decision que vous venez de prendre.`
+    )}</p>
+    ${champTexte('impFctEff', 'f_ct,eff impose (MPa)', etat.impFctEff)}
+    ${champTexte('impD1', 'd1 impose (mm)', etat.impD1)}
+    ${champTexte('impHcEff', 'h_c,ef impose (mm)', etat.impHcEff)}
+    ${champTexte('impK', 'k impose', etat.impK)}
+    ${champTexte('impKc', 'k_c impose', etat.impKc)}
+    ${champTexte('impAct', 'A_ct impose (mm²)', etat.impAct)}
+    ${champTexte('impAcEff', 'A_c,ef impose, une face (mm²)', etat.impAcEff)}
+    ${champTexte('impSigmaS', 'sigma_s impose (MPa)', etat.impSigmaS)}
   </fieldset>`
   )}
 
@@ -1943,7 +1983,9 @@ function blocsDeVerifications(
             minimumRestraintArea(section, p.restraintType, {
               ...(p.fctEff !== undefined ? { fctEff: p.fctEff } : {}),
               ...(p.sigmaS !== undefined ? { sigmaS: p.sigmaS } : {}),
-              effectiveZoneOnly: p.zoneEfficace,
+              thicknessConvention: p.thicknessConvention,
+              method: p.restraintMethod,
+              overrides: p.restraintOverrides,
             })
           );
   }
