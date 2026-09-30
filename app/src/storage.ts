@@ -1,3 +1,4 @@
+import { telecharger } from 'aedificium-ui';
 import { parseModel, serializeModel } from '../../src/index';
 import type { SectionModel } from '../../src/index';
 
@@ -70,21 +71,10 @@ export function sauvegardeIllisible(): string | null {
 }
 
 /**
- * Le telechargement, quel que soit ce qu'on telecharge.
- *
- * SEUL endroit du projet qui touche au navigateur pour faire sortir un
- * fichier : modele, dessin, tableau ou note passent tous par ici. Tout ce qui
- * COMPOSE ces documents est pur et vit dans `export.ts`.
+ * Le telechargement, quel que soit ce qu'on telecharge : `telecharger`
+ * d'aedificium-ui, commun a toute la suite.
  */
-export function telecharger(nomFichier: string, contenu: string, typeMime: string): void {
-  const blob = new Blob([contenu], { type: typeMime });
-  const url = URL.createObjectURL(blob);
-  const lien = document.createElement('a');
-  lien.href = url;
-  lien.download = nomFichier;
-  lien.click();
-  URL.revokeObjectURL(url);
-}
+export { telecharger };
 
 export function telechargerModele(model: SectionModel, nomFichier: string): void {
   telecharger(nomFichier, serializeModel(model), 'application/json');

@@ -1,10 +1,11 @@
-/** Separateur decimal francais, conforme aux libelles de l'interface. */
-function virgule(texte: string): string {
-  return texte.replace('.', ',');
-}
+import { nombreFr, tauxFr } from 'aedificium-ui';
 
+/**
+ * Nombre a la francaise : `nombreFr` d'aedificium-ui, commun a la suite. Un
+ * NaN ou un infini s'affiche en tiret, jamais comme une valeur.
+ */
 export function formatNumber(valeur: number, decimales: number): string {
-  return virgule(valeur.toFixed(decimales));
+  return nombreFr(valeur, decimales);
 }
 
 export function formatAngleDegrees(radians: number): string {
@@ -23,12 +24,5 @@ export function formatAngleDegrees(radians: number): string {
  * la meme histoire. Le cas d'egalite exacte reste « 1,00 ».
  */
 export function formatUtilization(taux: number): string {
-  if (!Number.isFinite(taux)) return 'hors domaine';
-  if (taux === 1) return '1,00';
-
-  const facteur = 100;
-  const arrondi =
-    taux < 1 ? Math.floor(taux * facteur) / facteur : Math.ceil(taux * facteur) / facteur;
-
-  return formatNumber(arrondi, 2);
+  return tauxFr(taux, 2);
 }

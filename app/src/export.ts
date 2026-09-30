@@ -1,3 +1,4 @@
+import { JETONS, csv, svgAutonome as svgAutonomeCommun } from 'aedificium-ui';
 import type { BlocService } from './service-view';
 
 /**
@@ -27,40 +28,7 @@ import type { BlocService } from './service-view';
  * palette a celle de `style.css` et echoue des que l une bouge sans l autre :
  * c est la copie, mais surveillee.
  */
-export const PALETTE = `:root {
-  /* ---- Châssis ---- */
-  --fond: #f7f7f6;            /* fond de page */
-  --surface: #ffffff;         /* cartes, panneaux, champs */
-  --surface-appui: #f2f1ec;   /* en-têtes de tableau, boutons au repos, blocs d'attente */
-  --texte: #1a1a1a;
-  --texte-doux: #4a4842;      /* notes, libellés de ligne, corps secondaire */
-  --texte-faible: #6a6862;    /* legend, sous-titres, surtitres */
-  --bordure: #c8c6c0;         /* filet structurant : cadres, champs, séparateurs */
-  --bordure-douce: #eceae4;   /* filet interne : lignes de liste, lignes de tableau */
-
-  /* ---- Interface ---- */
-  --accent: #1e5aa8;          /* focus, liens, état actif — JAMAIS une couleur de sens */
-  --accent-doux: #eaf1f9;     /* fond d'un champ actif, surlignage de zone */
-
-  /* ---- Couleurs de sens ---- */
-  --compression: #2f5d8a;     /* bielle, béton comprimé, domaine résistant */
-  --traction: #a8442a;        /* tirant, acier tendu, point sollicitant */
-  --beton: #e7eaee;           /* aplat de matière dans les tracés */
-  --neutre: #9a978f;          /* barre à effort nul, repères de cotation */
-
-  /* ---- Verdicts : trois états, pas quatre ---- */
-  --ok: #1f6f3f;      --ok-fond: #eaf4ee;
-  --alerte: #8a6d00;  --alerte-fond: #fdf6e3;
-  --refus: #a52121;   --refus-fond: #f8ecec;
-
-  /* ---- Typographie ---- */
-  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-
-  /* ---- Rayons ---- */
-  --rayon: 4px;        /* cartes, panneaux, fieldsets */
-  --rayon-petit: 3px;  /* champs, boutons, pastilles */
-}`;
+export const PALETTE = JETONS;
 
 /**
  * Les regles du trace, telles que la page les applique.
@@ -109,19 +77,6 @@ svg {
 
 // --- SVG autonome ------------------------------------------------------------
 
-const NAMESPACE_SVG = 'http://www.w3.org/2000/svg';
-const DECLARATION_XML = '<?xml version="1.0" encoding="UTF-8"?>';
-
-/**
- * Le CSS passe en CDATA, jamais en texte nu.
- *
- * Un document SVG est du XML : un `&` ou un `<` dans la feuille de style y
- * serait une erreur d analyse fatale — le fichier ne s ouvrirait pas du tout.
- */
-function baliseStyle(styles: string): string {
-  return `<style type="text/css"><![CDATA[\n${styles}\n]]></style>`;
-}
-
 /**
  * Enveloppe un SVG de la page dans un document autonome, styles INLINES.
  *
@@ -129,56 +84,13 @@ function baliseStyle(styles: string): string {
  * que le SVG : la legende est du HTML, et la laisser casserait le XML.
  */
 export function svgAutonome(svg: string, styles: string): string {
-  const debut = /<svg\b[^>]*>/i.exec(svg);
-  const fin = svg.lastIndexOf('</svg>');
-
-  // Rien d exploitable : on rend un document vide mais VALIDE, plutot qu un
-  // fichier tronque que le lecteur ne saurait pas ouvrir.
-  if (debut === null || fin < debut.index) {
-    return `${DECLARATION_XML}\n<svg xmlns="${NAMESPACE_SVG}">${baliseStyle(styles)}</svg>`;
-  }
-
-  const ouverture = /\bxmlns\s*=/.test(debut[0])
-    ? debut[0]
-    : debut[0].replace(/^<svg\b/i, `<svg xmlns="${NAMESPACE_SVG}"`);
-
-  const contenu = svg.slice(debut.index + debut[0].length, fin);
-
-  return `${DECLARATION_XML}\n${ouverture}${baliseStyle(styles)}${contenu}</svg>`;
+  return svgAutonomeCommun(svg, styles);
 }
 
 // --- CSV des resultats -------------------------------------------------------
 
-/**
- * Le point-virgule, et pas la virgule.
- *
- * Le separateur decimal de l interface est la VIRGULE — `formatNumber` la
- * produit partout. La prendre aussi comme separateur de colonnes couperait
- * chaque nombre en deux a l ouverture. Le point-virgule est du reste ce
- * qu attend un tableur en configuration francaise.
- */
-const SEPARATEUR = ';';
-
-/** Fin de ligne CSV usuelle (RFC 4180), celle qu attendent les tableurs. */
-const FIN_DE_LIGNE = '\r\n';
-
-/**
- * Marque d ordre des octets.
- *
- * Sans elle, Excel lit le fichier dans l encodage de la machine et massacre
- * les accents comme les σ, ρ et ζ dont les libelles de ce module sont peuples.
- * C est le seul moyen fiable de lui dire que le fichier est en UTF-8.
- */
-const BOM = '\uFEFF';
-
-function champCsv(valeur: string): string {
-  if (!/[;"\r\n]/.test(valeur)) return valeur;
-  return `"${valeur.replace(/"/g, '""')}"`;
-}
-
-function ligneCsv(champs: string[]): string {
-  return champs.map(champCsv).join(SEPARATEUR);
-}
+// Encodage (point-virgule, BOM, CRLF, guillemets) : `csv` d aedificium-ui,
+// commun a toute la suite.
 
 /**
  * Les resultats affiches, en tableau.
@@ -192,21 +104,21 @@ function ligneCsv(champs: string[]): string {
  * absence silencieuse ferait croire au lecteur que la verification a eu lieu.
  */
 export function resultatsEnCsv(blocs: BlocService[]): string {
-  const lignes = [ligneCsv(['Bloc', 'Grandeur', 'Valeur'])];
+  const lignes: string[][] = [['Bloc', 'Grandeur', 'Valeur']];
 
   for (const bloc of blocs) {
     const avant = lignes.length;
 
-    for (const l of bloc.lignes) lignes.push(ligneCsv([bloc.titre, l.libelle, l.valeur]));
-    if (bloc.verdict !== null) lignes.push(ligneCsv([bloc.titre, 'Verdict', bloc.verdict.texte]));
-    if (bloc.note !== null) lignes.push(ligneCsv([bloc.titre, 'Note', bloc.note]));
+    for (const l of bloc.lignes) lignes.push([bloc.titre, l.libelle, l.valeur]);
+    if (bloc.verdict !== null) lignes.push([bloc.titre, 'Verdict', bloc.verdict.texte]);
+    if (bloc.note !== null) lignes.push([bloc.titre, 'Note', bloc.note]);
 
     // Un bloc prive de tout garde quand meme sa ligne : c est son TITRE qui
     // porte alors l information, et le faire disparaitre serait pire.
-    if (lignes.length === avant) lignes.push(ligneCsv([bloc.titre, '', '']));
+    if (lignes.length === avant) lignes.push([bloc.titre, '', '']);
   }
 
-  return BOM + lignes.join(FIN_DE_LIGNE) + FIN_DE_LIGNE;
+  return csv(lignes);
 }
 
 // --- Note de calcul ----------------------------------------------------------
