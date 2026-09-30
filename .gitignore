@@ -8,3 +8,7 @@ docs/superpowers/
 
 # Memoire des agents : outillage local, jamais du contenu de projet
 .claude/
+
+# Construction : produite et publiee par la CI, jamais suivie
+docs/*
+!docs/validation/
