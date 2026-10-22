@@ -2,7 +2,6 @@ import {
   resolveModel,
   verifySection,
   capacityAtAngle,
-  polygonArea,
   verifyServiceUniaxial,
   verifyCrackWidth,
   sectionCurvature,
@@ -61,8 +60,7 @@ import { blocEtatSection, blocEtatFissuration } from './state-view';
 import { interactionDiagramNM, interactionCurveAtN } from '../../src/index';
 import { outlineOf, boundingBox, neutralAxisSegment, barRadius, splitByLine, zetaOf } from './draw';
 import { plotSvg } from './plot';
-import { effectiveDepth, simplifiedLeverArm } from './lever-arm';
-import { formatNumber, formatAngleDegrees, formatUtilization } from './format';
+import { formatNumber } from './format';
 import {
   chargerLocalement,
   sauvegarderLocalement,
@@ -1491,11 +1489,13 @@ function dessinerDomaineMyMz(
   // Un domaine vide est un RESULTAT, pas une panne : l'effort normal sort de
   // la plage resistante quelle que soit l'orientation de l'axe neutre.
   if (points.length === 0) {
-    return (
-      `<div id="domaine-mymz">${titre}` +
-      `<p class="motif">Aucun point du domaine n'existe a cet effort normal :
-       la section est depassee en compression ou en traction avant toute flexion.</p></div>`
-    );
+    return {
+      svg: '',
+      html:
+        `<div id="domaine-mymz">${titre}` +
+        `<p class="motif">Aucun point du domaine n'existe a cet effort normal :
+       la section est depassee en compression ou en traction avant toute flexion.</p></div>`,
+    };
   }
 
   // Cette courbe-ci EST fermee — le noyau balaye l'inclinaison de l'axe neutre
@@ -2105,7 +2105,7 @@ function tracerDomaine(): void {
 
     dernierDiagramme = dessinerDiagrammeNM(resolu).html;
     const domaine = dessinerDomaineMyMz(resolu, resultat);
-    dernierDomaine = domaine.svg;
+    dernierDomaine = domaine.svg === '' ? null : domaine.svg;
     zoneDiagramme.innerHTML = dernierDiagramme + domaine.html;
   } catch (e) {
     afficherErreur(e instanceof FormError ? e.message : String(e));
