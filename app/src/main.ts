@@ -150,6 +150,8 @@ let etat: FormState = modelToForm(chargerLocalement() ?? modeleParDefaut());
 let dernierResultat: string = '';
 /** Dernier diagramme N-M rendu, reaffiche tel quel pendant un trace de domaine. */
 let dernierDiagramme: string = '';
+/** SVG du domaine My-Mz affiche, `null` des qu'un recalcul l'a efface. */
+let dernierDomaine: string | null = null;
 
 /**
  * Tout ce qu'il faut pour composer une sortie, fige au dernier calcul REUSSI.
@@ -1237,7 +1239,8 @@ function htmlFormulaire(): string {
        telechargee. C est un <strong>compte rendu</strong> de calcul, pas une justification
        reglementaire signee.`
     )}</legend>
-    <button type="button" data-action="exporter-dessins">Dessins (SVG)</button>
+    <button type="button" data-action="exporter-section">Section (SVG)</button>
+    <button type="button" data-action="exporter-diagramme">Diagramme N-M (SVG)</button>
     <button type="button" data-action="exporter-resultats">Resultats (CSV)</button>
     <button type="button" data-action="exporter-note">Note de calcul (HTML imprimable)</button>
   </fieldset>`;
@@ -1467,7 +1470,10 @@ function dessinerDiagrammeNM(resolu: ResolvedModel): { svg: string; html: string
  * a chaque frappe figerait la page — c'est exactement la regression du mode
  * proportionnel du 2026-09-04. Bouton, et rien d'autre.
  */
-function dessinerDomaineMyMz(resolu: ResolvedModel, resultat: VerificationResult): string {
+function dessinerDomaineMyMz(
+  resolu: ResolvedModel,
+  resultat: VerificationResult
+): { svg: string; html: string } {
   const N = resolu.action.N;
   const PAS = 72;
   const points = interactionCurveAtN(resolu.section, N, resolu.norm, { steps: PAS });
@@ -1522,7 +1528,12 @@ function dessinerDomaineMyMz(resolu: ResolvedModel, resultat: VerificationResult
     (tourComplet ? '' : '<span>contour incomplet : certaines orientations n ont pas de solution</span>') +
     '</p>';
 
-  return `<div id="domaine-mymz">${titre}${svg}${legende}</div>`;
+  // Le bouton vit DANS le cadre du domaine : il n'a de sens que tant que le
+  // domaine est affiche, et disparait avec lui au prochain recalcul.
+  const exporter =
+    '<button type="button" data-action="exporter-domaine">Domaine My-Mz (SVG)</button>';
+
+  return { svg, html: `<div id="domaine-mymz">${titre}${svg}${legende}${exporter}</div>` };
 }
 
 // --- Resultat ---------------------------------------------------------------
@@ -2025,6 +2036,7 @@ function recalculer(mode?: 'proportional'): void {
     // un effort normal fixe, que la saisie vient peut-etre de changer.
     const diagramme = dessinerDiagrammeNM(resolu);
     dernierDiagramme = diagramme.html;
+    dernierDomaine = null;
     if (zoneDiagramme) zoneDiagramme.innerHTML = dernierDiagramme;
 
     // L'etat exportable est fige ICI, sur un calcul REUSSI. Les sorties ne
@@ -2084,7 +2096,9 @@ function tracerDomaine(): void {
     });
 
     dernierDiagramme = dessinerDiagrammeNM(resolu).html;
-    zoneDiagramme.innerHTML = dernierDiagramme + dessinerDomaineMyMz(resolu, resultat);
+    const domaine = dessinerDomaineMyMz(resolu, resultat);
+    dernierDomaine = domaine.svg;
+    zoneDiagramme.innerHTML = dernierDiagramme + domaine.html;
   } catch (e) {
     afficherErreur(e instanceof FormError ? e.message : String(e));
     zoneDiagramme.innerHTML = dernierDiagramme;
@@ -2129,20 +2143,19 @@ function dateDuJour(): string {
 }
 
 /**
- * Un fichier par dessin.
+ * Un fichier, un dessin, un bouton.
  *
- * Un document SVG porte UN dessin : la section et le diagramme sortent donc
- * separement, chacun autonome. Qui veut les deux dans un seul document a la
- * note de calcul, qui les porte tous.
+ * Un document SVG porte UN dessin. Les sortir tous d'un seul clic lancait
+ * plusieurs telechargements d'affilee, et les navigateurs bloquent le second
+ * sans prevenir : le diagramme N-M ne sortait jamais. Chaque dessin a donc son
+ * bouton. Qui veut tous les dessins dans un seul document a la note de calcul.
  */
-function exporterDessins(sortie: EtatExportable): void {
-  for (const dessin of sortie.dessins) {
-    telecharger(
-      `${baseDeNom(sortie.modele)}-${dessin.suffixe}.svg`,
-      svgAutonome(dessin.svg, STYLES_TRACE),
-      'image/svg+xml;charset=utf-8'
-    );
-  }
+function exporterDessin(modele: SectionModel, suffixe: string, svg: string): void {
+  telecharger(
+    `${baseDeNom(modele)}-${suffixe}.svg`,
+    svgAutonome(svg, STYLES_TRACE),
+    'image/svg+xml;charset=utf-8'
+  );
 }
 
 /** Les donnees d'entree ET les verifications : un tableau qui se lit seul. */
@@ -2197,14 +2210,27 @@ const SANS_CALCUL_A_EXPORTER =
   'Aucun calcul valide a exporter. Les sorties decrivent le dernier calcul reussi : corriger ' +
   'la saisie, puis reessayer.';
 
+/** Bouton -> suffixe du dessin dans `EtatExportable.dessins`. */
+const DESSIN_PAR_ACTION: Record<string, string> = {
+  'exporter-section': 'section',
+  'exporter-diagramme': 'diagramme-n-my',
+};
+
 function exporter(action: string): void {
   if (derniereSortie === null) {
     afficherErreur(SANS_CALCUL_A_EXPORTER);
     return;
   }
 
-  if (action === 'exporter-dessins') exporterDessins(derniereSortie);
-  else if (action === 'exporter-resultats') exporterResultats(derniereSortie);
+  const dessin = DESSIN_PAR_ACTION[action];
+  if (dessin !== undefined) {
+    const trouve = derniereSortie.dessins.find((d) => d.suffixe === dessin);
+    if (trouve !== undefined) exporterDessin(derniereSortie.modele, trouve.suffixe, trouve.svg);
+  } else if (action === 'exporter-domaine') {
+    // Le domaine n'est pas dans l'etat exportable : il n'existe que tant
+    // qu'il est affiche.
+    if (dernierDomaine !== null) exporterDessin(derniereSortie.modele, 'domaine-my-mz', dernierDomaine);
+  } else if (action === 'exporter-resultats') exporterResultats(derniereSortie);
   else if (action === 'exporter-note') exporterNote(derniereSortie);
 }
 

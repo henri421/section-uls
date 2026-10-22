@@ -1344,7 +1344,7 @@ describe('les sorties : dessins, resultats, note de calcul', () => {
   it('les trois boutons de sortie existent', async () => {
     const dom = await monterApplication();
 
-    for (const action of ['exporter-dessins', 'exporter-resultats', 'exporter-note']) {
+    for (const action of ['exporter-section', 'exporter-diagramme', 'exporter-resultats', 'exporter-note']) {
       expect(
         dom.window.document.querySelector(`[data-action="${action}"]`),
         `bouton "${action}"`
@@ -1354,10 +1354,12 @@ describe('les sorties : dessins, resultats, note de calcul', () => {
 
   it('les dessins sortent en SVG autonomes, styles inlines', async () => {
     const dom = await monterApplication();
-    cliquer(dom, 'exporter-dessins');
+    cliquer(dom, 'exporter-section');
 
     expect(pageEnErreur(dom)).toBe(false);
-    expect(telechargements.length).toBeGreaterThan(0);
+    // UN fichier par clic : plusieurs telechargements d'affilee sont bloques
+    // par les navigateurs, et le second dessin ne sortait jamais.
+    expect(telechargements).toHaveLength(1);
 
     const contenu = await telechargements[0].text();
     expect(telechargements[0].type).toContain('svg');
@@ -1365,6 +1367,19 @@ describe('les sorties : dessins, resultats, note de calcul', () => {
     expect(contenu).toContain('xmlns="http://www.w3.org/2000/svg"');
     // Sans les variables inlinees, le dessin s ouvre sans couleur ailleurs.
     expect(contenu).toContain('--compression');
+  });
+
+  it('le diagramme N-M sort seul, en SVG autonome avec ses styles de trace', async () => {
+    const dom = await monterApplication();
+    cliquer(dom, 'exporter-diagramme');
+
+    expect(pageEnErreur(dom)).toBe(false);
+    expect(telechargements).toHaveLength(1);
+    expect(telechargements[0].type).toContain('svg');
+    const contenu = await telechargements[0].text();
+    expect(contenu).toContain('<svg');
+    expect(contenu).toContain('plot-domaine');
+    expect(contenu).toContain('.plot-domaine');
   });
 
   it('les resultats sortent en CSV, point-virgule et BOM', async () => {
