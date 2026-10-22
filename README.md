@@ -12,7 +12,7 @@ npm run build    # construit dans docs/, servi par GitHub Pages
 npm run preview  # verifie le resultat construit
 ```
 
-Trois **sorties** quittent la page. Les **dessins** partent en SVG autonomes, styles inlinés — sans quoi ils s'ouvriraient sans couleur ailleurs, les teintes venant de variables CSS définies dans la page. Les **résultats** partent en CSV, point-virgule en séparateur de colonnes (la virgule est déjà le séparateur décimal) et UTF-8 avec BOM, sans quoi un tableur massacre les accents et les `σ`, `ρ`, `ζ` des libellés.
+Trois **sorties** quittent la page. Les **dessins** partent en SVG autonomes, **un bouton par dessin** (section, diagramme N-M, domaine My-Mz quand il est tracé : les navigateurs bloquent un second téléchargement lancé d'un même clic), styles inlinés — sans quoi ils s'ouvriraient sans couleur ailleurs, les teintes venant de variables CSS définies dans la page. Les **résultats** partent en CSV, point-virgule en séparateur de colonnes (la virgule est déjà le séparateur décimal) et UTF-8 avec BOM, sans quoi un tableur massacre les accents et les `σ`, `ρ`, `ζ` des libellés.
 
 La **note de calcul** est un document HTML autonome, ouvert dans un onglet et imprimable en PDF par le navigateur — avec repli sur un téléchargement si l'ouverture d'onglet est bloquée. Elle porte les données d'entrée, le dessin de la section et les diagrammes, puis chaque vérification **avec ses valeurs intermédiaires** : un `V_Rd,c` sans son `k`, son `ρ_l` et son `σ_cp` n'est pas vérifiable par un tiers, et c'est à cela qu'une note de calcul sert. Une vérification hors domaine y figure **avec son motif**, jamais par une absence : une section qui disparaît sans explication ferait croire qu'elle a été vérifiée.
 
@@ -96,6 +96,8 @@ Le nombre se compte désormais sur l'**étendue de la face** : `barsAtPitch(exte
 **Conséquence assumée :** l'espacement réel qui en résulte peut dépasser le pas demandé de quelques millimètres — `910/6 = 151,7` pour « 150 ». C'est un arbitrage d'ingénieur, il s'affiche, et le nombre voisin reste à un clic. Le lit saisi en espacement propose le plancher et le plafond avec leur espacement réel — 6 à 182 mm, 7 à 152 mm — et le nombre posé est marqué. Cliquer bascule le lit en saisie **par nombre**.
 
 Un **lit latéral** compte son pas sur la hauteur, et retranche **deux** barres : ses extrémités sont les barres d'angle, déjà posées par les lits inférieur et supérieur. En retrancher une seule ferait franchir le plafond à la face entière.
+
+Un **lit libre** (« Ajouter un lit libre (par d) ») pose un lit horizontal à la profondeur `d` de l'axe de ses barres, mesurée depuis la fibre supérieure, sur la même largeur qu'un lit de face. C'est lui qui décrit un second lit inférieur ou un lit intermédiaire. Un `d` hors de la zone armée (entre `a` et `h − a`) est refusé. Format de fichier version 5 ; les fichiers des versions 1 à 4 restent lisibles.
 
 Un **lit libre**, tracé d'axe à axe entre deux points, garde la lecture d'origine : son segment est déjà la fenêtre, ses deux extrémités sont des barres réelles, et « tous les 150 » y reste un maximum entre axes. Aucune ambiguïté à lever, donc aucune proposition n'y est offerte.
 

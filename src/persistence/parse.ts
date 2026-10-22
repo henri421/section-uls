@@ -185,7 +185,7 @@ function geometrie(v: unknown, chemin: string): GeometryModel {
   echec(`${chemin}.kind`, `valeur inconnue ${JSON.stringify(kind)} (attendu rectangle, polygon ou circle)`);
 }
 
-const FACES: readonly RowFaceModel[] = ['top', 'bottom', 'left', 'right'];
+const FACES: readonly RowFaceModel[] = ['top', 'bottom', 'left', 'right', 'depth'];
 
 function face(v: unknown, chemin: string): RowFaceModel {
   const s = chaine(v, chemin);
@@ -221,10 +221,19 @@ function ferraillage(v: unknown, chemin: string): ReinforcementModel {
   if (kind === 'rectangular-layout') {
     const rows = tableau(o.rows, `${chemin}.rows`).map((r, i) => {
       const ro = objet(r, `${chemin}.rows[${i}]`);
-      return {
-        face: face(ro.face, `${chemin}.rows[${i}].face`),
-        bars: barSpec(ro.bars, `${chemin}.rows[${i}].bars`),
-      };
+      const f = face(ro.face, `${chemin}.rows[${i}].face`);
+      // `d` n'a de sens que pour un lit libre : absent ailleurs, requis la.
+      if (f === 'depth') {
+        return {
+          face: f,
+          bars: barSpec(ro.bars, `${chemin}.rows[${i}].bars`),
+          d: positif(ro.d, `${chemin}.rows[${i}].d`),
+        };
+      }
+      if (ro.d !== undefined) {
+        echec(`${chemin}.rows[${i}].d`, `d ne s'applique qu'a un lit libre (face depth), pas a la face ${f}`);
+      }
+      return { face: f, bars: barSpec(ro.bars, `${chemin}.rows[${i}].bars`) };
     });
     const stirrupDiameter = optionnel(o.stirrupDiameter, `${chemin}.stirrupDiameter`, positifOuNul);
     return {
@@ -600,7 +609,11 @@ function ferraillageOrdonne(r: ReinforcementModel) {
         kind: r.kind,
         cover: r.cover,
         ...(r.stirrupDiameter !== undefined ? { stirrupDiameter: r.stirrupDiameter } : {}),
-        rows: r.rows.map((row) => ({ face: row.face, bars: barsOrdonnees(row.bars) })),
+        rows: r.rows.map((row) => ({
+          face: row.face,
+          bars: barsOrdonnees(row.bars),
+          ...(row.d !== undefined ? { d: row.d } : {}),
+        })),
       };
     case 'circular-cage':
       return {

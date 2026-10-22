@@ -34,9 +34,10 @@
  * sollicitations de service (session 10) ; 3 = type d'element, effort
  * tranchant, deformation genee du §7.3.2 et methode Meyer (session 14) ;
  * 4 = verifications retenues, referentiel de la deformation genee et etat
- * de fissuration en service.
+ * de fissuration en service ; 5 = lit horizontal libre d'une section
+ * rectangulaire, place par sa profondeur `d` (face `depth`).
  */
-export const FORMAT_VERSION = 4;
+export const FORMAT_VERSION = 5;
 
 /**
  * Versions ACCEPTEES a la lecture, de la plus ancienne a la courante.
@@ -53,7 +54,7 @@ export const FORMAT_VERSION = 4;
  * Ne retirer une version d'ici que le jour ou on assume de refuser les
  * fichiers qui la portent, et alors avec un message qui le dise.
  */
-export const SUPPORTED_FORMAT_VERSIONS: readonly number[] = [1, 2, 3, 4];
+export const SUPPORTED_FORMAT_VERSIONS: readonly number[] = [1, 2, 3, 4, 5];
 
 /**
  * Version du moteur ayant produit le fichier. Trace de provenance, JAMAIS
@@ -320,14 +321,20 @@ export type BarSpecModel =
   | { count: number; diameter: number }
   | { diameter: number; maxSpacing: number };
 
-export type RowFaceModel = 'top' | 'bottom' | 'left' | 'right';
+/**
+ * `depth` : lit horizontal LIBRE, place par la profondeur `d` de l'axe de ses
+ * barres, mesuree depuis la fibre superieure. C'est lui qui pose un second
+ * lit inferieur ou un lit intermediaire, qu'aucune face ne decrit.
+ */
+export type RowFaceModel = 'top' | 'bottom' | 'left' | 'right' | 'depth';
 
 export type ReinforcementModel =
   | {
       kind: 'rectangular-layout';
       cover: number;
       stirrupDiameter?: number;
-      rows: Array<{ face: RowFaceModel; bars: BarSpecModel }>;
+      /** `d` (mm) : requis pour la face `depth`, absent pour les autres. */
+      rows: Array<{ face: RowFaceModel; bars: BarSpecModel; d?: number }>;
     }
   | {
       kind: 'circular-cage';

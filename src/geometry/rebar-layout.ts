@@ -274,7 +274,8 @@ export function spacingOptions(params: {
     });
 }
 
-export type RowFace = 'top' | 'bottom' | 'left' | 'right';
+/** `depth` : lit horizontal libre, place par sa profondeur `d`. */
+export type RowFace = 'top' | 'bottom' | 'left' | 'right' | 'depth';
 
 /**
  * Le segment qui porte un lit sur une face d'un rectangle, avec le mode
@@ -295,6 +296,11 @@ export function faceSegment(params: {
   /** Diametre du lit concerne : la distance d'axe en depend. */
   diameter: number;
   face: RowFace;
+  /**
+   * Profondeur de l'axe des barres depuis la fibre superieure (mm). Requise
+   * pour la face `depth`, ignoree pour les autres.
+   */
+  d?: number;
 }): {
   from: Vertex;
   to: Vertex;
@@ -346,9 +352,28 @@ export function faceSegment(params: {
       to = { y: yDroite, z: zBas };
       endpoints = 'exclude';
       break;
+    // Lit libre : horizontal, sur la meme largeur qu'un lit de face, a la
+    // profondeur saisie. Hors de la zone armee [a ; h − a], ses barres
+    // sortiraient des etriers, voire du beton : le lit est refuse.
+    case 'depth': {
+      const d = params.d;
+      if (d === undefined || !Number.isFinite(d)) {
+        throw new Error('Un lit libre exige sa profondeur d (mm), mesuree depuis la fibre superieure.');
+      }
+      if (d < a - 1e-9 || d > h - a + 1e-9) {
+        throw new Error(
+          `Lit libre a d = ${d} mm hors de la zone armee : d doit etre compris entre ` +
+            `${a} et ${h - a} mm (enrobage + etrier + demi-diametre depuis chaque face).`
+        );
+      }
+      from = { y: yGauche, z: -h / 2 + d };
+      to = { y: yDroite, z: -h / 2 + d };
+      endpoints = 'include';
+      break;
+    }
   }
 
-  const extent = face === 'top' || face === 'bottom' ? b : h;
+  const extent = face === 'left' || face === 'right' ? h : b;
 
   return { from, to, length: Math.hypot(to.y - from.y, to.z - from.z), extent, endpoints };
 }
@@ -382,7 +407,7 @@ export function rectangularRebarLayout(params: {
   cover: number;
   stirrupDiameter?: number;
   steel: SteelMaterial;
-  rows: Array<{ face: RowFace; bars: BarSpec }>;
+  rows: Array<{ face: RowFace; bars: BarSpec; d?: number }>;
 }): { bars: RebarLayer[]; rows: RowSummary[] } {
   const { width: b, height: h, cover, steel } = params;
   const stirrup = params.stirrupDiameter ?? 0;
@@ -398,6 +423,7 @@ export function rectangularRebarLayout(params: {
       stirrupDiameter: stirrup,
       diameter: row.bars.diameter,
       face: row.face,
+      ...(row.d !== undefined ? { d: row.d } : {}),
     });
 
     // `pitchExtent` est l'ETENDUE DE LA FACE, pas la longueur de pose : « Ø14

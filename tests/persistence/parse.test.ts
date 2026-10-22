@@ -206,9 +206,9 @@ describe('parseModel : les versions du format', () => {
     expect(lu.serviceActions).toBeUndefined();
   });
 
-  it('la version courante est 4 et les quatre versions sont lues', () => {
-    expect(FORMAT_VERSION).toBe(4);
-    expect([...SUPPORTED_FORMAT_VERSIONS]).toEqual([1, 2, 3, 4]);
+  it('la version courante est 5 et les cinq versions sont lues', () => {
+    expect(FORMAT_VERSION).toBe(5);
+    expect([...SUPPORTED_FORMAT_VERSIONS]).toEqual([1, 2, 3, 4, 5]);
   });
 
   it('lit les deux combinaisons de service', () => {
@@ -243,13 +243,13 @@ describe('parseModel : les versions du format', () => {
     expect(seuleQp.serviceActions?.characteristic).toBeUndefined();
   });
 
-  it('refuse une version 5, en nommant les versions qu il sait lire', () => {
+  it('refuse une version 6, en nommant les versions qu il sait lire', () => {
     const json = avecAlteration((m) => {
-      m.formatVersion = 5;
+      m.formatVersion = 6;
     });
     expect(() => parseModel(json)).toThrow(/formatVersion/);
-    expect(() => parseModel(json)).toThrow(/5/);
-    expect(() => parseModel(json)).toThrow(/1, 2, 3, 4/);
+    expect(() => parseModel(json)).toThrow(/6/);
+    expect(() => parseModel(json)).toThrow(/1, 2, 3, 4, 5/);
   });
 
   it('refuse un serviceActions mal forme en nommant le champ fautif', () => {
@@ -694,5 +694,41 @@ describe('serializeModel', () => {
     const texte = serializeModel(modeleValide());
     expect(texte).toContain('\n  "formatVersion"');
     expect(texte.indexOf('"formatVersion"')).toBeLessThan(texte.indexOf('"geometry"'));
+  });
+});
+
+describe('lit libre par profondeur d (format 5)', () => {
+  function avecLitLibre(lit: Record<string, unknown>): string {
+    return avecAlteration((m) => {
+      const r = m.reinforcement as { rows: unknown[] };
+      r.rows.push(lit);
+    });
+  }
+
+  it('lit un lit libre et le reecrit a l identique', () => {
+    const json = avecLitLibre({ face: 'depth', d: 402, bars: { count: 3, diameter: 20 } });
+    const lu = parseModel(json);
+    if (lu.reinforcement.kind !== 'rectangular-layout') throw new Error('ferraillage attendu');
+    expect(lu.reinforcement.rows[1]).toEqual({ face: 'depth', d: 402, bars: { count: 3, diameter: 20 } });
+    expect(parseModel(serializeModel(lu))).toEqual(lu);
+  });
+
+  it('refuse un lit libre sans d, en nommant le chemin', () => {
+    expect(() => parseModel(avecLitLibre({ face: 'depth', bars: { count: 3, diameter: 20 } }))).toThrow(
+      /reinforcement\.rows\[1\]\.d/
+    );
+  });
+
+  it('refuse un d sur une face qui n en a pas', () => {
+    expect(() =>
+      parseModel(avecLitLibre({ face: 'bottom', d: 402, bars: { count: 3, diameter: 20 } }))
+    ).toThrow(/lit libre/);
+  });
+
+  it('un fichier de version 4 sans lit libre se lit toujours', () => {
+    const json = avecAlteration((m) => {
+      m.formatVersion = 4;
+    });
+    expect(parseModel(json).formatVersion).toBe(4);
   });
 });

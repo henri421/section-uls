@@ -295,3 +295,46 @@ describe('formatRow', () => {
     expect(text).toBe('1 HA12 = 113 mm²');
   });
 });
+
+describe('lit libre a la profondeur d (face depth)', () => {
+  const base = { width: 400, height: 600, cover: 30, stirrupDiameter: 8, steel };
+
+  it('pose le lit a z = −h/2 + d, sur la largeur d un lit de face', () => {
+    const layout = rectangularRebarLayout({
+      ...base,
+      rows: [{ face: 'depth', d: 400, bars: { count: 3, diameter: 20 } }],
+    });
+
+    // a = 30 + 8 + 10 = 48 mm ; z = −300 + 400 = 100 mm.
+    expect(layout.bars).toHaveLength(3);
+    expect(layout.bars.every((b) => b.z === 100)).toBe(true);
+    expect(layout.bars.map((b) => b.y)).toEqual([-152, 0, 152]);
+  });
+
+  it('a d = h − a, il coincide avec le lit de face inferieure', () => {
+    const libre = rectangularRebarLayout({
+      ...base,
+      rows: [{ face: 'depth', d: 600 - 48, bars: { count: 3, diameter: 20 } }],
+    });
+    const inferieur = rectangularRebarLayout({
+      ...base,
+      rows: [{ face: 'bottom', bars: { count: 3, diameter: 20 } }],
+    });
+    expect(libre.bars).toEqual(inferieur.bars);
+  });
+
+  it('refuse un d hors de la zone armee', () => {
+    expect(() =>
+      rectangularRebarLayout({ ...base, rows: [{ face: 'depth', d: 40, bars: { count: 3, diameter: 20 } }] })
+    ).toThrow(/hors de la zone armee/);
+    expect(() =>
+      rectangularRebarLayout({ ...base, rows: [{ face: 'depth', d: 560, bars: { count: 3, diameter: 20 } }] })
+    ).toThrow(/hors de la zone armee/);
+  });
+
+  it('refuse un lit libre sans d', () => {
+    expect(() =>
+      rectangularRebarLayout({ ...base, rows: [{ face: 'depth', bars: { count: 3, diameter: 20 } }] })
+    ).toThrow(/profondeur d/);
+  });
+});

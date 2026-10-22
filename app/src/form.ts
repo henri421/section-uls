@@ -18,6 +18,8 @@ import { formatNumber } from './format';
 /** Un lit tel qu'il est saisi : nombre de barres OU espacement maximal. */
 export interface RowInput {
   face: RowFaceModel;
+  /** Profondeur du lit libre (face `depth`), en saisie. */
+  d?: string;
   diameter: string;
   /** `true` : on saisit un espacement maximal ; `false` : un nombre de barres. */
   useSpacing: boolean;
@@ -824,10 +826,15 @@ export function formToModel(form: FormState): SectionModel {
         kind: 'rectangular-layout',
         cover: nombreRequis(form.cover, 'enrobage'),
         ...(stirrupDiameter !== undefined ? { stirrupDiameter } : {}),
-        rows: form.rows.map((row) => ({
-          face: row.face,
-          bars: parseBarSpec(row, `lit ${row.face}`),
-        })),
+        rows: form.rows.map((row, i) =>
+          row.face === 'depth'
+            ? {
+                face: row.face,
+                bars: parseBarSpec(row, `lit libre ${i + 1}`),
+                d: nombreRequis(row.d ?? '', `lit libre ${i + 1} : profondeur d`),
+              }
+            : { face: row.face, bars: parseBarSpec(row, `lit ${row.face}`) }
+        ),
       };
       break;
     }
@@ -1106,6 +1113,7 @@ export function modelToForm(model: SectionModel): FormState {
       form.stirrupDiameter = texteDe(model.reinforcement.stirrupDiameter);
       form.rows = model.reinforcement.rows.map((row) => ({
         face: row.face,
+        ...(row.d !== undefined ? { d: texteDe(row.d) } : {}),
         ...barSpecEnSaisie(row.bars),
       }));
       break;

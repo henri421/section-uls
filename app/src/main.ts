@@ -356,6 +356,7 @@ function optionsDuLitRectangulaire(lit: RowInput): RowOption[] | null {
         : {}),
       diameter: diametre,
       face: lit.face,
+      ...(lit.face === 'depth' ? { d: nombreDeChamp(lit.d ?? '') ?? Number.NaN } : {}),
     });
 
     return spacingOptions({
@@ -395,6 +396,7 @@ function litRectangulaire(lit: RowInput, index: number, recapitulatif?: string):
     ['top', 'superieure'],
     ['left', 'gauche'],
     ['right', 'droite'],
+    ['depth', 'libre, a la profondeur d'],
   ];
   const options = faces
     .map(([v, l]) => `<option value="${v}"${v === lit.face ? ' selected' : ''}>${l}</option>`)
@@ -403,6 +405,11 @@ function litRectangulaire(lit: RowInput, index: number, recapitulatif?: string):
   return `<fieldset class="lit">
     <legend>Lit ${index + 1}</legend>
     <label class="large"><span>Face</span><select data-lit="${index}" data-champ="face" data-structure="1">${options}</select></label>
+    ${
+      lit.face === 'depth'
+        ? `<label><span>d, axe des barres depuis la fibre superieure (mm)</span><input type="text" inputmode="decimal" data-lit="${index}" data-champ="d" value="${echapper(lit.d ?? '')}" /></label>`
+        : ''
+    }
     <label><span>Diametre (mm)</span><input type="text" inputmode="decimal" data-lit="${index}" data-champ="diameter" value="${echapper(lit.diameter)}" /></label>
     <label class="case"><input type="checkbox" data-lit="${index}" data-champ="useSpacing" data-structure="1"${lit.useSpacing ? ' checked' : ''} /><span>Definir par espacement maximal</span></label>
     ${
@@ -507,7 +514,8 @@ function blocFerraillage(): string {
       champTexte('cover', 'Enrobage (mm)', etat.cover) +
       champTexte('stirrupDiameter', 'Diametre etrier (mm, vide = 0)', etat.stirrupDiameter) +
       etat.rows.map((lit, i) => litRectangulaire(lit, i, recap?.[i])).join('') +
-      `<button type="button" data-action="ajouter-lit">Ajouter un lit</button>`
+      `<button type="button" data-action="ajouter-lit">Ajouter un lit</button>` +
+      `<button type="button" data-action="ajouter-lit-libre">Ajouter un lit libre (par d)</button>`
     );
   }
 
@@ -2390,6 +2398,12 @@ document.addEventListener('click', (evenement) => {
 
   if (action === 'ajouter-lit') {
     etat.rows.push({ face: 'bottom', diameter: '20', useSpacing: false, count: '2', maxSpacing: '' });
+    rendreFormulaire();
+    recalculer();
+  } else if (action === 'ajouter-lit-libre') {
+    // d vide : c'est a l'utilisateur de placer le lit, et le recalcul
+    // signale le champ manquant au lieu d'inventer une profondeur.
+    etat.rows.push({ face: 'depth', d: '', diameter: '20', useSpacing: false, count: '2', maxSpacing: '' });
     rendreFormulaire();
     recalculer();
   } else if (action === 'supprimer-lit') {
