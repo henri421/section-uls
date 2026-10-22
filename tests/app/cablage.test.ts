@@ -1449,7 +1449,10 @@ describe('les sorties : dessins, resultats, note de calcul', () => {
     // Donnees d entree, dessin, verifications, hypotheses, avertissement.
     expect(contenu).toContain('Donnees d entree');
     expect(contenu).toContain('<svg');
-    expect(contenu).toContain('Effort tranchant');
+    // La verification ELU affichee a l ecran figure dans la note. (Le
+    // tranchant, decoche par defaut, n y figure plus, meme en hypothese :
+    // voir « une verification cochee apparait dans la note ».)
+    expect(contenu).toContain('Flexion ELU');
     expect(contenu).toContain('Hypotheses et limites');
     expect(contenu).toMatch(/responsabilite incombent a l ingenieur/);
     expect(contenu).not.toContain('NaN');
