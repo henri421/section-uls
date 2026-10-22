@@ -72,7 +72,7 @@ export function blocsDEntree(
   const aireAcier = resolu.section.rebars.reduce((somme, r) => somme + r.area, 0);
   const service = modele.serviceActions;
 
-  return [
+  const blocs: BlocService[] = [
     blocSimple('Identification et profil normatif', [
       { libelle: 'Nom', valeur: modele.name ?? 'sans nom' },
       { libelle: 'Profil normatif', valeur: resolu.norm.name },
@@ -115,7 +115,14 @@ export function blocsDEntree(
       { libelle: 'My', valeur: `${formatNumber(resolu.action.My, 1)} kN·m` },
       { libelle: 'Mz', valeur: `${formatNumber(resolu.action.Mz, 1)} kN·m` },
     ]),
+  ];
 
+  // Les donnees de service n'entrent dans la note QUE si le service est
+  // verifie. Une note ELU seule qui listerait des moments ELS ferait croire
+  // a une verification de service qui n'a pas eu lieu.
+  if (!resolu.checks.service) return blocs;
+
+  blocs.push(
     {
       titre: 'Sollicitations de service',
       // Une combinaison absente est ECRITE comme absente. La faire disparaitre
@@ -145,8 +152,10 @@ export function blocsDEntree(
         'sous cette forme par l EN 1992-1-1 ; w_max depend de la classe d exposition ' +
         '(tableau 7.1N) ; beta vaut 0,5 en charge de longue duree ou repetee, 1,0 en charge ' +
         'courte.',
-    },
-  ];
+    }
+  );
+
+  return blocs;
 }
 
 /**
@@ -156,7 +165,13 @@ export function blocsDEntree(
  * qui separe un compte rendu honnete d une justification implicite.
  */
 export function hypothesesDeLaNote(resolu: ResolvedModel): string[] {
-  return [
+  // Chaque hypothese ne sort qu'avec la verification qu'elle borne : la note
+  // ne parle pas d'un module decoche.
+  const c = resolu.checks;
+  const meyer = c.restraint && c.restraintReferential !== 'ec2';
+  const restraintEc2 = c.restraint && c.restraintReferential !== 'meyer';
+
+  const hypotheses: Array<string | false> = [
     `Profil normatif retenu : ${resolu.norm.name}. Les coefficients k1, k2, k3, kt et les ` +
       'valeurs du §9 restent a leurs valeurs RECOMMANDEES par l EN 1992-1-1 : une annexe ' +
       'nationale (NBN, ILNAS, NF) peut les modifier, et c est alors elle qui fait foi.',
@@ -166,24 +181,32 @@ export function hypothesesDeLaNote(resolu: ResolvedModel): string[] {
       'donnee de niveau ELEMENT — portee, conditions d appui, schema statique — n entre dans ce ' +
       'calcul.',
 
-    'Effort tranchant (§6.2) et ouverture de fissures (§7.3) : sections RECTANGULAIRES ' +
+    (c.shear || c.service) &&
+      'Effort tranchant (§6.2) et ouverture de fissures (§7.3) : sections RECTANGULAIRES ' +
       'seulement. La largeur d ame b_w, la hauteur utile d et la zone tendue n ont pas de ' +
       'definition non ambigue hors du rectangle, et le calcul est refuse plutot qu approxime.',
 
-    'Verifications de service (§7.2, §7.3, §7.4.3) : FLEXION DROITE uniquement, sur les ' +
+    c.service &&
+      'Verifications de service (§7.2, §7.3, §7.4.3) : FLEXION DROITE uniquement, sur les ' +
       'combinaisons saisies separement de l ELU. Le coefficient d equivalence n est un choix ' +
       'assume, non une prescription de l EN 1992-1-1.',
 
-    'Courbure (§7.4.3) : ce N EST PAS UNE FLECHE. Une fleche exige la portee, les conditions ' +
+    c.service &&
+      'Courbure (§7.4.3) : ce N EST PAS UNE FLECHE. Une fleche exige la portee, les conditions ' +
       'd appui et la repartition des charges. La courbure s integre le long de la piece par qui ' +
       'dispose du schema statique.',
 
-    'Methode de G. et R. MEYER : methode ALLEMANDE (DIN 1045), servant au pre-dimensionnement ' +
+    meyer &&
+      'Methode de G. et R. MEYER : methode ALLEMANDE (DIN 1045), servant au pre-dimensionnement ' +
       'et au controle d ordre de grandeur. Elle ne remplace pas le §7.3.2 et n a de valeur ' +
       'reglementaire ni en Belgique ni au Luxembourg. Seule la famille traction / bridage ' +
       'exterieur a ete confrontee au diagramme de l ouvrage.',
 
-    'Deformation genee (§7.3.2) et methode Meyer rendent une aire d acier EXIGEE : elles ne la ' +
-      'comparent a aucune armature en place, et ne rendent donc aucun verdict.',
+    c.restraint &&
+      `${restraintEc2 && meyer ? 'Deformation genee (§7.3.2) et methode Meyer' : restraintEc2 ? 'Deformation genee (§7.3.2)' : 'Methode Meyer'} : ` +
+      'une aire d acier EXIGEE est rendue, sans comparaison a aucune armature en place, et donc ' +
+      'sans verdict.',
   ];
+
+  return hypotheses.filter((h): h is string => h !== false);
 }

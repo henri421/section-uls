@@ -78,6 +78,7 @@ import {
   STYLES_NOTE,
 } from './export';
 import { blocsDEntree, hypothesesDeLaNote } from './note-view';
+import { blocsFlexionUls } from './uls-view';
 import './style.css';
 
 /**
@@ -1535,164 +1536,37 @@ function groupe(titre: string, lignes: string[]): string {
   return contenu === '' ? '' : `<div class="groupe"><h3>${titre}</h3>${contenu}</div>`;
 }
 
-function htmlResultat(
-  resolu: ResolvedModel,
-  resultat: VerificationResult,
-  etatAxe: NeutralAxisState | null
-): string {
-  const taux = resultat.utilization;
-  const verdict = resultat.ok
-    ? `<p class="verdict ok">Verifie — taux ${formatUtilization(taux)}</p>`
-    : `<p class="verdict non-ok">Non verifie — taux ${formatUtilization(taux)}</p>`;
+/**
+ * Le resultat de flexion ELU a l'ecran, rendu A PARTIR DES BLOCS de
+ * `uls-view.ts` : ceux-la memes qui partent dans le CSV et la note. Il n'y a
+ * donc qu'une source, et la note ne peut plus omettre ce que l'ecran montre.
+ *
+ * Le premier bloc porte le verdict, rendu avec sa jauge ; les suivants sont
+ * les groupes de grandeurs.
+ */
+function htmlResultat(blocs: BlocService[], taux: number): string {
+  const [tete, ...groupes] = blocs;
+  const ok = tete.verdict?.ok ?? false;
+  const verdict = `<p class="verdict ${ok ? 'ok' : 'non-ok'}">${echapper(tete.verdict?.texte ?? '')}</p>`;
 
   // Jauge : le taux lu d'un coup d'oeil, plafonnee visuellement a 100 % pour
   // rester lisible quand la section est tres largement depassee.
   const remplissage = Number.isFinite(taux) ? Math.min(taux, 1) * 100 : 100;
-  const jauge = `<div class="jauge${resultat.ok ? '' : ' depasse'}"><div style="width:${remplissage.toFixed(1)}%"></div></div>`;
+  const jauge = `<div class="jauge${ok ? '' : ' depasse'}"><div style="width:${remplissage.toFixed(1)}%"></div></div>`;
 
-  const magnitudeSollicitante = Math.hypot(resolu.action.My, resolu.action.Mz);
-  const magnitudeResistante = resultat.M_Rd
-    ? Math.hypot(resultat.M_Rd.y, resultat.M_Rd.z)
-    : null;
+  const corps = groupes
+    .map(
+      (g) =>
+        groupe(
+          echapper(g.titre),
+          g.lignes.map((l) => ligne(echapper(l.libelle), echapper(l.valeur)))
+        ) + (g.note === null ? '' : `<p class="note">${echapper(g.note)}</p>`)
+    )
+    .join('');
 
-  const aireBeton = polygonArea(outlineOf(resolu.section));
-  const aireAcier = resolu.section.rebars.reduce((somme, r) => somme + r.area, 0);
+  const motif = tete.note === null ? '' : `<p class="motif">${echapper(tete.note)}</p>`;
 
-  const sollicitation = groupe('Sollicitation', [
-    ligne('Effort normal N', `${formatNumber(resolu.action.N, 1)} kN`),
-    ligne(
-      'Moment sollicitant',
-      `${formatNumber(magnitudeSollicitante, 1)} kN.m — My ${formatNumber(resolu.action.My, 1)}, Mz ${formatNumber(resolu.action.Mz, 1)}`
-    ),
-    ligne('Chemin de chargement', resultat.mode === 'constant-N' ? 'N constant' : 'proportionnel'),
-  ]);
-
-  const resistance = groupe('Resistance', [
-    magnitudeResistante !== null
-      ? ligne('Moment resistant', `${formatNumber(magnitudeResistante, 1)} kN.m`)
-      : '',
-    resultat.M_Rd
-      ? ligne(
-          'Composantes M_Rd',
-          `My ${formatNumber(resultat.M_Rd.y, 1)}, Mz ${formatNumber(resultat.M_Rd.z, 1)} kN.m`
-        )
-      : '',
-    magnitudeResistante !== null && magnitudeResistante > 0
-      ? ligne(
-          'Marge disponible',
-          `${formatNumber(magnitudeResistante - magnitudeSollicitante, 1)} kN.m`
-        )
-      : '',
-  ]);
-
-  // Hauteur utile mesuree perpendiculairement a l'axe neutre, d'ou le bras
-  // de levier simplifie des abaques.
-  const hauteurUtile =
-    resultat.neutralAxis === null
-      ? null
-      : effectiveDepth(resolu.section, resultat.neutralAxis.angle, resultat.neutralAxis.offset);
-
-  const equilibre = groupe('Equilibre de la section', [
-    resultat.neutralAxis
-      ? ligne('Inclinaison de l axe neutre', `${formatAngleDegrees(resultat.neutralAxis.angle)} deg`)
-      : '',
-    resultat.neutralAxis
-      ? ligne('Position de l axe neutre', `${formatNumber(resultat.neutralAxis.offset, 1)} mm`)
-      : '',
-    etatAxe?.compression
-      ? ligne(
-          'Resultante de compression',
-          `${formatNumber(etatAxe.compression.force, 0)} kN a z = ${formatNumber(etatAxe.compression.z, 1)} mm`
-        )
-      : '',
-    etatAxe?.tension
-      ? ligne(
-          'Resultante de traction',
-          `${formatNumber(etatAxe.tension.force, 0)} kN a z = ${formatNumber(etatAxe.tension.z, 1)} mm`
-        )
-      : '',
-    resultat.leverArm !== null
-      ? ligne('Distance entre resultantes', `${formatNumber(resultat.leverArm, 1)} mm`)
-      : '',
-    hauteurUtile !== null
-      ? ligne('Hauteur utile d', `${formatNumber(hauteurUtile, 1)} mm`)
-      : '',
-    hauteurUtile !== null && etatAxe !== null
-      ? ligne(
-          'Bras de levier z = d − 0,4x',
-          `${formatNumber(simplifiedLeverArm(hauteurUtile, etatAxe.x), 1)} mm`
-        )
-      : '',
-  ]);
-
-  const materiaux = groupe('Materiaux', [
-    ligne('fcd', `${formatNumber(resolu.concrete.fcd, 2)} MPa`),
-    ligne('fyd', `${formatNumber(resolu.steel.fyd, 1)} MPa`),
-    ligne('Aire de beton', `${formatNumber(aireBeton, 0)} mm²`),
-  ]);
-
-  // Separation inferieures / superieures par rapport au centroide, et non
-  // par rapport a l'axe neutre : c'est la lecture du plan de ferraillage,
-  // celle qu'attend l'utilisateur quand il verifie sa saisie.
-  const inferieures = resolu.section.rebars.filter((r) => r.z > 0);
-  const superieures = resolu.section.rebars.filter((r) => r.z <= 0);
-  const aire = (barres: typeof inferieures): number =>
-    barres.reduce((somme, r) => somme + r.area, 0);
-
-  // Armatures TENDUES : celles du cote tendu de l'axe neutre. C'est sur
-  // elles seules que porte le ratio d'acier demande.
-  const axeNeutre = resultat.neutralAxis;
-  const tendues =
-    axeNeutre === null
-      ? []
-      : resolu.section.rebars.filter(
-          (r) => zetaOf({ y: r.y, z: r.z }, axeNeutre.angle) > axeNeutre.offset
-        );
-  const aireTendue = aire(tendues);
-
-  // Ratio pondere : par metre courant, le volume d'acier vaut As x 1 m et le
-  // volume de beton Ac x 1 m, donc le rapport des aires suffit — multiplie
-  // par la masse volumique de l'acier.
-  const MASSE_VOLUMIQUE_ACIER = 7850; // kg/m³
-  const ratioTendu = aireBeton > 0 ? (aireTendue / aireBeton) * MASSE_VOLUMIQUE_ACIER : 0;
-
-  const ferraillage = groupe('Ferraillage', [
-    ligne(
-      'Armatures inferieures',
-      `${inferieures.length} barres, ${formatNumber(aire(inferieures), 0)} mm²`
-    ),
-    ligne(
-      'Armatures superieures',
-      `${superieures.length} barres, ${formatNumber(aire(superieures), 0)} mm²`
-    ),
-    ligne('Total', `${resolu.section.rebars.length} barres, ${formatNumber(aireAcier, 0)} mm²`),
-    aireBeton > 0
-      ? ligne('Taux d armature total', `${formatNumber((100 * aireAcier) / aireBeton, 2)} %`)
-      : '',
-    axeNeutre !== null
-      ? ligne(
-          'Armatures tendues',
-          `${tendues.length} barres, ${formatNumber(aireTendue, 0)} mm²`
-        )
-      : '',
-    axeNeutre !== null && aireBeton > 0
-      ? ligne('Ratio acier tendu', `${formatNumber(ratioTendu, 1)} kg/m³ de beton`)
-      : '',
-  ]);
-
-  const note =
-    resultat.leverArm !== null
-      ? `<p class="note"><strong>Deux bras de levier, deux definitions.</strong>
-         La <em>distance entre resultantes</em> separe les resultantes de compression et de traction
-         TOTALES, toutes armatures comprises : elle se raccourcit des qu'une seconde nappe se trouve
-         du cote tendu, meme faiblement sollicitee. Le <em>z = d &minus; 0,4x</em> est celui des abaques,
-         fonde sur le bloc rectangulaire et sur la seule nappe la plus eloignee. Les deux sont exacts
-         et ne mesurent pas la meme chose.</p>`
-      : '';
-
-  const motif = resultat.reason ? `<p class="motif">${echapper(resultat.reason)}</p>` : '';
-
-  return verdict + jauge + sollicitation + resistance + equilibre + materiaux + ferraillage + note + motif;
+  return verdict + jauge + corps + motif;
 }
 
 // --- Verifications de service -----------------------------------------------
@@ -2127,6 +2001,8 @@ function recalculer(mode?: 'proportional'): void {
     // temps de calcul suit.
     const checks = resolu.checks;
 
+    // La flexion ELU est TOUJOURS calculee : elle est l'objet de l'outil.
+    const blocsUls = blocsFlexionUls(resolu, resultat, etatAxe);
     const blocsEtat = checks.sectionState ? [blocDeLEtatSection(resolu)] : [];
     const blocsService = checks.service ? blocsDeService(resolu, parametres) : [];
     const blocsVerifications = blocsDeVerifications(
@@ -2137,7 +2013,7 @@ function recalculer(mode?: 'proportional'): void {
     );
 
     dernierResultat =
-      htmlResultat(resolu, resultat, etatAxe) +
+      htmlResultat(blocsUls, resultat.utilization) +
       htmlEtatSection(blocsEtat) +
       (checks.service ? htmlService(resolu.action.Mz, blocsService) : '') +
       htmlVerifications(blocsVerifications, checks);
@@ -2158,7 +2034,10 @@ function recalculer(mode?: 'proportional'): void {
       modele,
       resolu,
       parametres,
-      blocs: [...blocsEtat, ...blocsService, ...blocsVerifications].map((b) => b.bloc),
+      blocs: [
+        ...blocsUls,
+        ...[...blocsEtat, ...blocsService, ...blocsVerifications].map((b) => b.bloc),
+      ],
       dessins: [
         { suffixe: 'section', svg: svgSection },
         { suffixe: 'diagramme-n-my', svg: diagramme.svg },

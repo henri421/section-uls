@@ -122,8 +122,11 @@ describe('blocsDEntree', () => {
   it('DIT qu une combinaison de service n est pas saisie, au lieu de la taire', () => {
     // Une combinaison absente qui disparait de la note ferait croire au
     // lecteur qu elle a ete prise en compte.
+    // Service COCHE, combinaisons absentes : c'est le cas ou la note doit
+    // le dire.
     const sansService = modele();
     delete sansService.serviceActions;
+    sansService.checks = { service: true };
 
     expect(valeur('Sollicitations de service', 'Combinaison caracteristique', sansService)).toMatch(
       /non saisie/i
@@ -156,8 +159,10 @@ describe('hypothesesDeLaNote', () => {
     expect(hypotheses()).toMatch(/annexe nationale/i);
   });
 
-  it('enonce les restrictions de domaine de chaque module', () => {
-    const texte = hypotheses();
+  it('enonce les restrictions de domaine de chaque module coche', () => {
+    const tout = modele();
+    tout.checks = { service: true, shear: true, restraint: true, restraintReferential: 'both' };
+    const texte = hypothesesDeLaNote(resolveModel(tout)).join('\n');
 
     expect(texte).toMatch(/rectangulaire/i); // tranchant et fissuration
     expect(texte).toMatch(/flexion droite/i); // service
@@ -167,5 +172,37 @@ describe('hypothesesDeLaNote', () => {
 
   it('ne conclut rien', () => {
     expect(hypotheses()).not.toMatch(/section verifiee|section non verifiee/i);
+  });
+
+  it('ne parle d aucun module decoche', () => {
+    // Cas signale par l'utilisateur : ELU seul. La note ne doit evoquer ni le
+    // service, ni le tranchant, ni la deformation genee.
+    const eluSeul = modele();
+    eluSeul.checks = { service: false, shear: false, restraint: false, detailing: false };
+    const texte = hypothesesDeLaNote(resolveModel(eluSeul)).join('\n');
+
+    expect(texte).not.toMatch(/service|§7\.2|§7\.3|fleche|Meyer|tranchant/i);
+    expect(texte).toMatch(/annexe nationale/i);
+  });
+});
+
+describe('donnees d entree selon les verifications cochees', () => {
+  it('ELU seul : aucune sollicitation ni parametre de service', () => {
+    const eluSeul = modele();
+    eluSeul.checks = { service: false };
+    const titres = entrees(eluSeul).map((b) => b.titre);
+
+    expect(titres).toContain('Sollicitation ELU');
+    expect(titres).not.toContain('Sollicitations de service');
+    expect(titres).not.toContain('Parametres de service assumes');
+  });
+
+  it('service coche : les deux blocs de service sont presents', () => {
+    const avecService = modele();
+    avecService.checks = { service: true };
+    const titres = entrees(avecService).map((b) => b.titre);
+
+    expect(titres).toContain('Sollicitations de service');
+    expect(titres).toContain('Parametres de service assumes');
   });
 });
