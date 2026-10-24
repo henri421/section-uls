@@ -1,4 +1,10 @@
-import { JETONS, csv, svgAutonome as svgAutonomeCommun } from 'aedificium-ui';
+import {
+  JETONS,
+  csv,
+  notationHtml,
+  notationTexte,
+  svgAutonome as svgAutonomeCommun,
+} from 'aedificium-ui';
 import type { BlocService } from './service-view';
 
 /**
@@ -118,7 +124,10 @@ export function resultatsEnCsv(blocs: BlocService[]): string {
     if (lignes.length === avant) lignes.push([bloc.titre, '', '']);
   }
 
-  return csv(lignes);
+  // Les DONNEES gardent leur notation source ; la conversion en texte brut se
+  // fait ici, au rendu, par `notationTexte` — indices et exposants Unicode,
+  // lettres grecques, sans balise ni « _ ».
+  return csv(lignes.map((ligne) => ligne.map((cellule) => notationTexte(cellule))));
 }
 
 // --- Note de calcul ----------------------------------------------------------
@@ -251,21 +260,6 @@ export interface NoteDeCalcul {
 }
 
 /**
- * Echappement HTML, identique a celui du cablage.
- *
- * Recopie plutot qu importe : ce module ne doit RIEN devoir a `main.ts`, qui
- * touche au document. Quatre remplacements sans etat, dont la duplication
- * coute moins que le couplage.
- */
-function echapperHtml(texte: string): string {
-  return texte
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-/**
  * Un bloc de la note.
  *
  * La note du bloc devient un MOTIF — cadre rouge — quand elle explique une
@@ -280,8 +274,8 @@ function blocEnHtml(bloc: BlocService): string {
       : `<table class="lignes"><tbody>${bloc.lignes
           .map(
             (l) =>
-              `<tr><th scope="row">${echapperHtml(l.libelle)}</th>` +
-              `<td>${echapperHtml(l.valeur)}</td></tr>`
+              `<tr><th scope="row">${notationHtml(l.libelle)}</th>` +
+              `<td>${notationHtml(l.valeur)}</td></tr>`
           )
           .join('')}</tbody></table>`;
 
@@ -289,7 +283,7 @@ function blocEnHtml(bloc: BlocService): string {
     bloc.verdict === null
       ? ''
       : `<p class="verdict ${bloc.verdict.ok ? 'ok' : 'non-ok'}">` +
-        `${echapperHtml(bloc.verdict.texte)}</p>`;
+        `${notationHtml(bloc.verdict.texte)}</p>`;
 
   const estUneAbsence =
     (bloc.verdict !== null && !bloc.verdict.ok) ||
@@ -297,13 +291,13 @@ function blocEnHtml(bloc: BlocService): string {
   const note =
     bloc.note === null
       ? ''
-      : `<p class="${estUneAbsence ? 'motif' : 'note'}">${echapperHtml(bloc.note)}</p>`;
+      : `<p class="${estUneAbsence ? 'motif' : 'note'}">${notationHtml(bloc.note)}</p>`;
 
-  return `<section class="bloc"><h3>${echapperHtml(bloc.titre)}</h3>${lignes}${verdict}${note}</section>`;
+  return `<section class="bloc"><h3>${notationHtml(bloc.titre)}</h3>${lignes}${verdict}${note}</section>`;
 }
 
 function partie(titre: string, contenu: string): string {
-  return `<section class="partie"><h2>${echapperHtml(titre)}</h2>${contenu}</section>`;
+  return `<section class="partie"><h2>${notationHtml(titre)}</h2>${contenu}</section>`;
 }
 
 /**
@@ -337,7 +331,7 @@ export function noteDeCalculHtml(note: NoteDeCalcul, styles: string): string {
       ? ''
       : partie(
           'Hypotheses et limites',
-          `<ul>${note.hypotheses.map((h) => `<li>${echapperHtml(h)}</li>`).join('')}</ul>`
+          `<ul>${note.hypotheses.map((h) => `<li>${notationHtml(h)}</li>`).join('')}</ul>`
         );
 
   return `<!doctype html>
@@ -345,16 +339,16 @@ export function noteDeCalculHtml(note: NoteDeCalcul, styles: string): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${echapperHtml(note.titre)} — note de calcul</title>
+<title>${notationHtml(note.titre)} — note de calcul</title>
 <style>
 ${styles}
 </style>
 </head>
 <body>
 <header>
-<h1>${echapperHtml(note.titre)} — note de calcul</h1>
-<p class="date">Etablie le ${echapperHtml(note.date)} — section-uls, EN 1992-1-1</p>
-<p class="avertissement">${echapperHtml(AVERTISSEMENT_RESPONSABILITE)}</p>
+<h1>${notationHtml(note.titre)} — note de calcul</h1>
+<p class="date">Etablie le ${notationHtml(note.date)} — section-uls, EN 1992-1-1</p>
+<p class="avertissement">${notationHtml(AVERTISSEMENT_RESPONSABILITE)}</p>
 </header>
 ${partie('Donnees d entree', note.entrees.map(blocEnHtml).join(''))}
 ${dessins}

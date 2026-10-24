@@ -60,7 +60,7 @@ const AVERTISSEMENT =
  */
 const REGIME_EN_CLAIR: Record<MeyerRegime, string> = {
   'fissure-unique':
-    'fissure unique (h < h_grenz) — la piece est assez mince pour qu une seule fissure se forme',
+    'fissure unique (h inférieure à h_grenz) — la piece est assez mince pour qu une seule fissure se forme',
   'fissuration-achevee':
     'fissuration achevee (h ≥ h_grenz) — le cas des elements massifs courants',
   interieur:

@@ -293,7 +293,7 @@ export function blocZwang(entree: Issue<RestraintResult>): BlocService {
         // section a l instant de la fissuration.
         valeur: r.massive
           ? 'oui (h ≥ 800 mm) : k est a son plancher, l acier exige est reduit d autant'
-          : 'non (h < 800 mm)',
+          : 'non (h inférieure à 800 mm)',
       },
     ],
     verdict: null,

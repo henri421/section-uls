@@ -1,3 +1,4 @@
+import { notationSvg } from 'aedificium-ui';
 import { formatNumber } from './format';
 
 /**
@@ -380,10 +381,10 @@ export function plotSvg(series: PlotSeries[], options: PlotOptions): string {
 
   morceaux.push(
     `<text class="plot-libelle-x" x="${n(milieuX)}" y="${n(box.height - 8)}" ` +
-      `text-anchor="middle">${echapper(options.xLabel)}</text>`,
+      `text-anchor="middle">${notationSvg(options.xLabel)}</text>`,
     `<text class="plot-libelle-y" x="${n(yLibelleY)}" y="${n(milieuY)}" ` +
       `text-anchor="middle" transform="rotate(-90 ${n(yLibelleY)} ${n(milieuY)})">` +
-      `${echapper(options.yLabel)}</text>`
+      `${notationSvg(options.yLabel)}</text>`
   );
 
   return `<svg viewBox="0 0 ${n(box.width)} ${n(box.height)}" class="plot" ` +
@@ -483,7 +484,7 @@ function tracesDeMarqueurs(markers: PlotMarker[], echelle: PlotScale): string[] 
     if (m.libelle !== undefined) {
       sortie.push(
         `<text class="plot-marqueur-libelle" x="${n(cx + 7)}" y="${n(cy - 7)}">` +
-          `${echapper(m.libelle)}</text>`
+          `${notationSvg(m.libelle)}</text>`
       );
     }
   }
