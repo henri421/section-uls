@@ -168,10 +168,10 @@ function contenantDesOptions(attribut: string, index: number): string {
   return `<div class="options-barres">
     <p class="sous-titre">Nombres possibles ${info(
       `L espacement se mesure entre les <strong>axes des barres extremes</strong>, sur
-       <em>b &minus; 2a</em> et non sur la largeur brute : l ecart, c est l enrobage. Le
-       nombre en gras est le plus petit qui respecte le maximum demande, et c est celui qui
-       est pose. Les autres sont la parce que sur une <strong>poutre</strong> il n existe pas
-       de demi-barre, et qu un depassement de deux millimetres se refuse ou s assume — pas
+       <em>b &minus; 2a</em> et non sur la largeur brute : l'écart, c'est l'enrobage. Le
+       nombre en gras est le plus petit qui respecte le maximum demande, et c'est celui qui
+       est pose. Les autres sont la parce que sur une <strong>poutre</strong> il n'existe pas
+       de demi-barre, et qu'un depassement de deux millimetres se refuse ou s'assume — pas
        en silence.`
     )}</p>
     <span data-options="${attribut}-${index}"></span>
@@ -289,7 +289,7 @@ function litRectangulaire(lit: RowInput, index: number, recapitulatif?: string):
     ['top', 'superieure'],
     ['left', 'gauche'],
     ['right', 'droite'],
-    ['depth', 'libre, a la profondeur d'],
+    ['depth', 'libre, à la profondeur d'],
   ];
   const options = faces
     .map(([v, l]) => `<option value="${v}"${v === lit.face ? ' selected' : ''}>${l}</option>`)
@@ -300,10 +300,10 @@ function litRectangulaire(lit: RowInput, index: number, recapitulatif?: string):
     <label class="large"><span>Face</span><select data-lit="${index}" data-champ="face" data-structure="1">${options}</select></label>
     ${
       lit.face === 'depth'
-        ? `<label><span>d, axe des barres depuis la fibre superieure (mm)</span><input type="text" inputmode="decimal" data-lit="${index}" data-champ="d" value="${echapper(lit.d ?? '')}" /></label>`
+        ? `<label><span>d, axe des barres depuis la fibre supérieure (mm)</span><input type="text" inputmode="decimal" data-lit="${index}" data-champ="d" value="${echapper(lit.d ?? '')}" /></label>`
         : ''
     }
-    <label><span>Diametre (mm)</span><input type="text" inputmode="decimal" data-lit="${index}" data-champ="diameter" value="${echapper(lit.diameter)}" /></label>
+    <label><span>Diamètre (mm)</span><input type="text" inputmode="decimal" data-lit="${index}" data-champ="diameter" value="${echapper(lit.diameter)}" /></label>
     <label class="case"><input type="checkbox" data-lit="${index}" data-champ="useSpacing" data-structure="1"${lit.useSpacing ? ' checked' : ''} /><span>Definir par espacement maximal</span></label>
     ${
       lit.useSpacing
@@ -327,7 +327,7 @@ function litLibre(lit: FreeRowInput, index: number, recapitulatif?: string): str
         )
         .join('')}
     </div>
-    <label><span>Diametre (mm)</span><input type="text" inputmode="decimal" data-libre="${index}" data-champ="diameter" value="${echapper(lit.diameter)}" /></label>
+    <label><span>Diamètre (mm)</span><input type="text" inputmode="decimal" data-libre="${index}" data-champ="diameter" value="${echapper(lit.diameter)}" /></label>
     <label class="case"><input type="checkbox" data-libre="${index}" data-champ="useSpacing" data-structure="1"${lit.useSpacing ? ' checked' : ''} /><span>Definir par espacement maximal</span></label>
     ${
       lit.useSpacing
@@ -374,7 +374,7 @@ function tableauDeBarres(): string {
 
   const vide =
     etat.barList.length === 0
-      ? '<tr><td colspan="5" class="vide">Aucune barre. La section est calculee sans armature.</td></tr>'
+      ? '<tr><td colspan="5" class="vide">Aucune barre. La section est calculée sans armature.</td></tr>'
       : '';
 
   return `<table class="barres">
@@ -391,7 +391,7 @@ function blocGeometrie(): string {
   }
   if (etat.geometryKind === 'circle') {
     return (
-      champTexte('diameter', 'Diametre (mm)', etat.diameter) +
+      champTexte('diameter', 'Diamètre (mm)', etat.diameter) +
       champTexte('segments', 'Cotes du polygone (vide = 32)', etat.segments)
     );
   }
@@ -405,7 +405,7 @@ function blocFerraillage(): string {
     const recap = recapitulatifDesLits();
     return (
       champTexte('cover', 'Enrobage (mm)', etat.cover) +
-      champTexte('stirrupDiameter', 'Diametre etrier (mm, vide = 0)', etat.stirrupDiameter) +
+      champTexte('stirrupDiameter', 'Diamètre étrier (mm, vide = 0)', etat.stirrupDiameter) +
       etat.rows.map((lit, i) => litRectangulaire(lit, i, recap?.[i])).join('') +
       `<button type="button" data-action="ajouter-lit">Ajouter un lit</button>` +
       `<button type="button" data-action="ajouter-lit-libre">Ajouter un lit libre (par d)</button>`
@@ -415,8 +415,8 @@ function blocFerraillage(): string {
   if (kind === 'circular-cage') {
     return (
       champTexte('cover', 'Enrobage (mm)', etat.cover) +
-      champTexte('stirrupDiameter', 'Diametre spirale (mm, vide = 0)', etat.stirrupDiameter) +
-      champTexte('cageBarDiameter', 'Diametre des barres (mm)', etat.cageBarDiameter) +
+      champTexte('stirrupDiameter', 'Diamètre spirale (mm, vide = 0)', etat.stirrupDiameter) +
+      champTexte('cageBarDiameter', 'Diamètre des barres (mm)', etat.cageBarDiameter) +
       champTexte('cageCount', 'Nombre de barres', etat.cageCount) +
       champTexte('cageRotationOffset', 'Decalage angulaire (rad, vide = 0)', etat.cageRotationOffset)
     );
@@ -460,27 +460,27 @@ function champCaseStructurante(champ: keyof FormState, libelle: string, coche: b
  */
 function blocVerifications(): string {
   const referentiel = etat.checkRestraint
-    ? champChoix('restraintReferential', 'Referentiel retenu', etat.restraintReferential, [
+    ? champChoix('restraintReferential', 'Référentiel retenu', etat.restraintReferential, [
         ['both', 'Comparatif : les deux cote a cote'],
         ['ec2', 'EN 1992-1-1 §7.3.2'],
-        ['meyer', 'DIN 1045, methode Meyer'],
+        ['meyer', 'DIN 1045, méthode Meyer'],
       ])
     : '';
 
   return `
   <fieldset class="verifications">
-    <legend>Verifications ${info(
-      `La <strong>flexion composee a l ELU</strong> est toujours calculee : c est l objet de
-       l outil. Tout le reste se coche. Une verification decochee disparait de la saisie,
-       du resultat, du CSV <strong>et de la note de calcul</strong> — elle n est pas
-       seulement cachee, elle n est pas faite.`
+    <legend>Vérifications ${info(
+      `La <strong>flexion composee à l'ELU</strong> est toujours calculée : c'est l'objet de
+       l'outil. Tout le reste se coche. Une vérification décochée disparait de la saisie,
+       du résultat, du CSV <strong>et de la note de calcul</strong> — elle n'est pas
+       seulement cachee, elle n'est pas faite.`
     )}</legend>
     ${champCaseStructurante(
       'checkSectionState',
-      `Etat sous sollicitation, contrainte des aciers ${info(
-        `Sous un <em>M<sub>Ed</sub></em> inferieur a <em>M<sub>Rd</sub></em>, la section n est pas a l ultime et
+      `État sous sollicitation, contrainte des aciers ${info(
+        `Sous un <em>M<sub>Ed</sub></em> inférieur a <em>M<sub>Rd</sub></em>, la section n'est pas à l'ultime et
          ses armatures ne travaillent pas a <em>f<sub>yd</sub></em>. Ce bloc donne la contrainte
-         <strong>reelle</strong> de chaque barre a la sollicitation appliquee.`
+         <strong>reelle</strong> de chaque barre à la sollicitation appliquee.`
       )}`,
       etat.checkSectionState
     )}
@@ -497,12 +497,12 @@ function blocVerifications(): string {
     )}
     ${champCaseStructurante(
       'checkRestraint',
-      `Armature minimale sous deformation genee (Zwang) ${info(
-        `Deux methodes repondent a cette question et ne se remplacent pas : le
-         <strong>§7.3.2</strong> de l EN 1992-1-1 et la methode <strong>Meyer / DIN 1045</strong>.
+      `Armature minimale sous déformation gênée (Zwang) ${info(
+        `Deux méthodes répondent à cette question et ne se remplacent pas : le
+         <strong>§7.3.2</strong> de l'EN 1992-1-1 et la méthode <strong>Meyer / DIN 1045</strong>.
          Le comparatif montre laquelle surarme ; la note de calcul <strong>nomme</strong> celle
-         qui a servi, parce qu en Belgique et au Luxembourg la justification reglementaire
-         reste l EN 1992-1-1.`,
+         qui a servi, parce qu'en Belgique et au Luxembourg la norme applicable
+         reste l'EN 1992-1-1.`,
         'decisif'
       )}`,
       etat.checkRestraint
@@ -576,7 +576,7 @@ function ouvrirDisposition(): void {
     etat.reinforcementKind = 'bars';
   } catch (e) {
     afficherErreur(
-      'Le ferraillage actuel n est pas exploitable, il ne peut pas etre converti en barres : ' +
+      'Le ferraillage actuel n\'est pas exploitable, il ne peut pas être converti en barres : ' +
         (e instanceof Error ? e.message : String(e))
     );
     return;
@@ -648,7 +648,7 @@ function ajouterArmaturesDePeau(): void {
   if (contour === null || modele === null || modele.geometry.kind !== 'rectangle') {
     afficherErreur(
       'Les armatures de peau ne sont posees que sur une section RECTANGULAIRE : sur un contour ' +
-        'quelconque, « les deux faces laterales » n a pas de definition unique. Poser les barres ' +
+        'quelconque, « les deux faces laterales » n\'a pas de définition unique. Poser les barres ' +
         'une a une dans le tableau reste possible.'
     );
     return;
@@ -661,7 +661,7 @@ function ajouterArmaturesDePeau(): void {
 
   if (nombre === null || diametre === null || zFrom === null || zTo === null) {
     afficherErreur(
-      'Armatures de peau : le nombre par face, le diametre et les deux cotes doivent tous etre ' +
+      'Armatures de peau : le nombre par face, le diamètre et les deux cotes doivent tous être ' +
         'renseignes.'
     );
     return;
@@ -733,9 +733,9 @@ function htmlDefautsDePlacement(): string {
  */
 function htmlComparaison(MRd: number | null): string {
   if (referenceDisposition === null) {
-    return `<p class="note">Aucune disposition de reference : le moment resistant n etait pas
-      calculable a l ouverture du panneau. Les modifications s affichent alors en valeur
-      absolue, sans ecart.</p>`;
+    return `<p class="note">Aucune disposition de référence : le moment résistant n etait pas
+      calculable à l'ouverture du panneau. Les modifications s'affichent alors en valeur
+      absolue, sans écart.</p>`;
   }
 
   const reference = referenceDisposition;
@@ -750,9 +750,9 @@ function htmlComparaison(MRd: number | null): string {
   };
 
   return `<div class="comparaison">
-    ${ligne('Reference M_Rd', `${formatNumber(reference.MRd, 1)} kN·m`)}
+    ${ligne('Référence M_Rd', `${formatNumber(reference.MRd, 1)} kN·m`)}
     ${ligne('Actuel M_Rd', ecart(MRd, reference.MRd, 'kN·m'))}
-    ${ligne('Reference A_s', `${formatNumber(reference.As, 0)} mm² — ${reference.nombreDeBarres} barres`)}
+    ${ligne('Référence A_s', `${formatNumber(reference.As, 0)} mm² — ${reference.nombreDeBarres} barres`)}
     ${ligne('Actuel A_s', `${ecart(As, reference.As, 'mm²')} — ${etat.barList.length} barres`)}
   </div>`;
 }
@@ -772,12 +772,12 @@ function blocDisposition(): string {
 
   return `<fieldset class="disposition">
     <legend>Optimisation de la disposition ${info(
-      `Les armatures sont desormais des <strong>coordonnees</strong> : l intention de saisie
-       (« 4 HA20 en face inferieure ») a ete materialisee et n est pas restituable. Chaque
-       modification est comparee a la disposition figee a l <strong>ouverture</strong> du
-       panneau. Fermer puis rouvrir refige la reference sur l etat courant.<br /><br />
+      `Les armatures sont desormais des <strong>coordonnées</strong> : l'intention de saisie
+       (« 4 HA20 en face inférieure ») a ete materialisee et n'est pas restituable. Chaque
+       modification est comparee à la disposition figee a l <strong>ouverture</strong> du
+       panneau. Fermer puis rouvrir refige la référence sur l'état courant.<br /><br />
        Les gardes sont <strong>geometriques</strong> : barre hors du contour, barres qui se
-       chevauchent. Les distances libres du §8.2 et l enrobage du §4.4.1 ne sont
+       chevauchent. Les distances libres du §8.2 et l'enrobage du §4.4.1 ne sont
        <strong>pas</strong> verifies.`,
       'decisif'
     )}</legend>
@@ -785,13 +785,13 @@ function blocDisposition(): string {
     <p class="sous-titre">Armatures de peau</p>
     <div class="paire">
       ${champTexte('peauCount', 'Nombre par face', etat.peauCount)}
-      ${champTexte('peauDiameter', 'Diametre (mm)', etat.peauDiameter)}
+      ${champTexte('peauDiameter', 'Diamètre (mm)', etat.peauDiameter)}
       ${champTexte('peauZFrom', 'z de (mm)', etat.peauZFrom)}
       ${champTexte('peauZTo', 'z a (mm)', etat.peauZTo)}
     </div>
     <button type="button" data-action="ajouter-peau">Ajouter les armatures de peau</button>
 
-    <p class="sous-titre">Ecart a la disposition de reference</p>
+    <p class="sous-titre">Écart à la disposition de référence</p>
     <div data-panneau-vivant></div>
 
     <button type="button" data-action="fermer-disposition">Fermer le panneau</button>
@@ -840,7 +840,7 @@ function htmlFormulaire(): string {
   ${blocVerifications()}
 
   <fieldset>
-    <legend>Materiaux</legend>
+    <legend>Matériaux</legend>
     ${champTexte('fck', 'fck (MPa)', etat.fck)}
     ${champTexte('fyk', 'fyk (MPa)', etat.fyk)}
     ${champTexte('Es', 'Es (MPa)', etat.Es)}
@@ -848,7 +848,7 @@ function htmlFormulaire(): string {
   </fieldset>
 
   <fieldset>
-    <legend>Geometrie</legend>
+    <legend>Géométrie</legend>
     ${champChoix('geometryKind', 'Forme', etat.geometryKind, [
       ['rectangle', 'Rectangle'],
       ['polygon', 'Polygone'],
@@ -886,16 +886,16 @@ function htmlFormulaire(): string {
     etat.checkShear || etat.checkDetailing,
     `<fieldset>
     <legend>Effort tranchant et dispositions (§6.2, §9) ${info(
-      `Sections <strong>rectangulaires</strong> seulement ; ni precontrainte, ni torsion,
-       ni bielles inclinees, ni verification au droit de l appui. Les valeurs du §9 sont
-       celles <strong>recommandees</strong> par l EN 1992-1-1 : une annexe nationale peut
+      `Sections <strong>rectangulaires</strong> seulement ; ni précontrainte, ni torsion,
+       ni bielles inclinees, ni vérification au droit de l'appui. Les valeurs du §9 sont
+       celles <strong>recommandées</strong> par l'EN 1992-1-1 : une annexe nationale peut
        les modifier.`
     )}</legend>
     ${champChoix(
       'elementType',
-      `Type d element ${info(
-        `Le type d element est <strong>declare</strong>, jamais devine : un 300&times;500
-         est une poutre ou un poteau selon son role, et les regles du §9 different.`
+      `Type d'élément ${info(
+        `Le type d'élément est <strong>déclaré</strong>, jamais devine : un 300&times;500
+         est une poutre ou un poteau selon son role, et les règles du §9 different.`
       )}`,
       etat.elementType,
       [
@@ -905,15 +905,15 @@ function htmlFormulaire(): string {
       ]
     )}
     ${champTexte('V_Ed', 'V<sub>Ed</sub> (kN)', etat.V_Ed)}
-    <p class="sous-titre">Armatures d ame (vides = aucun cadre declare)</p>
-    ${champTexte('Asw', 'A<sub>sw</sub>, aire d un cours (mm²)', etat.Asw)}
+    <p class="sous-titre">Armatures d'âme (vides = aucun cadre déclaré)</p>
+    ${champTexte('Asw', 'A<sub>sw</sub>, aire d\'un cours (mm²)', etat.Asw)}
     ${champTexte('sCadres', 'Espacement des cours s (mm)', etat.sCadres)}
     ${champTexte('fywk', 'f<sub>ywk</sub> des cadres (MPa)', etat.fywk)}
     ${champTexte(
       'cotTheta',
       `cot θ (1 a 2,5) ${info(
         `<em>cot θ</em> est un <strong>arbitrage</strong>, pas une constante :
-         2,5 minimise les cadres et sollicite le plus les bielles, 1 fait l inverse.`
+         2,5 minimise les cadres et sollicite le plus les bielles, 1 fait l'inverse.`
       )}`,
       etat.cotTheta
     )}
@@ -924,71 +924,71 @@ function htmlFormulaire(): string {
     etat.checkService,
     `<fieldset>
     <legend>Sollicitations de service (ELS) ${info(
-      `Combinaisons EN 1990 <strong>differentes de l ELU</strong> et differentes entre
-       elles : reprendre le moment de l ELU serait faux d un facteur 1,35 a 1,5. Flexion
-       droite uniquement — un seul moment M par combinaison. Laisser les deux champs d une
+      `Combinaisons EN 1990 <strong>différentes de l'ELU</strong> et différentes entre
+       elles : reprendre le moment de l'ELU serait faux d'un facteur 1,35 a 1,5. Flexion
+       droite uniquement — un seul moment M par combinaison. Laisser les deux champs d'une
        combinaison vides la desactive.<br /><br />
-       La combinaison <strong>caracteristique</strong> gouverne la limitation des contraintes
-       (§7.2) ; la <strong>quasi-permanente</strong> gouverne l ouverture de fissures (§7.3)
+       La combinaison <strong>caractéristique</strong> gouverne la limitation des contraintes
+       (§7.2) ; la <strong>quasi-permanente</strong> gouverne l'ouverture de fissures (§7.3)
        et la courbure (§7.4.3).`
     )}</legend>
-    ${champTexte('serviceCarN', 'N caracteristique (kN)', etat.serviceCarN)}
-    ${champTexte('serviceCarM', 'M caracteristique (kN·m)', etat.serviceCarM)}
+    ${champTexte('serviceCarN', 'N caractéristique (kN)', etat.serviceCarN)}
+    ${champTexte('serviceCarM', 'M caractéristique (kN·m)', etat.serviceCarM)}
     ${champTexte('serviceQpN', 'N quasi-permanent (kN)', etat.serviceQpN)}
     ${champTexte('serviceQpM', 'M quasi-permanent (kN·m)', etat.serviceQpM)}
   </fieldset>
 
   <fieldset>
-    <legend>Parametres de service assumes ${info(
+    <legend>Paramètres de service assumés ${info(
       `Ces trois-la sont des <strong>choix</strong>, pas des constantes normatives.
-       Les autres coefficients (k1, k2, k3, kt…) restent a leurs valeurs recommandees.`
+       Les autres coefficients (k1, k2, k3, kt…) restent a leurs valeurs recommandées.`
     )}</legend>
     ${champTexte(
       'serviceN',
-      `n, coefficient d equivalence ${info(
-        `<em>n</em> = 15 est conventionnel et n est <strong>pas prescrit sous cette forme</strong>
-         par l EN 1992-1-1.`
+      `n, coefficient d'equivalence ${info(
+        `<em>n</em> = 15 est conventionnel et n'est <strong>pas prescrit sous cette forme</strong>
+         par l'EN 1992-1-1.`
       )}`,
       etat.serviceN
     )}
     ${champTexte(
       'crackWMax',
       `w<sub>max</sub> (mm) ${info(
-        `Depend de la <strong>classe d exposition</strong> — tableau 7.1N : 0,4 / 0,3 / 0,2 mm.`
+        `Depend de la <strong>classe d'exposition</strong> — tableau 7.1N : 0,4 / 0,3 / 0,2 mm.`
       )}`,
       etat.crackWMax
     )}
     ${champTexte(
       'curvatureBeta',
-      `β, duree de chargement ${info(
-        `<strong>0,5</strong> en charge de longue duree ou repetee, <strong>1,0</strong> en
+      `β, durée de chargement ${info(
+        `<strong>0,5</strong> en charge de longue durée ou répétée, <strong>1</strong> en
          charge courte.`
       )}`,
       etat.curvatureBeta
     )}
     ${champChoix(
       'crackingMode',
-      `Etat de fissuration ${info(
-        `Le <strong>§7.1(2)</strong> tranche : la section est non fissuree tant que la traction
-         du beton reste sous <em>f<sub>ct,eff</sub></em>. En <strong>etat I</strong> le beton tendu
-         travaille et soulage les armatures ; en <strong>etat II</strong> il est integralement
-         neglige et toute la traction passe dans l acier. Forcer un etat sert a l EXAMINER —
-         ce n est alors plus le choix de la norme, et la note le dira.`,
+      `État de fissuration ${info(
+        `Le <strong>§7.1(2)</strong> tranche : la section est non fissurée tant que la traction
+         du béton reste sous <em>f<sub>ct,eff</sub></em>. En <strong>état I</strong> le béton tendu
+         travaille et soulage les armatures ; en <strong>état II</strong> il est integralement
+         neglige et toute la traction passe dans l'acier. Forcer un état sert à l'EXAMINER —
+         ce n'est alors plus le choix de la norme, et la note le dira.`,
         'decisif'
       )}`,
       etat.crackingMode,
       [
-        ['auto', 'Automatique : critere du §7.1(2)'],
-        ['uncracked', 'Forcer l etat I : beton tendu actif'],
-        ['cracked', 'Forcer l etat II : beton tendu neglige'],
+        ['auto', 'Automatique : critère du §7.1(2)'],
+        ['uncracked', 'Forcer l\'état I : béton tendu actif'],
+        ['cracked', 'Forcer l\'état II : béton tendu neglige'],
       ]
     )}
     ${champTexte(
       'crackingFctEff',
-      `f<sub>ct,eff</sub> du critere (MPa, vide = f<sub>ctm</sub> a 28 jours) ${info(
-        `⚠ A ne pas confondre avec le <em>f<sub>ct,eff</sub></em> du §7.3.2 plus bas, qui porte le meme nom
+      `f<sub>ct,eff</sub> du critère (MPa, vide = f<sub>ctm</sub> a 28 jours) ${info(
+        `⚠ À ne pas confondre avec le <em>f<sub>ct,eff</sub></em> du §7.3.2 plus bas, qui porte le même nom
          et joue le role <strong>inverse</strong> : ici une valeur elevee <strong>retarde</strong>
-         la fissuration, la-bas elle <strong>augmente</strong> l armature exigee.`
+         la fissuration, la-bas elle <strong>augmente</strong> l'armature exigée.`
       )}`,
       etat.crackingFctEff
     )}
@@ -998,30 +998,30 @@ function htmlFormulaire(): string {
   ${cadreSiCoche(
     etat.checkRestraint && etat.restraintReferential !== 'meyer',
     `<fieldset>
-    <legend>Deformation genee — Zwang (§7.3.2)</legend>
+    <legend>Déformation gênée — Zwang (§7.3.2)</legend>
     ${champChoix('restraintType', 'Nature de la gene', etat.restraintType, [
       ['central', 'Centree (retrait ou refroidissement empeches)'],
-      ['bending', 'De flexion (gradient thermique au jeune age)'],
+      ['bending', 'De flexion (gradient thermique au jeune âge)'],
     ])}
     ${champTexte(
       'fctEff',
       `f<sub>ct,eff</sub> (MPa, vide = f<sub>ctm</sub> a 28 jours) ${info(
-        `Le defaut est le cas <strong>defavorable</strong> : la fissuration des pieces massives
-         survient a quelques jours, quand le beton n a pas atteint sa resistance a 28 jours.`
+        `Le défaut est le cas <strong>defavorable</strong> : la fissuration des pieces massives
+         survient a quelques jours, quand le béton n'a pas atteint sa résistance a 28 jours.`
       )}`,
       etat.fctEff
     )}
     ${champTexte('sigmaSZwang', 'σ<sub>s</sub> (MPa, vide = f<sub>yk</sub>)', etat.sigmaSZwang)}
     ${champChoix(
       'restraintMethod',
-      `Methode de calcul de h<sub>c,ef</sub> ${info(
-        `Deux familles de formules. Le <strong>texte</strong> de l EN 1992-1-1 §7.3.2(3) donne
+      `Méthode de calcul de h<sub>c,ef</sub> ${info(
+        `Deux familles de formules. Le <strong>texte</strong> de l'EN 1992-1-1 §7.3.2(3) donne
          <em>2,5·d1</em> ; la <strong>pratique allemande</strong> donne des branches selon
-         <em>h/d1</em>, qui croissent avec l epaisseur. Sur un radier de 1,30 m, l ecart entre
-         les deux vaut environ 43 % d armature.<br /><br />
+         <em>h/d1</em>, qui croissent avec l'épaisseur. Sur un radier de 1,30 m, l'écart entre
+         les deux vaut environ 43 % d'armature.<br /><br />
          Ce choix est <strong>independant</strong> de la convention de <em>k</em> ci-dessous :
-         <em>k</em> est un parametre d annexe nationale, <em>h<sub>c,ef</sub></em> est un choix de
-         methode. « Branches allemandes, <em>k</em> de l annexe belge » est un cas
+         <em>k</em> est un paramètre d'annexe nationale, <em>h<sub>c,ef</sub></em> est un choix de
+         méthode. « Branches allemandes, <em>k</em> de l'annexe belge » est un cas
          parfaitement legitime.`,
         'decisif'
       )}`,
@@ -1034,24 +1034,24 @@ function htmlFormulaire(): string {
     ${champChoix(
       'thicknessConvention',
       `Convention du facteur k ${info(
-        `<em>k</em> est un <strong>parametre national</strong> : 1,00 &rarr; 0,65 en valeurs
-         recommandees de l EC2, 0,80 &rarr; 0,50 en annexe allemande. En Belgique et au
-         Luxembourg, la justification reglementaire reste l EN 1992-1-1 et ses annexes
+        `<em>k</em> est un <strong>paramètre national</strong> : 1 &rarr; 0,65 en valeurs
+         recommandées de l EC2, 0,8 &rarr; 0,5 en annexe allemande. En Belgique et au
+         Luxembourg, la norme applicable reste l'EN 1992-1-1 et ses annexes
          NBN / ILNAS.`,
         'decisif'
       )}`,
       etat.thicknessConvention,
       [
-        ['ec2', 'EC2 recommande — 1,00 vers 0,65'],
-        ['de', 'Annexe allemande — 0,80 vers 0,50'],
+        ['ec2', 'EC2 recommandé — 1 vers 0,65'],
+        ['de', 'Annexe allemande — 0,8 vers 0,5'],
       ]
     )}
     <p class="sous-titre">Forcer des valeurs intermediaires ${info(
       `Un champ <strong>vide</strong> veut dire « calcule ». Une valeur saisie
        <strong>court-circuite sa formule</strong> et alimente la suite de la chaine : imposer
        <em>d1</em> change <em>h<sub>c,ef</sub></em>, imposer <em>f<sub>ct,eff</sub></em> change ce qui en depend.
-       Toute valeur imposee est <strong>marquee</strong> dans les resultats et dans la note de
-       calcul — une note qui presenterait une valeur forcee comme calculee ne serait
+       Toute valeur imposée est <strong>marquee</strong> dans les résultats et dans la note de
+       calcul — une note qui presenterait une valeur forcee comme calculée ne serait
        verifiable par personne.<br /><br />
        Une valeur hors du domaine physique produit un <strong>avertissement</strong>, jamais un
        ecretage silencieux : ecreter vous retirerait la decision que vous venez de prendre.`
@@ -1070,26 +1070,26 @@ function htmlFormulaire(): string {
   ${cadreSiCoche(
     etat.checkRestraint && etat.restraintReferential !== 'ec2',
     `<fieldset>
-    <legend>Elements massifs, methode Meyer (DIN 1045) ${info(
-      `Methode <strong>allemande</strong>, distincte du §7.3.2 ci-dessus et qui ne le
-       remplace pas : elle sert au <strong>pre-dimensionnement</strong> et au controle d ordre
-       de grandeur, la justification reglementaire restant l EN 1992-1-1 et ses annexes
-       nationales. Elle ne lit ni la geometrie ni le ferraillage — ses parametres sont les
+    <legend>Éléments massifs, méthode Meyer (DIN 1045) ${info(
+      `Méthode <strong>allemande</strong>, distincte du §7.3.2 ci-dessus et qui ne le
+       remplace pas : elle sert au <strong>pre-dimensionnement</strong> et au contrôle d'ordre
+       de grandeur, la norme applicable restant l'EN 1992-1-1 et ses annexes
+       nationales. Elle ne lit ni la géométrie ni le ferraillage — ses paramètres sont les
        siens, et <em>h</em> comme <em>f<sub>ctm</sub></em> sont seulement <strong>pre-remplis</strong> a
        partir de la section au chargement.`
     )}</legend>
-    ${champTexte('meyerH', 'h, epaisseur de l element (mm)', etat.meyerH)}
-    ${champTexte('meyerD1', 'd1, enrobage a l AXE des barres (mm)', etat.meyerD1)}
-    ${champTexte('meyerDs', 'ds, diametre des barres (mm)', etat.meyerDs)}
+    ${champTexte('meyerH', 'h, épaisseur de l\'élément (mm)', etat.meyerH)}
+    ${champTexte('meyerD1', 'd1, enrobage à l\'AXE des barres (mm)', etat.meyerD1)}
+    ${champTexte('meyerDs', 'ds, diamètre des barres (mm)', etat.meyerDs)}
     ${champTexte('meyerWk', 'w<sub>k</sub> visee (mm)', etat.meyerWk)}
     ${champTexte('meyerFctm', 'f<sub>ctm</sub> a 28 jours (MPa)', etat.meyerFctm)}
     ${champTexte(
       'meyerKzt',
       `k<sub>zt</sub> = f<sub>ct,eff</sub> / f<sub>ctm</sub> ${info(
-        `<em>k<sub>zt</sub></em> est le parametre <strong>decisif</strong> de la methode. Le Zwang des
+        `<em>k<sub>zt</sub></em> est le paramètre <strong>décisif</strong> de la méthode. Le Zwang des
          pieces massives nait de la chaleur d <strong>hydratation</strong> et fissure a quelques
-         jours, quand le beton est loin de son f<sub>ctm</sub> a 28 jours : <em>k<sub>zt</sub></em> = 1,0 correspond
-         a 28 jours, donne l armature la plus forte, et <strong>n est pas le cas courant</strong>.
+         jours, quand le béton est loin de son f<sub>ctm</sub> a 28 jours : <em>k<sub>zt</sub></em> = 1,0 correspond
+         a 28 jours, donne l'armature la plus forte, et <strong>n'est pas le cas courant</strong>.
          Valeurs usuelles : 0,4 / 0,5 / 0,6.`,
         'decisif'
       )}`,
@@ -1098,22 +1098,22 @@ function htmlFormulaire(): string {
     ${champChoix(
       'meyerCas',
       `Sollicitation ${info(
-        `Seule la famille <strong>traction / bridage exterieur</strong> a ete confrontee au
-         diagramme de l ouvrage (a environ 3 % pres). La flexion et le bridage interieur sont
-         derives de la meme formulation et n ont ete confrontes a rien.`
+        `Seule la famille <strong>traction / bridage extérieur</strong> a ete confrontee au
+         diagramme de l'ouvrage (a environ 3 % pres). La flexion et le bridage intérieur sont
+         dérivés de la même formulation et n'ont ete confrontes a rien.`
       )}`,
       etat.meyerCas,
       [
-        ['traction', 'Traction : gene centree, deux faces armees'],
+        ['traction', 'Traction : gene centree, deux faces armées'],
         ['flexion', 'Flexion : gene de flexion, une seule face tendue'],
       ]
     )}
     ${champChoix('meyerBridage', 'Origine du bridage', etat.meyerBridage, [
-      ['exterieur', 'Exterieur : appuis, radier durci, reprise de betonnage'],
-      ['interieur', 'Interieur : contraintes propres, gradient de peau'],
+      ['exterieur', 'Extérieur : appuis, radier durci, reprise de betonnage'],
+      ['interieur', 'Intérieur : contraintes propres, gradient de peau'],
     ])}
     ${champChoix('meyerKmode', 'Interpolation du facteur k', etat.meyerKmode, [
-      ['lineaire', 'Lineaire (0,80 a 0,50 entre 300 et 800 mm)'],
+      ['lineaire', 'Linéaire (0,8 à 0,5 entre 300 et 800 mm)'],
       ['parabolique', 'Parabolique (proposition de Meyer)'],
     ])}
   </fieldset>`
@@ -1124,25 +1124,25 @@ function htmlFormulaire(): string {
     ${champTexte('gammaC', 'γ<sub>c</sub>', etat.gammaC)}
     ${champTexte('gammaS', 'γ<sub>s</sub>', etat.gammaS)}
     ${champTexte('alphaCc', 'α<sub>cc</sub>', etat.alphaCc)}
-    ${champTexte('nBands', 'Bandes d integration', etat.nBands)}
+    ${champTexte('nBands', 'Bandes d\'integration', etat.nBands)}
   </fieldset>
 
   <fieldset>
-    <legend>Modele</legend>
+    <legend>Modèle</legend>
     <button type="button" data-action="enregistrer">Enregistrer</button>
-    <label class="large fichier"><span>Charger un modele</span><input type="file" accept="application/json,.json" data-action="charger" /></label>
+    <label class="large fichier"><span>Charger un modèle</span><input type="file" accept="application/json,.json" data-action="charger" /></label>
   </fieldset>
 
   <fieldset class="sorties">
     <legend>Sorties ${info(
-      `Les sorties decrivent le dernier calcul <strong>reussi</strong>. La note s ouvre dans un
-       nouvel onglet, d ou le navigateur l imprime en PDF ; si l ouverture est bloquee, elle est
-       telechargee. C est un <strong>compte rendu</strong> de calcul, pas une justification
-       reglementaire signee.`
+      `Les sorties decrivent le dernier calcul <strong>réussi</strong>. La note s'ouvre dans un
+       nouvel onglet, d'où le navigateur l'imprime en PDF ; si l'ouverture est bloquee, elle est
+       telechargee. C'est un <strong>compte rendu</strong> de calcul, pas une justification
+       réglementaire signee.`
     )}</legend>
     <button type="button" data-action="exporter-section">Section (SVG)</button>
     <button type="button" data-action="exporter-diagramme">Diagramme N-M (SVG)</button>
-    <button type="button" data-action="exporter-resultats">Resultats (CSV)</button>
+    <button type="button" data-action="exporter-resultats">Résultats (CSV)</button>
     <button type="button" data-action="exporter-note">Note de calcul (HTML imprimable)</button>
   </fieldset>`;
 }
@@ -1211,7 +1211,7 @@ function resoudreAcier(modele: SectionModel) {
  * page et n a rien a faire dans un fichier `.svg`.
  */
 const LEGENDE_SECTION =
-  '<p class="legende"><span class="c">zone comprimee</span><span class="t">zone tendue</span>' +
+  '<p class="legende"><span class="c">zone comprimée</span><span class="t">zone tendue</span>' +
   '<span class="n">axe neutre</span><span>cercles : resultantes, reliees par le bras de levier</span>' +
   '<span>origine du repere au centroide, y vers la droite, z vers le bas</span></p>';
 
@@ -1243,8 +1243,8 @@ function dessinerDomaineMyMz(
       svg: '',
       html:
         `<div id="domaine-mymz">${titre}` +
-        `<p class="motif">Aucun point du domaine n'existe a cet effort normal :
-       la section est depassee en compression ou en traction avant toute flexion.</p></div>`,
+        `<p class="motif">Aucun point du domaine n'existe à cet effort normal :
+       la section est dépassée en compression ou en traction avant toute flexion.</p></div>`,
     };
   }
 
@@ -1282,8 +1282,8 @@ function dessinerDomaineMyMz(
   const legende =
     '<p class="legende">' +
     `<span>${notationHtml(`trace a N = ${formatNumber(N, 1)} kN constant`)}</span>` +
-    '<span>le rayon en tirets va de l origine a la capacite : le rapport des deux longueurs est le taux</span>' +
-    (tourComplet ? '' : '<span>contour incomplet : certaines orientations n ont pas de solution</span>') +
+    '<span>le rayon en tirets va de l\'origine à la capacité : le rapport des deux longueurs est le taux</span>' +
+    (tourComplet ? '' : '<span>contour incomplet : certaines orientations n\'ont pas de solution</span>') +
     '</p>';
 
   // Le bouton vit DANS le cadre du domaine : il n'a de sens que tant que le
@@ -1492,7 +1492,7 @@ function exporterNote(sortie: Sortie): void {
 }
 
 const SANS_CALCUL_A_EXPORTER =
-  'Aucun calcul valide a exporter. Les sorties decrivent le dernier calcul reussi : corriger ' +
+  'Aucun calcul valide a exporter. Les sorties decrivent le dernier calcul réussi : corriger ' +
   'la saisie, puis reessayer.';
 
 /** Bouton -> suffixe du dessin dans `Sortie.dessins`. */

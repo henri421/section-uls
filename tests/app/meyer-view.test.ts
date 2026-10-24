@@ -56,14 +56,14 @@ function texteComplet(bloc: BlocService): string {
 }
 
 describe('blocMeyer', () => {
-  it('rend les grandeurs de la methode sur un calcul reussi', () => {
+  it('rend les grandeurs de la méthode sur un calcul reussi', () => {
     const bloc = blocMeyer({ resultat: calcul() }, VOILE.ds);
 
     expect(bloc.titre).toMatch(/meyer/i);
     expect(bloc.lignes.length).toBeGreaterThan(0);
 
     // Les neuf grandeurs du `MeyerResult`, plus la repartition.
-    for (const attendu of ['A_s', 'A_s total', 'Regime', 'k', 'k_c', 'A_cr', 'h_grenz', 'f_ct,eff']) {
+    for (const attendu of ['A_s', 'A_s total', 'Régime', 'k', 'k_c', 'A_cr', 'h_grenz', 'f_ct,eff']) {
       expect(() => valeur(bloc, attendu)).not.toThrow();
     }
   });
@@ -80,31 +80,31 @@ describe('blocMeyer', () => {
     }
   });
 
-  it('ecrit le regime EN CLAIR, jamais son identifiant', () => {
+  it('écrit le régime EN CLAIR, jamais son identifiant', () => {
     // Trois regimes, et le lecteur doit savoir lequel a servi : ils ne
     // repondent pas a la meme physique. « fissuration-achevee » a l ecran
     // serait un nom de variable echappe dans la page.
-    const achevee = valeur(blocMeyer({ resultat: calcul() }, VOILE.ds), 'Regime');
-    expect(achevee).toMatch(/fissuration achevee/i);
+    const achevee = valeur(blocMeyer({ resultat: calcul() }, VOILE.ds), 'Régime');
+    expect(achevee).toMatch(/fissuration achevée/i);
     expect(achevee).not.toContain('fissuration-achevee');
 
     // h = 250 mm : k vaut 0,80, h_grenz = 250 mm, la piece est mince.
-    const unique = valeur(blocMeyer({ resultat: calcul({ h: 240 }) }, VOILE.ds), 'Regime');
+    const unique = valeur(blocMeyer({ resultat: calcul({ h: 240 }) }, VOILE.ds), 'Régime');
     expect(unique).toMatch(/fissure unique/i);
     expect(unique).not.toContain('fissure-unique');
 
     const interieur = valeur(
       blocMeyer({ resultat: calcul({ bridage: 'interieur' }) }, VOILE.ds),
-      'Regime'
+      'Régime'
     );
     expect(interieur).toMatch(/interieur|propres/i);
   });
 
-  it('affiche la repartition de barres deduite du diametre', () => {
+  it('affiche la répartition de barres déduite du diamètre', () => {
     // `MeyerResult` ne porte PAS `ds` : il est passe a cote, comme `V_Ed`
     // l est a `blocTranchant`. Sans lui, aucune repartition n est possible.
     const bloc = blocMeyer({ resultat: calcul() }, VOILE.ds);
-    const repartition = valeur(bloc, 'Repartition');
+    const repartition = valeur(bloc, 'Répartition');
 
     expect(repartition).toMatch(/HA ?16/i);
     expect(repartition).toMatch(/\d+\s*barres/i);
@@ -112,7 +112,7 @@ describe('blocMeyer', () => {
     expect(texteComplet(bloc)).toMatch(/fournie/i);
   });
 
-  it('la repartition couvre l aire exigee PAR FACE', () => {
+  it('la répartition couvre l\'aire exigée PAR FACE', () => {
     // Arrondi TOUJOURS vers le haut : `A_s,fournie >= A_s,requise`. Une
     // repartition qui couvrirait l aire totale placerait deux fois trop peu
     // de barres sur chaque face.
@@ -120,7 +120,7 @@ describe('blocMeyer', () => {
     const bloc = blocMeyer({ resultat }, VOILE.ds);
 
     const fournie = Number(
-      /(\d+(?:,\d+)?)/.exec(valeur(bloc, 'Repartition').split('fournie')[1] ?? '')?.[1]?.replace(
+      /(\d+(?:,\d+)?)/.exec(valeur(bloc, 'Répartition').split('fournie')[1] ?? '')?.[1]?.replace(
         ',',
         '.'
       ) ?? NaN
@@ -129,13 +129,13 @@ describe('blocMeyer', () => {
     expect(fournie).toBeLessThan(resultat.AsTotal);
   });
 
-  it('porte le motif quand le calcul n a pas eu lieu, sans aucun chiffre', () => {
+  it('porte le motif quand le calcul n\'a pas eu lieu, sans aucun chiffre', () => {
     // `meyerRestraintReinforcement` LEVE sur un parametre nul ou negatif.
-    const bloc = blocMeyer({ motif: 'h doit etre strictement positif (0)' }, 16);
+    const bloc = blocMeyer({ motif: 'h doit être strictement positif (0)' }, 16);
 
     expect(bloc.lignes).toHaveLength(0);
     expect(bloc.verdict).toBeNull();
-    expect(bloc.note).toContain('h doit etre strictement positif');
+    expect(bloc.note).toContain('h doit être strictement positif');
   });
 
   it('ne rend JAMAIS de verdict', () => {
@@ -147,7 +147,7 @@ describe('blocMeyer', () => {
     expect(bloc.note).toMatch(/aucun verdict|pas de verdict/i);
   });
 
-  it('annonce le cadre reglementaire : DIN 1045, pas l EN 1992-1-1', () => {
+  it('annonce le cadre réglementaire : DIN 1045, pas l\'EN 1992-1-1', () => {
     // La methode est allemande. En Belgique et au Luxembourg la
     // justification reste l EC2 et ses annexes nationales : Meyer sert au
     // pre-dimensionnement et au controle d ordre de grandeur.
@@ -157,7 +157,7 @@ describe('blocMeyer', () => {
     expect(bloc.note).toMatch(/pre-dimensionnement|ordre de grandeur/i);
   });
 
-  it('dit qu elle NE REMPLACE PAS le §7.3.2 affiche au-dessus', () => {
+  it('dit qu\'elle NE REMPLACE PAS le §7.3.2 affiche au-dessus', () => {
     // Les deux coexistent. Le lecteur qui verrait deux « k » differents a
     // dix lignes d ecart conclurait a un bug : le bloc doit le prevenir.
     const bloc = blocMeyer({ resultat: calcul() }, VOILE.ds);
@@ -167,23 +167,21 @@ describe('blocMeyer', () => {
     expect(texte).toMatch(/remplace/i);
     // Les bornes de chaque facteur, ecrites cote a cote : c est ce qui rend
     // l ecart lisible plutot qu affirme.
-    expect(texte).toMatch(/0,80/);
-    expect(texte).toMatch(/0,50/);
-    expect(texte).toMatch(/1,00/);
-    expect(texte).toMatch(/0,65/);
+    expect(texte).toMatch(/0,8 à 0,5/);
+    expect(texte).toMatch(/1 à 0,65/);
   });
 
-  it('signale que seule la famille traction / bridage exterieur est validee', () => {
+  it('signale que seule la famille traction / bridage extérieur est validee', () => {
     const bloc = blocMeyer({ resultat: calcul() }, VOILE.ds);
     expect(bloc.note).toMatch(/valid/i);
     expect(bloc.note).toMatch(/flexion/i);
   });
 
-  it('avertit meme quand le calcul a echoue', () => {
+  it('avertit même quand le calcul a echoue', () => {
     // Un bloc reduit a son motif perdrait tout ce qui distingue Meyer de
     // l EC2 — et c est justement quand rien ne s affiche que le lecteur
     // cherche a comprendre ce que ce bloc fait la.
-    const bloc = blocMeyer({ motif: 'ds doit etre strictement positif (0)' }, 0);
+    const bloc = blocMeyer({ motif: 'ds doit être strictement positif (0)' }, 0);
 
     expect(bloc.note).toMatch(/DIN 1045/);
     expect(bloc.note).toMatch(/7\.3\.2/);

@@ -1,11 +1,11 @@
-import { nombreFr, tauxFr } from 'aedificium-ui';
+import { nombreAffiche, tauxAffiche } from 'aedificium-ui';
 
 /**
- * Nombre a la francaise : `nombreFr` d'aedificium-ui, commun a la suite. Un
- * NaN ou un infini s'affiche en tiret, jamais comme une valeur.
+ * Nombre a la francaise, trois decimales au plus et sans zero inutile
+ * (`nombreAffiche` d'aedificium-ui). Un NaN ou un infini s'affiche en tiret.
  */
 export function formatNumber(valeur: number, decimales: number): string {
-  return nombreFr(valeur, decimales);
+  return nombreAffiche(valeur, Math.min(decimales, 3));
 }
 
 export function formatAngleDegrees(radians: number): string {
@@ -21,8 +21,8 @@ export function formatAngleDegrees(radians: number): string {
  * a cote d'un verdict defavorable cette fois. Dans les deux cas l'affichage
  * contredit la conclusion. On arrondit donc VERS LE BAS sous 1 et VERS LE
  * HAUT au-dessus, de sorte que le nombre lu et le verdict racontent toujours
- * la meme histoire. Le cas d'egalite exacte reste « 1,00 ».
+ * la meme histoire. Le cas d'egalite exacte s'ecrit « 1 ».
  */
 export function formatUtilization(taux: number): string {
-  return tauxFr(taux, 2);
+  return tauxAffiche(taux);
 }

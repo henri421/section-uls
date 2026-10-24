@@ -36,10 +36,10 @@ function pourMille(eps: number): string {
  * pour une incoherence de l outil.
  */
 const DEUX_SIGMA_S =
-  'Contraintes obtenues avec les LOIS DE CALCUL de l ELU (f_cd, f_yd, parabole-rectangle, ' +
-  'beton tendu neglige), sous la sollicitation ELU. A ne pas confondre avec le sigma_s des ' +
-  '§7.2 et §7.3, qui sort de la methode n sous combinaison de SERVICE, avec f_ck et f_yk : ' +
-  'deux nombres differents pour deux questions differentes.';
+  'Contraintes obtenues avec les LOIS DE CALCUL de l\'ELU (f_cd, f_yd, parabole-rectangle, ' +
+  'béton tendu neglige), sous la sollicitation ELU. À ne pas confondre avec le sigma_s des ' +
+  '§7.2 et §7.3, qui sort de la méthode n sous combinaison de SERVICE, avec f_ck et f_yk : ' +
+  'deux nombres differents pour deux questions différentes.';
 
 /**
  * Etat d equilibre de la section sous `(N_Ed, M_Ed)`.
@@ -57,23 +57,23 @@ export function blocEtatSection(
   entree: Issue<SectionStateResult>,
   action: Action
 ): BlocService {
-  const titre = 'Etat sous sollicitation (ELU)';
+  const titre = 'État sous sollicitation (ELU)';
   if (!('resultat' in entree)) return sansCalcul(titre, entree.motif);
 
   const r = entree.resultat;
 
   const lignes: LigneAffichee[] = [
     { libelle: 'Sollicitation appliquee', valeur: `N ${formatNumber(action.N, 1)} kN, M ${formatNumber(action.M, 1)} kN·m` },
-    { libelle: 'Deformation fibre superieure', valeur: pourMille(r.epsTop) },
-    { libelle: 'Deformation fibre inferieure', valeur: pourMille(r.epsBottom) },
+    { libelle: 'Déformation fibre supérieure', valeur: pourMille(r.epsTop) },
+    { libelle: 'Déformation fibre inférieure', valeur: pourMille(r.epsBottom) },
     {
       libelle: 'Axe neutre',
       valeur:
         r.neutralAxisDepth === null
           ? 'hors section : aucune fibre ne change de signe'
           : r.neutralAxisDepth === Infinity
-            ? 'a l infini : deformation uniforme'
-            : `${formatNumber(r.neutralAxisDepth, 1)} mm sous la fibre superieure`,
+            ? 'à l\'infini : déformation uniforme'
+            : `${formatNumber(r.neutralAxisDepth, 1)} mm sous la fibre supérieure`,
     },
   ];
 
@@ -110,8 +110,8 @@ export function blocEtatSection(
   }
 
   const ultime = r.atUltimate
-    ? ' La fibre la plus comprimee est a eps_cu2 : la section est A L ULTIME, le moment ' +
-      'applique egale son moment resistant.'
+    ? ' La fibre la plus comprimée est a eps_cu2 : la section est A L ULTIME, le moment ' +
+      'applique égale son moment résistant.'
     : '';
 
   return {
@@ -125,8 +125,8 @@ export function blocEtatSection(
 // --- Etat de fissuration en service ------------------------------------------
 
 const NOM_ETAT = {
-  uncracked: 'etat I — section NON fissuree, le beton tendu travaille',
-  cracked: 'etat II — section FISSUREE, le beton tendu est neglige',
+  uncracked: 'état I — section NON fissurée, le béton tendu travaille',
+  cracked: 'état II — section FISSURÉE, le béton tendu est neglige',
 } as const;
 
 /**
@@ -151,20 +151,20 @@ export function blocEtatFissuration(
    */
   quasiPermanente?: Issue<ServiceStateResult>
 ): BlocService {
-  const titre = 'Etat de fissuration (§7.1(2))';
+  const titre = 'État de fissuration (§7.1(2))';
   if (!('resultat' in entree)) return sansCalcul(titre, entree.motif);
 
   const r = entree.resultat;
   const c = r.cracking;
 
   const lignes: LigneAffichee[] = [
-    { libelle: 'Combinaison', valeur: 'caracteristique — celle que le §7.2 limite' },
-    { libelle: 'Etat retenu', valeur: NOM_ETAT[c.state] },
+    { libelle: 'Combinaison', valeur: 'caractéristique — celle que le §7.2 limite' },
+    { libelle: 'État retenu', valeur: NOM_ETAT[c.state] },
     {
-      libelle: 'Traction extreme du beton (etat I)',
+      libelle: 'Traction extreme du béton (état I)',
       valeur: `${formatNumber(c.uncracked.sigmaCt, 2)} MPa`,
     },
-    { libelle: 'f_ct,eff du critere', valeur: `${formatNumber(c.fctEff, 2)} MPa` },
+    { libelle: 'f_ct,eff du critère', valeur: `${formatNumber(c.fctEff, 2)} MPa` },
     {
       libelle: 'Moment de fissuration M_cr',
       valeur:
@@ -172,7 +172,7 @@ export function blocEtatFissuration(
           ? `sans objet — ${c.McrReason ?? 'non gouverne par le moment'}`
           : `${formatNumber(c.Mcr, 1)} kN·m`,
     },
-    { libelle: 'Compression du beton sigma_c', valeur: `${formatNumber(r.sigmaC, 1)} MPa` },
+    { libelle: 'Compression du béton sigma_c', valeur: `${formatNumber(r.sigmaC, 1)} MPa` },
     {
       libelle: 'Limite k1·f_ck',
       valeur: `${formatNumber(r.sigmaCLimit, 1)} MPa`,
@@ -183,7 +183,7 @@ export function blocEtatFissuration(
 
   if (quasiPermanente !== undefined && 'resultat' in quasiPermanente) {
     lignes.push({
-      libelle: 'Etat sous quasi-permanente (§7.3)',
+      libelle: 'État sous quasi-permanente (§7.3)',
       valeur: NOM_ETAT[quasiPermanente.resultat.cracking.state],
     });
   }
@@ -192,17 +192,17 @@ export function blocEtatFissuration(
   // repeter quand les deux concordent brouillerait le seul cas ou l
   // information compte.
   const forcage = c.forced
-    ? `Etat IMPOSE par l utilisateur. Le critere du §7.1(2) designe l autre : ` +
+    ? `État IMPOSE par l'utilisateur. Le critère du §7.1(2) designe l'autre : ` +
       `${NOM_ETAT[c.criterionState]}. Les contraintes ci-dessus sont donc celles d une ` +
-      "hypothese que la norme n aurait pas retenue ici — c est un examen, pas une justification."
+      "hypothèse que la norme n aurait pas retenue ici — c'est un examen, pas une justification."
     : '';
 
   const lecture =
     c.state === 'uncracked'
-      ? 'Le beton tendu participe, ce qui soulage les armatures : le sigma_s ci-dessus est ' +
-        'plus faible que celui d un calcul en section fissuree, et c est legitime tant que la ' +
+      ? 'Le béton tendu participe, ce qui soulage les armatures : le sigma_s ci-dessus est ' +
+        'plus faible que celui d\'un calcul en section fissurée, et c\'est legitime tant que la ' +
         'traction reste sous f_ct,eff.'
-      : "La traction du beton atteint f_ct,eff : le beton tendu est integralement neglige, et " +
+      : "La traction du béton atteint f_ct,eff : le béton tendu est integralement neglige, et " +
         'toute la traction passe dans les armatures.';
 
   const note = [forcage, lecture].filter((t) => t !== '').join(' ');
@@ -211,8 +211,8 @@ export function blocEtatFissuration(
     titre,
     lignes,
     verdict: r.ok
-      ? { ok: true, texte: 'Contraintes de service verifiees sur l etat retenu' }
-      : { ok: false, texte: 'Contraintes de service non verifiees' },
+      ? { ok: true, texte: 'Contraintes de service vérifiées sur l\'état retenu' }
+      : { ok: false, texte: 'Contraintes de service non vérifiées' },
     note: r.ok ? note : `${r.reason ?? ''} ${note}`.trim(),
   };
 }

@@ -56,18 +56,18 @@ function sectionEnTe() {
   });
 }
 
-describe('note de flexion deviee', () => {
-  it('une sollicitation ELU droite n appelle aucune precision', () => {
+describe('note de flexion déviée', () => {
+  it('une sollicitation ELU droite n appelle aucune précision', () => {
     expect(noteFlexionDeviee(0)).toBeNull();
   });
 
-  it('un Mz ELU non nul appelle une PRECISION, jamais un refus de calculer', () => {
+  it('un Mz ELU non nul appelle une PRÉCISION, jamais un refus de calculer', () => {
     // Le Mz de l ELU ne concerne pas le service : les combinaisons de service
     // sont saisies separement et sont uniaxiales {N, M} par construction.
     const note = noteFlexionDeviee(12.5);
 
     expect(note).not.toBeNull();
-    expect(note).toMatch(/flexion deviee|deviee/i);
+    expect(note).toMatch(/flexion déviée|déviée/i);
     expect(note).toContain('12,5');
     // Elle doit expliquer POURQUOI ce n est pas une incoherence.
     expect(note).toMatch(/combinaison/i);
@@ -75,10 +75,10 @@ describe('note de flexion deviee', () => {
 
   it('le signe du Mz est indifferent : seule compte sa presence', () => {
     expect(noteFlexionDeviee(-3)).not.toBeNull();
-    expect(noteFlexionDeviee(-3)).toMatch(/deviee/i);
+    expect(noteFlexionDeviee(-3)).toMatch(/déviée/i);
   });
 
-  it('une section rectangulaire ne fait pas obstacle a la fissuration', () => {
+  it('une section rectangulaire ne fait pas obstacle à la fissuration', () => {
     expect(obstacleFissuration(rectangle())).toBeNull();
   });
 
@@ -126,7 +126,7 @@ function sansNaN(bloc: BlocService): boolean {
 }
 
 describe('bloc des contraintes en service', () => {
-  it('un resultat favorable porte ses valeurs et son verdict', () => {
+  it('un résultat favorable porte ses valeurs et son verdict', () => {
     const bloc = blocContraintes({ resultat: verifyServiceUniaxial(poutre(), { N: 0, M: 120 }) });
     const v = valeurs(bloc);
 
@@ -134,28 +134,28 @@ describe('bloc des contraintes en service', () => {
     expect(bloc.verdict!.ok).toBe(true);
 
     // sigma_c = 12,33 MPa contre la limite 0,6·fck = 18 MPa.
-    expect(v['σc']).toBe('12,3 MPa (limite 18,0 MPa)');
+    expect(v['σc']).toBe('12,3 MPa (limite 18 MPa)');
     // sigma_s = 322,1 MPa contre la limite 0,8·fyk = 400 MPa.
-    expect(v['σs']).toBe('322,1 MPa (limite 400,0 MPa)');
+    expect(v['σs']).toBe('322,1 MPa (limite 400 MPa)');
     // L axe neutre de SERVICE, qui n est pas celui de l ELU.
     expect(v['Axe neutre en service (≠ ELU)']).toBe('-85,9 mm');
     expect(sansNaN(bloc)).toBe(true);
   });
 
-  it('un resultat defavorable met le verdict a cote du bon chiffre', () => {
+  it('un résultat defavorable met le verdict a cote du bon chiffre', () => {
     const bloc = blocContraintes({ resultat: verifyServiceUniaxial(poutre(), { N: 0, M: 400 }) });
     const v = valeurs(bloc);
 
     expect(bloc.verdict!.ok).toBe(false);
     // Le chiffre fautif est affiche a cote de sa limite : 41,1 > 18,0.
-    expect(v['σc']).toBe('41,1 MPa (limite 18,0 MPa)');
-    expect(v['σs']).toBe('1073,7 MPa (limite 400,0 MPa)');
+    expect(v['σc']).toBe('41,1 MPa (limite 18 MPa)');
+    expect(v['σs']).toBe('1073,7 MPa (limite 400 MPa)');
     // Le motif du noyau, qui dit LEQUEL des deux est depasse.
-    expect(bloc.note).toContain('compression du beton');
-    expect(bloc.note).toContain('traction de l acier');
+    expect(bloc.note).toContain('compression du béton');
+    expect(bloc.note).toContain('traction de l\'acier');
   });
 
-  it('une section entierement comprimee est un RESULTAT, pas un NaN affiche', () => {
+  it('une section entièrement comprimée est un RÉSULTAT, pas un NaN affiche', () => {
     const resultat = verifyServiceUniaxial(poutre(), { N: 4000, M: 5 });
     expect(resultat.converged).toBe(false);
 
@@ -164,11 +164,11 @@ describe('bloc des contraintes en service', () => {
     expect(bloc.lignes).toEqual([]);
     expect(sansNaN(bloc)).toBe(true);
     expect(bloc.verdict).toBeNull();
-    expect(bloc.note).toContain('entierement comprimee');
+    expect(bloc.note).toContain('entièrement comprimée');
   });
 
   it('un obstacle amont donne un bloc sans lignes, portant le motif', () => {
-    const motif = 'Sollicitation caracteristique de service non saisie.';
+    const motif = 'Sollicitation caractéristique de service non saisie.';
     const bloc = blocContraintes({ motif });
 
     expect(bloc.lignes).toEqual([]);
@@ -190,17 +190,17 @@ describe('bloc des contraintes en service', () => {
 });
 
 describe('bloc de la fissuration', () => {
-  it('un resultat defavorable confronte w_k a w_max', () => {
+  it('un résultat defavorable confronte w_k a w_max', () => {
     const bloc = blocFissuration({ resultat: verifyCrackWidth(poutre(), { N: 0, M: 120 }) });
     const v = valeurs(bloc);
 
     expect(bloc.verdict!.ok).toBe(false);
-    expect(v['w_k']).toBe('0,352 mm (limite w_max 0,300 mm)');
+    expect(v['w_k']).toBe('0,352 mm (limite w_max 0,3 mm)');
     expect(v['s_r,max']).toBe('257,2 mm');
     expect(bloc.note).toContain('ouverture de fissure');
   });
 
-  it('la meme section passe avec le w_max d une autre classe d exposition', () => {
+  it('la même section passe avec le w_max d\'une autre classe d exposition', () => {
     // 0,3 n est pas une valeur normative universelle : tableau 7.1N donne
     // 0,4 / 0,3 / 0,2 selon la classe. Le meme w_k change donc de verdict.
     const bloc = blocFissuration({
@@ -208,7 +208,7 @@ describe('bloc de la fissuration', () => {
     });
 
     expect(bloc.verdict!.ok).toBe(true);
-    expect(valeurs(bloc)['w_k']).toBe('0,352 mm (limite w_max 0,400 mm)');
+    expect(valeurs(bloc)['w_k']).toBe('0,352 mm (limite w_max 0,4 mm)');
     expect(bloc.note).toBeNull();
   });
 
@@ -243,7 +243,7 @@ describe('bloc de la fissuration', () => {
     expect(texte).not.toContain('7.14');
   });
 
-  it('une geometrie refusee donne un bloc lisible, pas un vide', () => {
+  it('une géométrie refusee donne un bloc lisible, pas un vide', () => {
     const motif = obstacleFissuration(circularSection({ diameter: 600, concrete: beton, rebars: [] }))!;
     const bloc = blocFissuration({ motif });
 
@@ -255,7 +255,7 @@ describe('bloc de la fissuration', () => {
 });
 
 describe('bloc de la courbure', () => {
-  it('une section fissuree rend la courbure, M_cr, zeta et EI', () => {
+  it('une section fissurée rend la courbure, M_cr, zeta et EI', () => {
     const bloc = blocCourbure({ resultat: sectionCurvature(poutre(), { N: 0, M: 120 }) });
     const v = valeurs(bloc);
 
@@ -264,17 +264,17 @@ describe('bloc de la courbure', () => {
     expect(v['1/r']).toBe('5,42·10⁻⁶ mm⁻¹');
     expect(v['M_cr']).toBe('44,7 kN·m');
     expect(v['ζ']).toBe('0,93');
-    expect(v['Etat']).toBe('fissuree');
+    expect(v['État']).toBe('fissurée');
     expect(v['EI effectif']).toBe('2,22·10¹³ N·mm²');
     expect(sansNaN(bloc)).toBe(true);
   });
 
-  it('sous le moment de fissuration, la section est annoncee non fissuree', () => {
+  it('sous le moment de fissuration, la section est annoncee non fissurée', () => {
     const bloc = blocCourbure({ resultat: sectionCurvature(poutre(), { N: 0, M: 10 }) });
     const v = valeurs(bloc);
 
-    expect(v['Etat']).toBe('non fissuree');
-    expect(v['ζ']).toBe('0,00');
+    expect(v['État']).toBe('non fissurée');
+    expect(v['ζ']).toBe('0');
     expect(v['1/r']).toBe('2,08·10⁻⁷ mm⁻¹');
     expect(v['EI effectif']).toBe('4,81·10¹³ N·mm²');
   });
@@ -285,22 +285,22 @@ describe('bloc de la courbure', () => {
     expect(blocCourbure({ resultat: sectionCurvature(poutre(), { N: 0, M: 10 }) }).verdict).toBeNull();
   });
 
-  it('la note dit TOUJOURS que ce n est pas une fleche', () => {
+  it('la note dit TOUJOURS que ce n\'est pas une flèche', () => {
     // La confusion se joue a l ecran : une fleche exige portee, appuis et
     // chargement, du niveau element, que ce module de sections ignore.
     const motif = 'Sollicitation quasi-permanente non saisie.';
     const calcule = blocCourbure({ resultat: sectionCurvature(poutre(), { N: 0, M: 120 }) });
     const empeche = blocCourbure({ motif });
 
-    expect(calcule.note).toMatch(/fleche/i);
-    expect(empeche.note).toMatch(/fleche/i);
+    expect(calcule.note).toMatch(/flèche/i);
+    expect(empeche.note).toMatch(/flèche/i);
     // Et le motif reste porte, en plus de l avertissement.
     expect(empeche.note).toContain(motif);
     expect(empeche.lignes).toEqual([]);
     expect(empeche.verdict).toBeNull();
   });
 
-  it('un etat fissure incalculable ne montre pas les valeurs de l etat non fissure', () => {
+  it('un état fissure incalculable ne montre pas les valeurs de l\'état non fissure', () => {
     // `sectionCurvature` rend alors converged:false avec les grandeurs de
     // l etat I, qui ne decrivent PAS la section reelle : les afficher
     // tromperait plus surement qu un bloc vide.
@@ -311,7 +311,7 @@ describe('bloc de la courbure', () => {
 
     expect(bloc.lignes).toEqual([]);
     expect(bloc.verdict).toBeNull();
-    expect(bloc.note).toContain('etat fissure incalculable');
-    expect(bloc.note).toMatch(/fleche/i);
+    expect(bloc.note).toContain('état fissuré incalculable');
+    expect(bloc.note).toMatch(/flèche/i);
   });
 });

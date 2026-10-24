@@ -162,14 +162,14 @@ function htmlResultat(blocs: BlocService[], taux: number): string {
 // --- Verifications de service -----------------------------------------------
 
 const SANS_CARACTERISTIQUE =
-  'Aucune sollicitation de service caracteristique saisie. La limitation des contraintes du §7.2 ' +
-  'porte sur la combinaison CARACTERISTIQUE, qui n est pas celle de l ELU : la reprendre serait ' +
-  'fausse d un facteur 1,35 a 1,5, elle doit donc etre renseignee separement.';
+  'Aucune sollicitation de service caractéristique saisie. La limitation des contraintes du §7.2 ' +
+  'porte sur la combinaison CARACTÉRISTIQUE, qui n\'est pas celle de l\'ELU : la reprendre serait ' +
+  'fausse d\'un facteur 1,35 a 1,5, elle doit donc être renseignée séparément.';
 
 const SANS_QUASI_PERMANENTE =
-  'Aucune sollicitation de service quasi-permanente saisie. L ouverture de fissures (§7.3) et la ' +
-  'courbure (§7.4.3) portent sur la combinaison QUASI-PERMANENTE, qui n est pas celle de l ELU : ' +
-  'elle doit etre renseignee separement.';
+  'Aucune sollicitation de service quasi-permanente saisie. L\'ouverture de fissures (§7.3) et la ' +
+  'courbure (§7.4.3) portent sur la combinaison QUASI-PERMANENTE, qui n\'est pas celle de l\'ELU : ' +
+  'elle doit être renseignée séparément.';
 
 /**
  * Protege UN appel de verification, et lui seul.
@@ -312,10 +312,10 @@ function blocDeLEtatSection(resolu: ResolvedModel): BlocAffiche {
       bloc: blocEtatSection(
         {
           motif:
-            `Sollicitation deviee (M_z = ${formatNumber(resolu.action.Mz, 1)} kN·m). ` +
-            "L'equilibre sous sollicitation donnee est resolu en flexion DROITE : il " +
-            'faudrait une orientation d axe neutre supplementaire, que ce module ne cherche ' +
-            'pas. Le moment resistant, lui, reste calcule en flexion deviee par le bloc de flexion.',
+            `Sollicitation déviée (M_z = ${formatNumber(resolu.action.Mz, 1)} kN·m). ` +
+            "L'équilibre sous sollicitation donnée est résolu en flexion DROITE : il " +
+            'faudrait une orientation d\'axe neutre supplementaire, que ce module ne cherche ' +
+            'pas. Le moment résistant, lui, reste calcule en flexion déviée par le bloc de flexion.',
         },
         action
       ),
@@ -339,7 +339,7 @@ function htmlService(MzElu: number, blocs: BlocAffiche[]): string {
   const deviee = note === null ? '' : `<p class="note note-deviee">${notationHtml(note)}</p>`;
 
   return (
-    `<div id="service"><h2>Verifications de service (ELS)</h2>${deviee}` +
+    `<div id="service"><h2>Vérifications de service (ELS)</h2>${deviee}` +
     blocs.map((b) => htmlBlocService(b.bloc, b.cle)).join('') +
     '</div>'
   );
@@ -348,7 +348,7 @@ function htmlService(MzElu: number, blocs: BlocAffiche[]): string {
 function htmlEtatSection(blocs: BlocAffiche[]): string {
   if (blocs.length === 0) return '';
   return (
-    '<div id="etat-section"><h2>Etat sous sollicitation</h2>' +
+    '<div id="etat-section"><h2>État sous sollicitation</h2>' +
     blocs.map((b) => htmlBlocService(b.bloc, b.cle)).join('') +
     '</div>'
   );
@@ -497,7 +497,7 @@ function htmlVerifications(blocs: BlocAffiche[], checks: ResolvedChecks): string
   const familles: string[] = [];
   if (checks.shear) familles.push('effort tranchant');
   if (checks.detailing) familles.push('dispositions constructives');
-  if (checks.restraint) familles.push('deformation genee');
+  if (checks.restraint) familles.push('déformation gênée');
 
   const titre = familles.join(', ').replace(/^./, (c) => c.toUpperCase());
 
@@ -506,11 +506,11 @@ function htmlVerifications(blocs: BlocAffiche[], checks: ResolvedChecks): string
   // Luxembourg la justification reglementaire reste l'EN 1992-1-1. Qui lit
   // l'ecran doit savoir laquelle il regarde.
   const referentiel = checks.restraint
-    ? `<p class="legende"><span>deformation genee — referentiel : ${
+    ? `<p class="legende"><span>déformation gênée — référentiel : ${
         checks.restraintReferential === 'ec2'
           ? 'EN 1992-1-1 §7.3.2'
           : checks.restraintReferential === 'meyer'
-            ? 'DIN 1045, methode Meyer'
+            ? 'DIN 1045, méthode Meyer'
             : 'comparatif §7.3.2 / Meyer'
       }</span></p>`
     : '';
@@ -650,7 +650,7 @@ export function dessinerDiagrammeNM(resolu: ResolvedModel): { svg: string; html:
   // traction pure. Le dire, plutot que de dessiner un domaine non calcule.
   const limites =
     '<p class="legende">' +
-    '<span>contour OUVERT du cote traction : seule la branche du pivot beton est parcourue</span>' +
+    '<span>contour OUVERT du cote traction : seule la branche du pivot béton est parcourue</span>' +
     '<span>graphe de la flexion droite autour de y</span>' +
     '</p>';
 
@@ -659,7 +659,7 @@ export function dessinerDiagrammeNM(resolu: ResolvedModel): { svg: string; html:
   // plutot que d'afficher un point trompeusement rassurant — ou l'inverse.
   const avertissement =
     Mz !== 0
-      ? `<p class="note"><strong>Flexion deviee</strong> (${notationHtml(
+      ? `<p class="note"><strong>Flexion déviée</strong> (${notationHtml(
           `M_z = ${formatNumber(Mz, 1)} kN·m`
         )}) : le point sollicitant ne se trouve pas dans le plan de ce graphe, qui ne peut donc
          pas rendre le verdict. C'est le domaine My-Mz ci-dessous qui fait foi.</p>`

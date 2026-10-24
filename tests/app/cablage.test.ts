@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
+import { notationHtml, texteVisible } from 'aedificium-ui';
 
 /**
  * Tests du CABLAGE de l'interface.
@@ -309,12 +310,12 @@ describe('diagramme N-M', () => {
     // PAS au plan (N, My). Le graphe reste exact, mais il ne dit plus rien du
     // verdict — il faut l'ecrire plutot que de laisser croire le contraire.
     const dom = await monterApplication();
-    expect(diagramme(dom).textContent).toMatch(/deviee/i);
+    expect(diagramme(dom).textContent).toMatch(/déviée/i);
 
     saisir(dom, 'Mz', '0');
     vi.advanceTimersByTime(500);
 
-    expect(diagramme(dom).textContent).not.toMatch(/deviee/i);
+    expect(diagramme(dom).textContent).not.toMatch(/déviée/i);
   });
 });
 
@@ -453,12 +454,12 @@ describe('verifications de service', () => {
 
   it('le bloc courbure porte TOUJOURS qu il ne s agit pas d une fleche', async () => {
     const dom = await monterAvecVerifications();
-    expect(bloc(dom, 'courbure').textContent).toMatch(/pas.*fleche/i);
+    expect(bloc(dom, 'courbure').textContent).toMatch(/pas.*flèche/i);
 
     // Y compris apres un changement de sollicitation.
     saisir(dom, 'serviceQpM', '250');
     vi.advanceTimersByTime(500);
-    expect(bloc(dom, 'courbure').textContent).toMatch(/pas.*fleche/i);
+    expect(bloc(dom, 'courbure').textContent).toMatch(/pas.*flèche/i);
   });
 
   it('changer une sollicitation de service change le service, PAS le verdict ELU', async () => {
@@ -586,8 +587,10 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
 
   /** Valeur affichee en face d un libelle, telle qu elle est lue a l ecran. */
   function valeur(dom: JSDOM, nomDuBloc: string, libelle: string): string {
+    // Le libelle passe par la notation au rendu (A_s s affiche A<sub>s</sub>).
+    const lu = texteVisible(notationHtml(libelle));
     for (const l of bloc(dom, nomDuBloc).querySelectorAll('.ligne')) {
-      if (l.querySelector('span')?.textContent === libelle) {
+      if (l.querySelector('span')?.textContent === lu) {
         return l.querySelector('strong')?.textContent ?? '';
       }
     }
@@ -748,14 +751,14 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
 
   it('declarer des cadres fait apparaitre V_Rd,s et V_Rd,max', async () => {
     const dom = await monterAvecVerifications();
-    expect(bloc(dom, 'tranchant').textContent).not.toContain('V_Rd,s');
+    expect(bloc(dom, 'tranchant').textContent).not.toContain('VRd,s');
 
     saisir(dom, 'Asw', '100');
     saisir(dom, 'sCadres', '200');
     vi.advanceTimersByTime(500);
 
-    expect(bloc(dom, 'tranchant').textContent).toContain('V_Rd,s');
-    expect(bloc(dom, 'tranchant').textContent).toContain('V_Rd,max');
+    expect(bloc(dom, 'tranchant').textContent).toContain('VRd,s');
+    expect(bloc(dom, 'tranchant').textContent).toContain('VRd,max');
     expect(verifications(dom).innerHTML).not.toContain('NaN');
   });
 
@@ -782,11 +785,11 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
 
     choisir(dom, 'elementType', 'beam');
     vi.advanceTimersByTime(500);
-    expect(bloc(dom, 'dispositions').textContent).toContain('rho_w');
+    expect(bloc(dom, 'dispositions').textContent).toContain(texteVisible(notationHtml('rho_w')));
 
     choisir(dom, 'elementType', 'slab');
     vi.advanceTimersByTime(500);
-    expect(bloc(dom, 'dispositions').textContent).not.toContain('rho_w');
+    expect(bloc(dom, 'dispositions').textContent).not.toContain(texteVisible(notationHtml('rho_w')));
     expect(bloc(dom, 'dispositions').textContent).toMatch(/sans objet/i);
     expect(verifications(dom).innerHTML).not.toContain('NaN');
   });
@@ -812,14 +815,14 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
    */
   it('changer la methode change h_c,ef sans toucher a k', async () => {
     const dom = await monterAvecVerifications();
-    const kAvant = valeur(dom, 'zwang', 'k (facteur d epaisseur)');
+    const kAvant = valeur(dom, 'zwang', 'k (facteur d\'épaisseur)');
     const hAvant = nombre(valeur(dom, 'zwang', 'h_c,ef (une face)'));
 
     choisir(dom, 'restraintMethod', 'ec2');
     vi.advanceTimersByTime(500);
 
     expect(nombre(valeur(dom, 'zwang', 'h_c,ef (une face)'))).not.toBe(hAvant);
-    expect(valeur(dom, 'zwang', 'k (facteur d epaisseur)')).toBe(kAvant);
+    expect(valeur(dom, 'zwang', 'k (facteur d\'épaisseur)')).toBe(kAvant);
   });
 
   /**
@@ -835,7 +838,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
 
     expect(valeur(dom, 'zwang', 'h_c,ef (une face)')).toMatch(/300 mm — IMPOSE/);
     // Les grandeurs non forcees ne portent PAS la marque.
-    expect(valeur(dom, 'zwang', 'k (facteur d epaisseur)')).not.toMatch(/IMPOSE/);
+    expect(valeur(dom, 'zwang', 'k (facteur d\'épaisseur)')).not.toMatch(/IMPOSE/);
   });
 
   it('une valeur imposee hors du domaine AVERTIT, sans ecreter ni bloquer', async () => {
@@ -1002,7 +1005,7 @@ describe('verifications de section : tranchant, dispositions, deformation genee'
       const dom = await monterAvecVerifications();
       const saisie = dom.window.document.querySelector('#saisie')?.textContent ?? '';
 
-      expect(saisie).toMatch(/k_zt/);
+      expect(saisie).toMatch(/kzt/);
       expect(saisie).toMatch(/hydratation|jeune age|quelques jours/i);
     });
   });
@@ -1258,10 +1261,10 @@ describe('optimisation de la disposition', () => {
     cliquer(dom, 'ajouter-peau');
 
     const panneau = dom.window.document.querySelector('.disposition')?.textContent ?? '';
-    expect(panneau).toMatch(/Reference M_Rd/);
-    expect(panneau).toMatch(/Actuel M_Rd/);
+    expect(panneau).toMatch(/Référence MRd/);
+    expect(panneau).toMatch(/Actuel MRd/);
     // 4 HA12 = 452 mm² de plus, et le signe doit etre affiche.
-    expect(panneau).toMatch(/Actuel A_s.*\+45[0-9]/);
+    expect(panneau).toMatch(/Actuel As.*\+45[0-9]/);
     expect(panneau).toMatch(/10 barres/);
   });
 
@@ -1447,14 +1450,14 @@ describe('les sorties : dessins, resultats, note de calcul', () => {
     expect(contenu).toContain('<!doctype html>');
     expect(contenu).toContain('note de calcul');
     // Donnees d entree, dessin, verifications, hypotheses, avertissement.
-    expect(contenu).toContain('Donnees d entree');
+    expect(contenu).toContain('Données d\'entrée');
     expect(contenu).toContain('<svg');
     // La verification ELU affichee a l ecran figure dans la note. (Le
     // tranchant, decoche par defaut, n y figure plus, meme en hypothese :
     // voir « une verification cochee apparait dans la note ».)
     expect(contenu).toContain('Flexion ELU');
-    expect(contenu).toContain('Hypotheses et limites');
-    expect(contenu).toMatch(/responsabilite incombent a l ingenieur/);
+    expect(contenu).toContain('Hypothèses et limites');
+    expect(contenu).not.toMatch(/aide au calcul/i);
     expect(contenu).not.toContain('NaN');
   });
 

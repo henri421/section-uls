@@ -123,7 +123,7 @@ export function verifyCrackWidth(
   const aire = effectiveTensionArea(section, x);
 
   if (aire.asEff <= 0) {
-    return echec('aucune armature dans l aire effective de beton tendu');
+    return echec("aucune armature dans l'aire effective de béton tendu");
   }
 
   const fctm = options?.fctm ?? fctmDepuisFck(section.concrete.fck);

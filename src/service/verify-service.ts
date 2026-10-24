@@ -49,6 +49,11 @@ function verticesDe(section: Section): Vertex[] {
     : section.geometry.vertices;
 }
 
+/** Motif lisible : virgule décimale, une décimale. */
+function virgule(v: number): string {
+  return v.toFixed(1).replace('.', ',');
+}
+
 /**
  * Verification des contraintes en SERVICE par la methode n.
  *
@@ -123,8 +128,8 @@ export function verifyServiceUniaxial(
     // neutre ne verifie l'equilibre avec une zone comprimee partielle. Le
     // cas usuel est une section entierement comprimee.
     return echec(
-      'aucun axe neutre dans la section : elle est vraisemblablement entierement comprimee, ' +
-        "et l'hypothese de section fissuree ne s'applique plus (la section non fissuree n'est pas couverte)"
+      'aucun axe neutre dans la section : elle est vraisemblablement entièrement comprimée, ' +
+        "et l'hypothèse de section fissurée ne s'applique plus (la section non fissurée n'est pas couverte)"
     );
   }
 
@@ -171,12 +176,12 @@ export function verifyServiceUniaxial(
   const motifs: string[] = [];
   if (betonDepasse) {
     motifs.push(
-      `compression du beton ${sigmaC.toFixed(1)} MPa au-dela de la limite ${sigmaCLimit.toFixed(1)} MPa`
+      `compression du béton ${virgule(sigmaC)} MPa au-delà de la limite ${virgule(sigmaCLimit)} MPa`
     );
   }
   if (acierDepasse) {
     motifs.push(
-      `traction de l acier ${tractionMax.toFixed(1)} MPa au-dela de la limite ${sigmaSLimit.toFixed(1)} MPa`
+      `traction de l'acier ${virgule(tractionMax)} MPa au-delà de la limite ${virgule(sigmaSLimit)} MPa`
     );
   }
 

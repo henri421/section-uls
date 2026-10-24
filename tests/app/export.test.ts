@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { notationTexte } from 'aedificium-ui';
 import { JSDOM } from 'jsdom';
 
 import {
@@ -190,7 +191,7 @@ describe('resultatsEnCsv', () => {
     const lignes = lignesDe(resultatsEnCsv([piege]));
 
     expect(lignes[0]).toBe(
-      'Dispositions constructives (§9);Violations;"A_s < A_s,min ; cadres absents"'
+      `Dispositions constructives (§9);Violations;"${notationTexte('A_s < A_s,min ; cadres absents')}"`
     );
     expect(lignes[1]).toBe(
       'Dispositions constructives (§9);"Mode dit ""simplifie""";"ligne 1\nligne 2"'
@@ -304,9 +305,9 @@ describe('noteDeCalculHtml', () => {
     // de calcul sert precisement a etre verifiee par un tiers.
     const texte = analyserNote(noteDeCalculHtml(NOTE, STYLES_ESSAI)).body.textContent ?? '';
 
-    expect(texte).toContain('V_Rd,c (sans armature d ame)');
+    expect(texte).toContain('VRd,c (sans armature d ame)'); // notation rendue : indices en <sub>
     expect(texte).toContain('82,4 kN');
-    expect(texte).toContain('Taux V_Ed / V_Rd');
+    expect(texte).toContain('Taux VEd / VRd');
     expect(texte).toContain('Effort tranchant verifie');
   });
 
@@ -328,11 +329,10 @@ describe('noteDeCalculHtml', () => {
     expect(doc.querySelectorAll('.verdict')).toHaveLength(attendus);
   });
 
-  it('porte l avertissement de responsabilite', () => {
+  it('ne porte plus la phrase type d aide au calcul (etape 8.2)', () => {
     const texte = analyserNote(noteDeCalculHtml(NOTE, STYLES_ESSAI)).body.textContent ?? '';
 
-    expect(texte).toMatch(/aide au calcul/i);
-    expect(texte).toMatch(/responsabilite incombent a l ingenieur/i);
+    expect(texte).not.toMatch(/aide au calcul/i);
   });
 
   it('rend les hypotheses et limites', () => {
@@ -375,6 +375,6 @@ describe('noteDeCalculHtml', () => {
 
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;');
-    expect(analyserNote(html).body.textContent).toContain('sigma < 0 & rho > 1');
+    expect(analyserNote(html).body.textContent).toContain('σ < 0 & ρ > 1');
   });
 });

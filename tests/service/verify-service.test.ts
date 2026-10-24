@@ -79,7 +79,7 @@ describe('verifyServiceUniaxial', () => {
     const r = verifyServiceUniaxial(poutre(), { N: 5000, M: 1 });
 
     expect(r.converged).toBe(false);
-    expect(r.reason).toMatch(/comprimee/i);
+    expect(r.reason).toMatch(/comprimée/i);
     expect(Number.isNaN(r.sigmaC)).toBe(true);
   });
 
@@ -102,7 +102,7 @@ describe('verifyServiceUniaxial', () => {
       limits: { k1: 0.2, k3: 0.8 },
     });
     expect(beton.ok).toBe(false);
-    expect(beton.reason).toMatch(/beton/i);
+    expect(beton.reason).toMatch(/béton/i);
   });
 
   it('les limites sont parametrables', () => {

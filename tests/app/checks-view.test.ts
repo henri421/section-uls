@@ -92,8 +92,8 @@ function texte(bloc: BlocService): string {
 
 // --- Effort tranchant --------------------------------------------------------
 
-describe('bloc d effort tranchant', () => {
-  it('affiche la sollicitation, les resistances et le taux quand la section passe', () => {
+describe('bloc d\'effort tranchant', () => {
+  it('affiche la sollicitation, les résistances et le taux quand la section passe', () => {
     // V_Ed = 80 kN depasse V_Rd,c mais reste sous V_Rd,s : cas courant d une
     // poutre qui a besoin de cadres, et qui en a.
     const r = tranchant(80, CADRES);
@@ -111,7 +111,7 @@ describe('bloc d effort tranchant', () => {
     expect(JSON.stringify(bloc)).not.toContain('NaN');
   });
 
-  it('dit que le calcul exige des armatures d ame, sans les confondre avec le minimum du §9.2.2', () => {
+  it('dit que le calcul exige des armatures d\'âme, sans les confondre avec le minimum du §9.2.2', () => {
     const r = tranchant(80, CADRES);
     expect(r.shearReinforcementRequired).toBe(true);
 
@@ -166,11 +166,11 @@ describe('bloc d effort tranchant', () => {
   });
 
   it('un motif d indisponibilite donne un bloc SANS aucune ligne', () => {
-    const bloc = blocTranchant({ motif: 'geometrie non rectangulaire' }, 120);
+    const bloc = blocTranchant({ motif: 'géométrie non rectangulaire' }, 120);
 
     expect(bloc.lignes).toHaveLength(0);
     expect(bloc.verdict).toBeNull();
-    expect(bloc.note).toBe('geometrie non rectangulaire');
+    expect(bloc.note).toBe('géométrie non rectangulaire');
     expect(JSON.stringify(bloc)).not.toContain('NaN');
   });
 });
@@ -178,7 +178,7 @@ describe('bloc d effort tranchant', () => {
 // --- Dispositions constructives ---------------------------------------------
 
 describe('bloc des dispositions constructives', () => {
-  it('affiche l acier en place et les bornes du §9 quand tout est regulier', () => {
+  it('affiche l\'acier en place et les bornes du §9 quand tout est regulier', () => {
     const r: DetailingResult = verifyDetailing(poutre(), 'beam', { web: { asw: 100, s: 200, fywk: 500 } });
     expect(r.ok).toBe(true);
 
@@ -194,7 +194,7 @@ describe('bloc des dispositions constructives', () => {
     expect(JSON.stringify(bloc)).not.toContain('NaN');
   });
 
-  it('liste TOUTES les violations, pas seulement la premiere', () => {
+  it('liste TOUTES les violations, pas seulement la première', () => {
     // Poutre sous-armee ET depourvue de cadres : deux regles enfreintes.
     const r = verifyDetailing(poutre(100), 'beam');
     expect(r.violations.length).toBe(2);
@@ -206,7 +206,7 @@ describe('bloc des dispositions constructives', () => {
     }
   });
 
-  it('une dalle n a pas d exigence d armature d ame, et ce n est PAS un echec', () => {
+  it('une dalle n\'a pas d exigence d\'armature d\'âme, et ce n\'est PAS un echec', () => {
     // Le §6.2.1(4) dispense les dalles du minimum d ame. L exiger declarerait
     // non conformes toutes les dalles courantes.
     const r = verifyDetailing(dalle(), 'slab');
@@ -223,7 +223,7 @@ describe('bloc des dispositions constructives', () => {
     expect(JSON.stringify(bloc)).not.toContain('NaN');
   });
 
-  it('un poteau affiche le renvoi au §9.5.3 plutot qu une regle de poutre', () => {
+  it('un poteau affiche le renvoi au §9.5.3 plutot qu\'une règle de poutre', () => {
     const r = verifyDetailing(poutre(), 'column', { longitudinal: { NEd: 500 } });
     expect(r.web.applicable).toBe(false);
 
@@ -232,7 +232,7 @@ describe('bloc des dispositions constructives', () => {
     expect(JSON.stringify(bloc)).not.toContain('NaN');
   });
 
-  it('nomme le type d element, qui est une SAISIE et non une deduction', () => {
+  it('nomme le type d\'élément, qui est une SAISIE et non une deduction', () => {
     expect(texte(blocDispositions({ resultat: verifyDetailing(poutre(), 'beam') }))).toMatch(/poutre/i);
     expect(texte(blocDispositions({ resultat: verifyDetailing(dalle(), 'slab') }))).toMatch(/dalle/i);
     expect(
@@ -245,18 +245,18 @@ describe('bloc des dispositions constructives', () => {
   });
 
   it('un motif d indisponibilite donne un bloc SANS aucune ligne', () => {
-    const bloc = blocDispositions({ motif: 'geometrie non rectangulaire' });
+    const bloc = blocDispositions({ motif: 'géométrie non rectangulaire' });
 
     expect(bloc.lignes).toHaveLength(0);
     expect(bloc.verdict).toBeNull();
-    expect(bloc.note).toBe('geometrie non rectangulaire');
+    expect(bloc.note).toBe('géométrie non rectangulaire');
   });
 });
 
 // --- Deformation genee (Zwang) -----------------------------------------------
 
-describe('bloc de l armature minimale sous deformation genee', () => {
-  it('affiche l aire exigee et les cinq grandeurs qui la fondent', () => {
+describe('bloc de l\'armature minimale sous déformation gênée', () => {
+  it('affiche l\'aire exigée et les cinq grandeurs qui la fondent', () => {
     const r: RestraintResult = minimumRestraintArea(voile(400), 'central');
 
     const bloc = blocZwang({ resultat: r });
@@ -279,7 +279,7 @@ describe('bloc de l armature minimale sous deformation genee', () => {
     expect(bloc.note).toMatch(/compare|verdict|exig/i);
   });
 
-  it('signale l element massif, ou k est a son plancher', () => {
+  it('signale l\'élément massif, ou k est a son plancher', () => {
     const mince = blocZwang({ resultat: minimumRestraintArea(voile(400), 'central') });
     const massif = blocZwang({ resultat: minimumRestraintArea(voile(1000), 'central') });
 
@@ -293,9 +293,9 @@ describe('bloc de l armature minimale sous deformation genee', () => {
 
     expect(bloc).toMatch(/approche retenue/i);
     expect(bloc).toMatch(/approche mince/i);
-    expect(bloc).toMatch(/approche epaisse/i);
+    expect(bloc).toMatch(/approche épaisse/i);
     expect(bloc).toMatch(/borne anti-plastification/i);
-    expect(bloc).toMatch(/methode de h_c,ef/i);
+    expect(bloc).toMatch(/méthode de h_c,ef/i);
     expect(bloc).toMatch(/convention du facteur k/i);
   });
 
@@ -311,10 +311,10 @@ describe('bloc de l armature minimale sous deformation genee', () => {
     expect(bloc).toMatch(/sur 2 nappe/i);
   });
 
-  it('porte l ecart au texte de l EN 1992-1-1, a l ecran et pas seulement dans le code', () => {
+  it('porte l\'écart au texte de l\'EN 1992-1-1, a l ecran et pas seulement dans le code', () => {
     const bloc = blocZwang({ resultat: minimumRestraintArea(voile(1000), 'central') });
 
-    expect(bloc.note).toMatch(/ECART DOCUMENTE AU TEXTE/);
+    expect(bloc.note).toMatch(/ÉCART DOCUMENTÉ AU TEXTE/);
     expect(bloc.note).toMatch(/NBN \/ ILNAS/);
   });
 
@@ -334,7 +334,7 @@ describe('bloc de l armature minimale sous deformation genee', () => {
     expect(bloc).not.toMatch(/0,650 — IMPOSE/);
   });
 
-  it('affiche l avertissement d une valeur imposee hors du domaine physique', () => {
+  it('affiche l avertissement d\'une valeur imposee hors du domaine physique', () => {
     const bloc = blocZwang({
       resultat: minimumRestraintArea(voile(1000), 'central', { overrides: { hcEff: 900 } }),
     });
@@ -343,11 +343,11 @@ describe('bloc de l armature minimale sous deformation genee', () => {
   });
 
   it('un motif d indisponibilite donne un bloc SANS aucune ligne', () => {
-    const bloc = blocZwang({ motif: 'geometrie non rectangulaire' });
+    const bloc = blocZwang({ motif: 'géométrie non rectangulaire' });
 
     expect(bloc.lignes).toHaveLength(0);
     expect(bloc.verdict).toBeNull();
-    expect(bloc.note).toMatch(/geometrie non rectangulaire/);
+    expect(bloc.note).toMatch(/géométrie non rectangulaire/);
   });
 });
 
@@ -378,7 +378,7 @@ describe('gardes de domaine', () => {
     expect(obstacleDispositions(dalle(), 'slab')).toBeNull();
   });
 
-  it('hors du rectangle, le motif est ecrit SANS le nom de la fonction du noyau', () => {
+  it('hors du rectangle, le motif est écrit SANS le nom de la fonction du noyau', () => {
     const motifs = [
       obstacleTranchant(pieu()),
       obstacleZwang(pieu()),
@@ -392,7 +392,7 @@ describe('gardes de domaine', () => {
     }
   });
 
-  it('les dispositions d un POTEAU restent calculables hors du rectangle', () => {
+  it('les dispositions d\'un POTEAU restent calculables hors du rectangle', () => {
     // Le §9.5.2 ne demande que l aire de beton et l effort normal : ni b_t ni
     // hauteur utile. Refuser le calcul la aussi priverait d un resultat qui
     // existe.

@@ -124,7 +124,7 @@ export function sectionCurvature(
       cracked: true,
       effectiveStiffness: ecEff * inertieI,
       converged: false,
-      reason: `etat fissure incalculable (${service.reason ?? 'cause non precisee'})`,
+      reason: `état fissuré incalculable (${service.reason ?? 'cause non précisée'})`,
     };
   }
 

@@ -132,16 +132,6 @@ export function resultatsEnCsv(blocs: BlocService[]): string {
 
 // --- Note de calcul ----------------------------------------------------------
 
-/**
- * L avertissement porte par l en-tete de l application, reconduit sur la note.
- *
- * La note est le document qui SORT et circule : c est sur lui, plus encore que
- * sur l ecran, que la portee de l outil doit etre lisible.
- */
-export const AVERTISSEMENT_RESPONSABILITE =
-  'Outil d aide au calcul : la verification finale et la responsabilite incombent a ' +
-  'l ingenieur du projet. Cette note est un COMPTE RENDU de calcul, non une justification ' +
-  'reglementaire signee.';
 
 /**
  * La feuille de style de la note, embarquee dans le document.
@@ -330,7 +320,7 @@ export function noteDeCalculHtml(note: NoteDeCalcul, styles: string): string {
     note.hypotheses.length === 0
       ? ''
       : partie(
-          'Hypotheses et limites',
+          'Hypothèses et limites',
           `<ul>${note.hypotheses.map((h) => `<li>${notationHtml(h)}</li>`).join('')}</ul>`
         );
 
@@ -347,12 +337,11 @@ ${styles}
 <body>
 <header>
 <h1>${notationHtml(note.titre)} — note de calcul</h1>
-<p class="date">Etablie le ${notationHtml(note.date)} — section-uls, EN 1992-1-1</p>
-<p class="avertissement">${notationHtml(AVERTISSEMENT_RESPONSABILITE)}</p>
+<p class="date">Établie le ${notationHtml(note.date)} — Sections en béton armé, EN 1992-1-1</p>
 </header>
-${partie('Donnees d entree', note.entrees.map(blocEnHtml).join(''))}
+${partie('Données d\'entrée', note.entrees.map(blocEnHtml).join(''))}
 ${dessins}
-${partie('Verifications', note.verifications.map(blocEnHtml).join(''))}
+${partie('Vérifications', note.verifications.map(blocEnHtml).join(''))}
 ${hypotheses}
 </body>
 </html>

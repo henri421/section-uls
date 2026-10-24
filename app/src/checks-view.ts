@@ -28,7 +28,7 @@ import { formatNumber, formatUtilization } from './format';
  * s applique pas est un RESULTAT, affiche comme les autres.
  */
 
-const MOTIF_PAR_DEFAUT = 'verification non concluante, sans motif precise par le module';
+const MOTIF_PAR_DEFAUT = 'vérification non concluante, sans motif précisé par le module';
 
 /** Nom d usage du type d element, qui est une SAISIE et jamais une deduction. */
 const NOM_ELEMENT: Record<ElementType, string> = {
@@ -57,9 +57,9 @@ export function obstacleTranchant(section: Section): string | null {
   if (section.geometry.kind === 'rectangle') return null;
 
   return (
-    'Geometrie non rectangulaire. La largeur d ame b_w et la hauteur utile d du §6.2 n ont pas ' +
-    'de definition non ambigue hors du rectangle, et l EN 1992-1-1 ne la donne pas : le calcul ' +
-    'est refuse plutot qu approxime.'
+    'Géométrie non rectangulaire. La largeur d\'âme b_w et la hauteur utile d du §6.2 n\'ont pas ' +
+    'de définition non ambiguë hors du rectangle, et l\'EN 1992-1-1 ne la donne pas : le calcul ' +
+    'est refuse plutôt qu\'approxime.'
   );
 }
 
@@ -67,8 +67,8 @@ export function obstacleZwang(section: Section): string | null {
   if (section.geometry.kind === 'rectangle') return null;
 
   return (
-    'Geometrie non rectangulaire. L aire de beton tendu A_ct du §7.3.2 suppose une largeur ' +
-    'constante et n est pas transposable telle quelle.'
+    'Géométrie non rectangulaire. L\'aire de béton tendu A_ct du §7.3.2 suppose une largeur ' +
+    'constante et n\'est pas transposable telle quelle.'
   );
 }
 
@@ -82,9 +82,9 @@ export function obstacleDispositions(section: Section, elementType: ElementType)
   if (section.geometry.kind === 'rectangle' || elementType === 'column') return null;
 
   return (
-    'Geometrie non rectangulaire. La largeur moyenne de la zone tendue b_t du §9.2.1.1 n a pas ' +
-    'de definition normative hors du rectangle. Le minimum de POTEAU (§9.5.2), lui, ne demande ' +
-    'que l aire de beton et resterait calculable.'
+    'Géométrie non rectangulaire. La largeur moyenne de la zone tendue b_t du §9.2.1.1 n\'a pas ' +
+    'de définition normative hors du rectangle. Le minimum de POTEAU (§9.5.2), lui, ne demande ' +
+    'que l\'aire de béton et resterait calculable.'
   );
 }
 
@@ -110,9 +110,9 @@ export function blocTranchant(entree: Issue<ShearResult>, VEd: number): BlocServ
 
   const lignes: LigneAffichee[] = [
     { libelle: 'V_Ed', valeur: `${formatNumber(VEd, 1)} kN` },
-    { libelle: 'V_Rd,c (sans armature d ame)', valeur: `${formatNumber(r.VRdc, 1)} kN` },
+    { libelle: 'V_Rd,c (sans armature d\'âme)', valeur: `${formatNumber(r.VRdc, 1)} kN` },
     {
-      libelle: 'Armatures d ame',
+      libelle: 'Armatures d\'âme',
       // Le §6.2 conclut sur ce que le CALCUL exige ; le minimum
       // constructif du §9.2.2 reste du meme quand le calcul n exige rien,
       // et les deux verdicts se lisent ensemble.
@@ -129,15 +129,15 @@ export function blocTranchant(entree: Issue<ShearResult>, VEd: number): BlocServ
     lignes.push({ libelle: 'V_Rd,max (bielles)', valeur: `${formatNumber(r.VRdmax, 1)} kN` });
   }
 
-  lignes.push({ libelle: 'Resistance retenue V_Rd', valeur: `${formatNumber(r.VRd, 1)} kN` });
+  lignes.push({ libelle: 'Résistance retenue V_Rd', valeur: `${formatNumber(r.VRd, 1)} kN` });
   lignes.push({ libelle: 'Taux V_Ed / V_Rd', valeur: formatUtilization(r.utilization) });
 
   return {
     titre,
     lignes,
     verdict: r.ok
-      ? { ok: true, texte: 'Effort tranchant verifie' }
-      : { ok: false, texte: 'Effort tranchant non verifie' },
+      ? { ok: true, texte: 'Effort tranchant vérifié' }
+      : { ok: false, texte: 'Effort tranchant non vérifié' },
     note: r.ok ? null : (r.reason ?? MOTIF_PAR_DEFAUT),
   };
 }
@@ -167,7 +167,7 @@ export function blocDispositions(entree: Issue<DetailingResult>): BlocService {
   const l = r.longitudinal;
 
   const lignes: LigneAffichee[] = [
-    { libelle: 'Type d element (declare)', valeur: NOM_ELEMENT[r.elementType] },
+    { libelle: 'Type d\'élément (déclaré)', valeur: NOM_ELEMENT[r.elementType] },
     { libelle: 'A_s en place', valeur: `${formatNumber(l.asProvided, 0)} mm²` },
     { libelle: 'A_s,min', valeur: `${formatNumber(l.asMin, 0)} mm²` },
     { libelle: 'A_s,max', valeur: `${formatNumber(l.asMax, 0)} mm²` },
@@ -178,7 +178,7 @@ export function blocDispositions(entree: Issue<DetailingResult>): BlocService {
     // `rho_w` vaut quelques 10⁻³, ou une notation decimale brute serait
     // illisible.
     lignes.push({
-      libelle: 'Taux d armature d ame rho_w',
+      libelle: 'Taux d\'armature d\'âme rho_w',
       valeur:
         `${formatNumber(100 * r.web.rhoW, 3)} % ` +
         `(minimum ${formatNumber(100 * r.web.rhoWMin, 3)} %)`,
@@ -194,8 +194,8 @@ export function blocDispositions(entree: Issue<DetailingResult>): BlocService {
     // pas, le noyau peut les rendre indefinis, et un chiffre illisible se
     // lirait plus mal qu une phrase.
     lignes.push({
-      libelle: 'Armature d ame (§9.2.2)',
-      valeur: `sans objet — ${r.web.notApplicableReason ?? 'regle non applicable a cet element'}`,
+      libelle: 'Armature d\'âme (§9.2.2)',
+      valeur: `sans objet — ${r.web.notApplicableReason ?? 'règle non applicable à cet élément'}`,
     });
   }
 
@@ -220,15 +220,15 @@ export function blocDispositions(entree: Issue<DetailingResult>): BlocService {
  * qu apres avoir commande l acier.
  */
 const AUCUN_VERDICT =
-  'Ce bloc ne rend AUCUN verdict : il donne l aire d acier exigee par le §7.3.2, il ne la ' +
-  'compare a aucune armature en place. A ne pas confondre avec le minimum de RESISTANCE du ' +
-  '§9.2.1.1, qui repond a une autre question. Par defaut f_ct,eff est prise a 28 jours, ce qui ' +
+  'Ce bloc ne rend AUCUN verdict : il donne l\'aire d\'acier exigée par le §7.3.2, il ne la ' +
+  'compare à aucune armature en place. À ne pas confondre avec le minimum de RÉSISTANCE du ' +
+  '§9.2.1.1, qui répond à une autre question. Par défaut f_ct,eff est prise à 28 jours, ce qui ' +
   'est le cas DEFAVORABLE : la fissuration des pieces massives survient a quelques jours, et le ' +
-  '§7.3.2(2) demande d estimer f_ct,eff a l age ou elle est attendue.';
+  '§7.3.2(2) demande d\'estimer f_ct,eff à l\'âge ou elle est attendue.';
 
 /** Armature minimale de maitrise de la fissuration sous deformation genee. */
 export function blocZwang(entree: Issue<RestraintResult>): BlocService {
-  const titre = 'Deformation genee, armature minimale (§7.3.2)';
+  const titre = 'Déformation gênée, armature minimale (§7.3.2)';
   if (!('resultat' in entree)) return sansCalcul(titre, `${entree.motif} ${AUCUN_VERDICT}`);
 
   const r = entree.resultat;
@@ -258,14 +258,14 @@ export function blocZwang(entree: Issue<RestraintResult>): BlocService {
         libelle: 'Approche retenue',
         valeur:
           r.approach === 'epaisse'
-            ? 'EPAISSE — zone de beton tendu efficace'
-            : 'MINCE — zone tendue entiere',
+            ? 'ÉPAISSE — zone de béton tendu efficace'
+            : 'MINCE — zone tendue entière',
       },
       { libelle: 'A_s,min approche mince', valeur: aire(r.AsMinceParNappe) },
-      { libelle: 'A_s,min approche epaisse', valeur: aire(r.AsEpaisParNappe) },
+      { libelle: 'A_s,min approche épaisse', valeur: aire(r.AsEpaisParNappe) },
       { libelle: 'Borne anti-plastification', valeur: aire(r.BorneParNappe) },
       {
-        libelle: 'Methode de h_c,ef',
+        libelle: 'Méthode de h_c,ef',
         valeur:
           r.method === 'ec2'
             ? 'texte EN 1992-1-1 §7.3.2(3) — 2,5·d1'
@@ -275,24 +275,24 @@ export function blocZwang(entree: Issue<RestraintResult>): BlocService {
         libelle: 'Convention du facteur k',
         valeur:
           r.thicknessConvention === 'de'
-            ? 'annexe allemande — 0,80 vers 0,50'
-            : 'EC2 recommande — 1,00 vers 0,65',
+            ? 'annexe allemande — 0,8 vers 0,5'
+            : 'EC2 recommandé — 1 vers 0,65',
       },
-      { libelle: 'k (facteur d epaisseur)', valeur: formatNumber(r.k, 3) + marque('k') },
+      { libelle: 'k (facteur d\'épaisseur)', valeur: formatNumber(r.k, 3) + marque('k') },
       { libelle: 'k_c (distribution)', valeur: formatNumber(r.kc, 2) + marque('kc') },
-      { libelle: 'd1 (enrobage d axe)', valeur: `${formatNumber(r.d1, 0)} mm${marque('d1')}` },
+      { libelle: 'd1 (enrobage d\'axe)', valeur: `${formatNumber(r.d1, 0)} mm${marque('d1')}` },
       { libelle: 'h_c,ef (une face)', valeur: `${formatNumber(r.hcEff, 0)} mm${marque('hcEff')}` },
       { libelle: 'A_c,ef (une face)', valeur: `${formatNumber(r.AcEff, 0)} mm²${marque('AcEff')}` },
-      { libelle: 'A_ct (zone tendue entiere)', valeur: `${formatNumber(r.Act, 0)} mm²${marque('Act')}` },
+      { libelle: 'A_ct (zone tendue entière)', valeur: `${formatNumber(r.Act, 0)} mm²${marque('Act')}` },
       { libelle: 'f_ct,eff', valeur: `${formatNumber(r.fctEff, 2)} MPa${marque('fctEff')}` },
       { libelle: 'sigma_s', valeur: `${formatNumber(r.sigmaS, 0)} MPa${marque('sigmaS')}` },
       {
-        libelle: 'Element massif',
+        libelle: 'Élément massif',
         // Le sens physique est un facteur REDUCTEUR, pas une penalite : les
         // contraintes d auto-equilibre reduisent l effort qui traverse la
         // section a l instant de la fissuration.
         valeur: r.massive
-          ? 'oui (h ≥ 800 mm) : k est a son plancher, l acier exige est reduit d autant'
+          ? 'oui (h ≥ 800 mm) : k est à son plancher, l\'acier exigé est réduit d\'autant'
           : 'non (h inférieure à 800 mm)',
       },
     ],
@@ -309,8 +309,8 @@ export function blocZwang(entree: Issue<RestraintResult>): BlocService {
  * lit, pas au relecteur du depot.
  */
 const ECART_AU_TEXTE =
-  'ECART DOCUMENTE AU TEXTE en methode « pratique allemande » : les branches de h_c,ef selon ' +
-  'h/d1 ne figurent pas dans l EN 1992-1-1, dont le §7.3.2(3) ecrit ' +
-  'h_c,ef = min(2,5(h−d) ; (h−x)/3 ; h/2). Le facteur k est un PARAMETRE NATIONAL. En Belgique ' +
-  'et au Luxembourg, la justification reglementaire reste l EN 1992-1-1 et ses annexes ' +
+  'ÉCART DOCUMENTÉ AU TEXTE en méthode « pratique allemande » : les branches de h_c,ef selon ' +
+  'h/d1 ne figurent pas dans l\'EN 1992-1-1, dont le §7.3.2(3) écrit ' +
+  'h_c,ef = min(2,5(h−d) ; (h−x)/3 ; h/2). Le facteur k est un PARAMÈTRE NATIONAL. En Belgique ' +
+  'et au Luxembourg, la norme applicable reste l\'EN 1992-1-1 et ses annexes ' +
   'NBN / ILNAS.';

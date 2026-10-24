@@ -316,19 +316,19 @@ function sollicitationDeService(
   if (sansN && sansM) return undefined;
   if (sansN) {
     throw new FormError(
-      `${libelle} : N est vide alors que M est renseigne. Une combinaison de service se saisit entierement, ou pas du tout.`
+      `${libelle} : N est vide alors que M est renseigné. Une combinaison de service se saisit entièrement, ou pas du tout.`
     );
   }
   if (sansM) {
     throw new FormError(
-      `${libelle} : M est vide alors que N est renseigne. Une combinaison de service se saisit entierement, ou pas du tout.`
+      `${libelle} : M est vide alors que N est renseigné. Une combinaison de service se saisit entièrement, ou pas du tout.`
     );
   }
 
   return { N: nombreRequis(N, `${libelle} : N`), M: nombreRequis(M, `${libelle} : M`) };
 }
 
-const LIBELLE_CARACTERISTIQUE = 'Sollicitation de service caracteristique (§7.2)';
+const LIBELLE_CARACTERISTIQUE = 'Sollicitation de service caractéristique (§7.2)';
 const LIBELLE_QUASI_PERMANENT = 'Sollicitation de service quasi-permanente (§7.3, §7.4.3)';
 
 /** Les parametres assumes du service, evalues comme n'importe quel champ. */
@@ -347,9 +347,9 @@ export interface ParametresService {
 
 export function parametresDeService(form: FormState): ParametresService {
   return {
-    n: nombreRequis(form.serviceN, 'coefficient d equivalence n'),
+    n: nombreRequis(form.serviceN, 'coefficient d\'equivalence n'),
     wMax: nombreRequis(form.crackWMax, 'ouverture limite w_max'),
-    beta: nombreRequis(form.curvatureBeta, 'duree de chargement beta'),
+    beta: nombreRequis(form.curvatureBeta, 'durée de chargement beta'),
     crackingMode: form.crackingMode,
     crackingFctEff: nombreOptionnel(form.crackingFctEff, 'f_ct,eff de fissuration'),
   };
@@ -413,7 +413,7 @@ function forcagesDeLaGene(form: FormState): RestraintOverrides {
   return forcages;
 }
 
-const LIBELLE_CADRES = 'Armatures d effort tranchant';
+const LIBELLE_CADRES = 'Armatures d\'effort tranchant';
 
 /**
  * Les cadres se saisissent entierement ou pas du tout.
@@ -430,14 +430,14 @@ function cadresSaisis(form: FormState): ShearReinforcement | undefined {
   if (sansAire && sansEspacement) return undefined;
   if (sansAire) {
     throw new FormError(
-      `${LIBELLE_CADRES} : l aire A_sw est vide alors que l espacement est renseigne. ` +
-        'Les cadres se saisissent entierement, ou pas du tout.'
+      `${LIBELLE_CADRES} : l'aire A_sw est vide alors que l'espacement est renseigné. ` +
+        'Les cadres se saisissent entièrement, ou pas du tout.'
     );
   }
   if (sansEspacement) {
     throw new FormError(
-      `${LIBELLE_CADRES} : l espacement est vide alors que l aire A_sw est renseignee. ` +
-        'Les cadres se saisissent entierement, ou pas du tout.'
+      `${LIBELLE_CADRES} : l'espacement est vide alors que l'aire A_sw est renseignée. ` +
+        'Les cadres se saisissent entièrement, ou pas du tout.'
     );
   }
 
@@ -456,7 +456,7 @@ export function parametresDeVerification(form: FormState): ParametresVerificatio
     cotTheta: nombreRequis(form.cotTheta, 'cot theta'),
     restraintType: form.restraintType,
     fctEff: nombreOptionnel(form.fctEff, 'f_ct,eff'),
-    sigmaS: nombreOptionnel(form.sigmaSZwang, 'sigma_s de la deformation genee'),
+    sigmaS: nombreOptionnel(form.sigmaSZwang, 'sigma_s de la déformation gênée'),
     thicknessConvention: form.thicknessConvention,
     restraintMethod: form.restraintMethod,
     restraintOverrides: forcagesDeLaGene(form),
@@ -492,12 +492,12 @@ export interface ParametresMeyer {
 
 export function parametresDeMeyer(form: FormState): ParametresMeyer {
   return {
-    h: nombreRequis(form.meyerH, 'Meyer : epaisseur h'),
-    d1: nombreRequis(form.meyerD1, 'Meyer : enrobage a l axe d1'),
-    ds: nombreRequis(form.meyerDs, 'Meyer : diametre des barres ds'),
+    h: nombreRequis(form.meyerH, 'Meyer : épaisseur h'),
+    d1: nombreRequis(form.meyerD1, 'Meyer : enrobage à l\'axe d1'),
+    ds: nombreRequis(form.meyerDs, 'Meyer : diamètre des barres ds'),
     wk: nombreRequis(form.meyerWk, 'Meyer : ouverture visee w_k'),
     fctm: nombreRequis(form.meyerFctm, 'Meyer : f_ctm'),
-    kzt: nombreRequis(form.meyerKzt, 'Meyer : facteur d age k_zt'),
+    kzt: nombreRequis(form.meyerKzt, 'Meyer : facteur d âge k_zt'),
     cas: form.meyerCas,
     bridage: form.meyerBridage,
     kmode: form.meyerKmode,
@@ -575,7 +575,7 @@ function tranchantDuModele(form: FormState): ShearModel | undefined {
  */
 function geneDuModele(form: FormState): RestraintModel {
   const fctEff = nombreOptionnel(form.fctEff, 'f_ct,eff');
-  const sigmaS = nombreOptionnel(form.sigmaSZwang, 'sigma_s de la deformation genee');
+  const sigmaS = nombreOptionnel(form.sigmaSZwang, 'sigma_s de la déformation gênée');
   return {
     type: form.restraintType,
     ...(fctEff !== undefined ? { fctEff } : {}),
@@ -601,12 +601,12 @@ function meyerDuModele(form: FormState): MeyerModel | undefined {
   if (CHAMPS_MEYER_REQUIS.some((champ) => form[champ].trim() === '')) return undefined;
 
   return {
-    h: nombreRequis(form.meyerH, 'Meyer : epaisseur h'),
-    d1: nombreRequis(form.meyerD1, 'Meyer : enrobage a l axe d1'),
-    ds: nombreRequis(form.meyerDs, 'Meyer : diametre des barres ds'),
+    h: nombreRequis(form.meyerH, 'Meyer : épaisseur h'),
+    d1: nombreRequis(form.meyerD1, 'Meyer : enrobage à l\'axe d1'),
+    ds: nombreRequis(form.meyerDs, 'Meyer : diamètre des barres ds'),
     wk: nombreRequis(form.meyerWk, 'Meyer : ouverture visee w_k'),
     fctm: nombreRequis(form.meyerFctm, 'Meyer : f_ctm'),
-    kzt: nombreRequis(form.meyerKzt, 'Meyer : facteur d age k_zt'),
+    kzt: nombreRequis(form.meyerKzt, 'Meyer : facteur d âge k_zt'),
     cas: form.meyerCas,
     bridage: form.meyerBridage,
     kmode: form.meyerKmode,
@@ -756,7 +756,7 @@ interface SaisieBarSpec {
 }
 
 function parseBarSpec(saisie: SaisieBarSpec, champ: string): BarSpecModel {
-  const diameter = nombreRequis(saisie.diameter, `${champ} : diametre`);
+  const diameter = nombreRequis(saisie.diameter, `${champ} : diamètre`);
   if (saisie.useSpacing) {
     return { diameter, maxSpacing: nombreRequis(saisie.maxSpacing, `${champ} : espacement maximal`) };
   }
@@ -821,7 +821,7 @@ export function formToModel(form: FormState): SectionModel {
   let reinforcement: ReinforcementModel;
   switch (form.reinforcementKind) {
     case 'rectangular-layout': {
-      const stirrupDiameter = nombreOptionnel(form.stirrupDiameter, 'diametre etrier');
+      const stirrupDiameter = nombreOptionnel(form.stirrupDiameter, 'diamètre étrier');
       reinforcement = {
         kind: 'rectangular-layout',
         cover: nombreRequis(form.cover, 'enrobage'),
@@ -839,13 +839,13 @@ export function formToModel(form: FormState): SectionModel {
       break;
     }
     case 'circular-cage': {
-      const stirrupDiameter = nombreOptionnel(form.stirrupDiameter, 'diametre etrier');
+      const stirrupDiameter = nombreOptionnel(form.stirrupDiameter, 'diamètre étrier');
       const rotationOffset = nombreOptionnel(form.cageRotationOffset, 'decalage angulaire');
       reinforcement = {
         kind: 'circular-cage',
         cover: nombreRequis(form.cover, 'enrobage'),
         ...(stirrupDiameter !== undefined ? { stirrupDiameter } : {}),
-        barDiameter: nombreRequis(form.cageBarDiameter, 'diametre des barres'),
+        barDiameter: nombreRequis(form.cageBarDiameter, 'diamètre des barres'),
         count: nombreRequis(form.cageCount, 'nombre de barres'),
         ...(rotationOffset !== undefined ? { rotationOffset } : {}),
       };
@@ -868,8 +868,8 @@ export function formToModel(form: FormState): SectionModel {
       const barres = barresEvaluees(form.barList);
       if (barres === null) {
         throw new FormError(
-          'Barres libres : une coordonnee ou un diametre n est pas evaluable, ou le diametre ' +
-            'est nul. Chaque barre demande un y, un z et un diametre strictement positif.'
+          'Barres libres : une coordonnée ou un diamètre n\'est pas évaluable, ou le diamètre ' +
+            'est nul. Chaque barre demande un y, un z et un diamètre strictement positif.'
         );
       }
       reinforcement = {

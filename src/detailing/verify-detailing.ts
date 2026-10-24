@@ -56,8 +56,8 @@ function applicabiliteDuMinimumDAme(elementType: ElementType): string | null {
       );
     case 'column':
       return (
-        'poteau : les armatures transversales relevent du §9.5.3 (diametres et ' +
-        'espacements), hors du perimetre de ce module'
+        'poteau : les armatures transversales relèvent du §9.5.3 (diamètres et ' +
+        'espacements), hors du périmètre de ce module'
       );
   }
 }

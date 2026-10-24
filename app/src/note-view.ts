@@ -32,8 +32,8 @@ function formeSaisie(modele: SectionModel): string {
     // detail de calcul ; la donnee d entree de l ouvrage reste un cercle, et
     // la note doit dire ce qui a ete saisi.
     return (
-      `cercle de diametre ${formatNumber(g.diameter, 0)} mm ` +
-      `(integre en polygone a ${g.segments ?? 32} cotes)`
+      `cercle de diamètre ${formatNumber(g.diameter, 0)} mm ` +
+      `(intégré en polygone à ${g.segments ?? 32} côtés)`
     );
   }
   return `polygone a ${g.vertices.length} sommets`;
@@ -48,7 +48,7 @@ const NOM_FERRAILLAGE: Record<string, string> = {
 
 /** Une combinaison de service, ou le fait qu elle n a pas ete saisie. */
 function combinaison(action: { N: number; M: number } | undefined): string {
-  if (action === undefined) return 'non saisie — la verification correspondante n a pas eu lieu';
+  if (action === undefined) return 'non saisie — la vérification correspondante n\'a pas eu lieu';
   return `N = ${formatNumber(action.N, 1)} kN, M = ${formatNumber(action.M, 1)} kN·m`;
 }
 
@@ -79,17 +79,17 @@ export function blocsDEntree(
       { libelle: 'gamma_c', valeur: formatNumber(resolu.norm.gammaC, 2) },
       { libelle: 'gamma_s', valeur: formatNumber(resolu.norm.gammaS, 2) },
       { libelle: 'alpha_cc', valeur: formatNumber(resolu.norm.alphaCc, 2) },
-      { libelle: 'Bandes d integration', valeur: formatNumber(resolu.norm.nBands, 0) },
+      { libelle: 'Bandes d\'integration', valeur: formatNumber(resolu.norm.nBands, 0) },
       { libelle: 'Version du format', valeur: String(modele.formatVersion) },
       { libelle: 'Version du moteur', valeur: modele.engineVersion },
     ]),
 
-    blocSimple('Geometrie', [
+    blocSimple('Géométrie', [
       { libelle: 'Forme', valeur: formeSaisie(modele) },
-      { libelle: 'Aire de beton', valeur: `${formatNumber(aireBeton, 0)} mm²` },
+      { libelle: 'Aire de béton', valeur: `${formatNumber(aireBeton, 0)} mm²` },
     ]),
 
-    blocSimple('Materiaux', [
+    blocSimple('Matériaux', [
       { libelle: 'fck', valeur: `${formatNumber(modele.concrete.fck, 1)} MPa` },
       { libelle: 'fcd', valeur: `${formatNumber(resolu.concrete.fcd, 2)} MPa` },
       { libelle: 'fyk', valeur: `${formatNumber(modele.steel.fyk, 1)} MPa` },
@@ -105,7 +105,7 @@ export function blocsDEntree(
       { libelle: 'Nombre de barres', valeur: String(resolu.section.rebars.length) },
       { libelle: 'Aire totale A_s', valeur: `${formatNumber(aireAcier, 0)} mm²` },
       {
-        libelle: 'Taux d armature total',
+        libelle: 'Taux d\'armature total',
         valeur: aireBeton > 0 ? `${formatNumber((100 * aireAcier) / aireBeton, 2)} %` : 'indefini',
       },
     ]),
@@ -128,29 +128,29 @@ export function blocsDEntree(
       // Une combinaison absente est ECRITE comme absente. La faire disparaitre
       // laisserait croire au lecteur qu elle a ete prise en compte.
       lignes: [
-        { libelle: 'Combinaison caracteristique', valeur: combinaison(service?.characteristic) },
+        { libelle: 'Combinaison caractéristique', valeur: combinaison(service?.characteristic) },
         { libelle: 'Combinaison quasi-permanente', valeur: combinaison(service?.quasiPermanent) },
       ],
       verdict: null,
       note:
-        'Combinaisons EN 1990 DIFFERENTES de l ELU et differentes entre elles : la ' +
-        'caracteristique gouverne le §7.2, la quasi-permanente le §7.3 et le §7.4.3. Flexion ' +
+        'Combinaisons EN 1990 DIFFÉRENTES de l\'ELU et différentes entre elles : la ' +
+        'caractéristique gouverne le §7.2, la quasi-permanente le §7.3 et le §7.4.3. Flexion ' +
         'droite uniquement.',
     },
 
     {
-      titre: 'Parametres de service assumes',
+      titre: 'Paramètres de service assumés',
       lignes: [
-        { libelle: 'n, coefficient d equivalence', valeur: formatNumber(parametres.n, 1) },
+        { libelle: 'n, coefficient d\'équivalence', valeur: formatNumber(parametres.n, 1) },
         { libelle: 'w_max', valeur: `${formatNumber(parametres.wMax, 3)} mm` },
         { libelle: 'beta', valeur: formatNumber(parametres.beta, 2) },
       ],
       verdict: null,
       note:
-        'Ces trois-la sont des CHOIX de verification, pas des constantes normatives, et ils ne ' +
-        'sont pas enregistres avec le modele : n = 15 est conventionnel et n est pas prescrit ' +
-        'sous cette forme par l EN 1992-1-1 ; w_max depend de la classe d exposition ' +
-        '(tableau 7.1N) ; beta vaut 0,5 en charge de longue duree ou repetee, 1,0 en charge ' +
+        'Ces trois-la sont des CHOIX de vérification, pas des constantes normatives, et ils ne ' +
+        'sont pas enregistres avec le modèle : n = 15 est conventionnel et n\'est pas prescrit ' +
+        'sous cette forme par l\'EN 1992-1-1 ; w_max depend de la classe d\'exposition ' +
+        '(tableau 7.1N) ; beta vaut 0,5 en charge de longue durée ou répétée, 1 en charge ' +
         'courte.',
     }
   );
@@ -173,38 +173,38 @@ export function hypothesesDeLaNote(resolu: ResolvedModel): string[] {
 
   const hypotheses: Array<string | false> = [
     `Profil normatif retenu : ${resolu.norm.name}. Les coefficients k1, k2, k3, kt et les ` +
-      'valeurs du §9 restent a leurs valeurs RECOMMANDEES par l EN 1992-1-1 : une annexe ' +
-      'nationale (NBN, ILNAS, NF) peut les modifier, et c est alors elle qui fait foi.',
+      'valeurs du §9 restent a leurs valeurs RECOMMANDÉES par l\'EN 1992-1-1 : une annexe ' +
+      'nationale (NBN, ILNAS, NF) peut les modifier, et c\'est alors elle qui fait foi.',
 
-    'Verification de SECTION : la note ne traite ni le flambement (§5.8), ni l ancrage et les ' +
-      'recouvrements (§8), ni la torsion, ni le poinconnement, ni la precontrainte. Aucune ' +
-      'donnee de niveau ELEMENT — portee, conditions d appui, schema statique — n entre dans ce ' +
+    'Vérification de SECTION : la note ne traite ni le flambement (§5.8), ni l\'ancrage et les ' +
+      'recouvrements (§8), ni la torsion, ni le poinçonnement, ni la précontrainte. Aucune ' +
+      'donnée de niveau ÉLÉMENT — portée, conditions d\'appui, schéma statique — n\'entre dans ce ' +
       'calcul.',
 
     (c.shear || c.service) &&
       'Effort tranchant (§6.2) et ouverture de fissures (§7.3) : sections RECTANGULAIRES ' +
-      'seulement. La largeur d ame b_w, la hauteur utile d et la zone tendue n ont pas de ' +
-      'definition non ambigue hors du rectangle, et le calcul est refuse plutot qu approxime.',
+      'seulement. La largeur d\'âme b_w, la hauteur utile d, ainsi que la zone tendue n\'ont pas de ' +
+      'définition non ambiguë hors du rectangle, et le calcul est refuse plutôt qu\'approxime.',
 
     c.service &&
-      'Verifications de service (§7.2, §7.3, §7.4.3) : FLEXION DROITE uniquement, sur les ' +
-      'combinaisons saisies separement de l ELU. Le coefficient d equivalence n est un choix ' +
-      'assume, non une prescription de l EN 1992-1-1.',
+      'Vérifications de service (§7.2, §7.3, §7.4.3) : FLEXION DROITE uniquement, sur les ' +
+      'combinaisons saisies séparément de l\'ELU. Le coefficient d\'équivalence n\'est un choix ' +
+      'assume, non une prescription de l\'EN 1992-1-1.',
 
     c.service &&
-      'Courbure (§7.4.3) : ce N EST PAS UNE FLECHE. Une fleche exige la portee, les conditions ' +
-      'd appui et la repartition des charges. La courbure s integre le long de la piece par qui ' +
-      'dispose du schema statique.',
+      'Courbure (§7.4.3) : ce N\'EST PAS UNE FLÈCHE. Une flèche exige la portée, les conditions ' +
+      'd\'appui et la répartition des charges. La courbure s\'intègre le long de la pièce par qui ' +
+      'dispose du schéma statique.',
 
     meyer &&
-      'Methode de G. et R. MEYER : methode ALLEMANDE (DIN 1045), servant au pre-dimensionnement ' +
-      'et au controle d ordre de grandeur. Elle ne remplace pas le §7.3.2 et n a de valeur ' +
-      'reglementaire ni en Belgique ni au Luxembourg. Seule la famille traction / bridage ' +
-      'exterieur a ete confrontee au diagramme de l ouvrage.',
+      'Méthode de G. et R. MEYER : méthode ALLEMANDE (DIN 1045), servant au pre-dimensionnement ' +
+      'et au contrôle d\'ordre de grandeur. Elle ne remplace pas le §7.3.2 et n\'a de valeur ' +
+      'réglementaire ni en Belgique ni au Luxembourg. Seule la famille traction / bridage ' +
+      'extérieur a ete confrontee au diagramme de l\'ouvrage.',
 
     c.restraint &&
-      `${restraintEc2 && meyer ? 'Deformation genee (§7.3.2) et methode Meyer' : restraintEc2 ? 'Deformation genee (§7.3.2)' : 'Methode Meyer'} : ` +
-      'une aire d acier EXIGEE est rendue, sans comparaison a aucune armature en place, et donc ' +
+      `${restraintEc2 && meyer ? 'Déformation gênée (§7.3.2) et méthode Meyer' : restraintEc2 ? 'Déformation gênée (§7.3.2)' : 'Méthode Meyer'} : ` +
+      'une aire d\'acier EXIGÉE est rendue, sans comparaison à aucune armature en place, et donc ' +
       'sans verdict.',
   ];
 

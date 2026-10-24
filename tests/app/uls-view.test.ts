@@ -54,24 +54,24 @@ describe('blocsFlexionUls', () => {
     expect(tete.titre).toBe(TITRE_FLEXION_ELU);
     expect(tete.verdict).not.toBeNull();
     expect(tete.verdict?.ok).toBe(resultat.ok);
-    expect(tete.verdict?.texte).toMatch(/^Verifie — taux 0,\d\d$/);
+    expect(tete.verdict?.texte).toMatch(/^Vérifié — taux 0,\d+$/);
   });
 
   it('un moment excessif rend un verdict defavorable', () => {
     const { liste } = blocs(400);
     expect(liste[0].verdict?.ok).toBe(false);
-    expect(liste[0].verdict?.texte).toMatch(/^Non verifie/);
+    expect(liste[0].verdict?.texte).toMatch(/^Non vérifié/);
   });
 
-  it('rend le moment resistant calcule a la main', () => {
+  it('rend le moment résistant calcule à la main', () => {
     // 3 HA20 : A_s = 942,5 mm², f_yd = 500 / 1,15 = 434,8 MPa, F_s = 409,8 kN.
     // d = 500 − 30 − 8 − 10 = 452 mm ; f_cd = 25 / 1,5 = 16,67 MPa.
     // Parabole-rectangle : alpha = 0,8095, beta = 0,416.
     // x = 409,8e3 / (0,8095 × 300 × 16,67) = 101,2 mm ; z = 452 − 0,416 × 101,2 = 409,9 mm.
     // M_Rd = 409,8 × 0,4099 = 168,0 kN·m.
     const { liste } = blocs(100);
-    const resistance = liste.find((b) => b.titre === 'Resistance');
-    const ligne = resistance?.lignes.find((l) => l.libelle === 'Moment resistant');
+    const resistance = liste.find((b) => b.titre === 'Résistance');
+    const ligne = resistance?.lignes.find((l) => l.libelle === 'Moment résistant');
     const valeur = Number(ligne?.valeur.replace(/\s/g, '').replace(',', '.').replace('kN.m', ''));
 
     expect(valeur).toBeGreaterThan(168.0 * 0.99);
@@ -83,15 +83,15 @@ describe('blocsFlexionUls', () => {
     expect(titres).toEqual([
       TITRE_FLEXION_ELU,
       'Sollicitation',
-      'Resistance',
-      'Equilibre de la section',
-      'Materiaux',
+      'Résistance',
+      'Équilibre de la section',
+      'Matériaux',
       'Ferraillage',
     ]);
   });
 
-  it('joint l explication des deux bras de levier a l equilibre, en texte brut', () => {
-    const equilibre = blocs(100).liste.find((b) => b.titre === 'Equilibre de la section');
+  it('joint l explication des deux bras de levier à l\'équilibre, en texte brut', () => {
+    const equilibre = blocs(100).liste.find((b) => b.titre === 'Équilibre de la section');
     expect(equilibre?.note).toBe(NOTE_BRAS_DE_LEVIER);
     expect(NOTE_BRAS_DE_LEVIER).not.toMatch(/[<>]/);
   });

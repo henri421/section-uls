@@ -38,12 +38,12 @@ export function noteFlexionDeviee(MzElu: number): string | null {
   if (MzElu === 0) return null;
 
   return (
-    `Sollicitation ELU deviee (Mz = ${formatNumber(MzElu, 1)} kN·m), alors que les ` +
-    'verifications ci-dessous sont en flexion droite. Ce n est pas une incoherence : elles ' +
-    'portent sur des combinaisons DIFFERENTES de l ELU, saisies separement et uniaxiales. ' +
-    'La combinaison quasi-permanente (§7.3, §7.4.3) exclut d ailleurs le vent, qui apporte ' +
-    'le plus souvent le moment transversal. Verifier que la sollicitation de service saisie ' +
-    'decrit bien la flexion attendue.'
+    `Sollicitation ELU déviée (Mz = ${formatNumber(MzElu, 1)} kN·m), alors que les ` +
+    'vérifications ci-dessous sont en flexion droite. Ce n\'est pas une incohérence : elles ' +
+    'portent sur des combinaisons DIFFÉRENTES de l\'ELU, saisies séparément et uniaxiales. ' +
+    'La combinaison quasi-permanente (§7.3, §7.4.3) exclut d\'ailleurs le vent, qui apporte ' +
+    'le plus souvent le moment transversal. Vérifier que la sollicitation de service saisie ' +
+    'décrit bien la flexion attendue.'
   );
 }
 
@@ -59,7 +59,7 @@ export function obstacleFissuration(section: Section): string | null {
   if (section.geometry.kind === 'rectangle') return null;
 
   return (
-    'Geometrie non rectangulaire. Les formules du §7.3.4 supposent une zone tendue ' +
+    'Géométrie non rectangulaire. Les formules du §7.3.4 supposent une zone tendue ' +
     'rectangulaire et ne sont pas transposables telles quelles. Les contraintes (§7.2) ' +
     'et la courbure (§7.4.3) restent calculables.'
   );
@@ -103,7 +103,7 @@ export function sansCalcul(titre: string, note: string): BlocService {
   return { titre, lignes: [], verdict: null, note };
 }
 
-const MOTIF_PAR_DEFAUT = 'calcul non convergent, sans motif precise par le module';
+const MOTIF_PAR_DEFAUT = 'calcul non convergent, sans motif précisé par le module';
 
 /**
  * Notation scientifique, dans l UNITE DU NOYAU — aucune conversion.
@@ -170,8 +170,8 @@ export function blocContraintes(entree: Issue<ServiceResult>): BlocService {
       { libelle: 'Axe neutre en service (≠ ELU)', valeur: `${formatNumber(r.neutralAxisZ, 1)} mm` },
     ],
     verdict: r.ok
-      ? { ok: true, texte: 'Contraintes de service verifiees' }
-      : { ok: false, texte: 'Contraintes de service non verifiees' },
+      ? { ok: true, texte: 'Contraintes de service vérifiées' }
+      : { ok: false, texte: 'Contraintes de service non vérifiées' },
     note: r.ok ? null : (r.reason ?? MOTIF_PAR_DEFAUT),
   };
 }
@@ -206,8 +206,8 @@ export function blocFissuration(entree: Issue<CrackResult>): BlocService {
     titre,
     lignes,
     verdict: r.ok
-      ? { ok: true, texte: 'Ouverture de fissure verifiee' }
-      : { ok: false, texte: 'Ouverture de fissure non verifiee' },
+      ? { ok: true, texte: 'Ouverture de fissure vérifiée' }
+      : { ok: false, texte: 'Ouverture de fissure non vérifiée' },
     note: r.ok ? null : (r.reason ?? MOTIF_PAR_DEFAUT),
   };
 }
@@ -219,9 +219,9 @@ export function blocFissuration(entree: Issue<CrackResult>): BlocService {
  * l utilisateur risque de la manquer.
  */
 const PAS_UNE_FLECHE =
-  'Ce n est PAS une fleche. Une fleche exige la portee, les conditions d appui et la ' +
-  'repartition des charges — des donnees de niveau ELEMENT, que ce module de sections ' +
-  'ne connait pas. La courbure s integre le long de la piece par qui dispose du schema statique.';
+  'Ce n\'est PAS une flèche. Une flèche exige la portée, les conditions d\'appui et la ' +
+  'répartition des charges — des données de niveau ÉLÉMENT, que ce module de sections ' +
+  'ne connaît pas. La courbure s\'intègre le long de la pièce par qui dispose du schéma statique.';
 
 /** Courbure en service (§7.4.3). Sans verdict : elle ne se compare a rien ici. */
 export function blocCourbure(entree: Issue<CurvatureResult>): BlocService {
@@ -243,7 +243,7 @@ export function blocCourbure(entree: Issue<CurvatureResult>): BlocService {
       { libelle: '1/r', valeur: `${formatScientifique(r.curvature, 2)} mm⁻¹` },
       { libelle: 'M_cr', valeur: `${formatNumber(r.crackingMoment, 1)} kN·m` },
       { libelle: 'ζ', valeur: formatNumber(r.zeta, 2) },
-      { libelle: 'Etat', valeur: r.cracked ? 'fissuree' : 'non fissuree' },
+      { libelle: 'État', valeur: r.cracked ? 'fissurée' : 'non fissurée' },
       { libelle: 'EI effectif', valeur: `${formatScientifique(r.effectiveStiffness, 2)} N·mm²` },
     ],
     verdict: null,

@@ -54,7 +54,7 @@ const SEPT_FORMES: SectionModel[] = [
     reinforcement: { kind: 'bars', bars: [{ y: 150, z: 450, area: 314 }] } },
 ];
 
-describe('conversion formulaire <-> modele', () => {
+describe('conversion formulaire <-> modèle', () => {
   /**
    * Le modele reconstruit CONSERVE tout ce que portait l'original.
    *
@@ -66,13 +66,13 @@ describe('conversion formulaire <-> modele', () => {
    * l'identite stricte est verifiee plus bas, sur un modele de version 3
    * complet, ou elle a un sens.
    */
-  it('aller-retour sur toutes les formes de geometrie et de ferraillage', () => {
+  it('aller-retour sur toutes les formes de géométrie et de ferraillage', () => {
     for (const modele of SEPT_FORMES) {
       expect(formToModel(modelToForm(modele))).toMatchObject(modele);
     }
   });
 
-  it('un modele anterieur a la version 3 ressort avec ce que le formulaire affiche', () => {
+  it('un modèle anterieur à la version 3 ressort avec ce que le formulaire affiche', () => {
     // La contrepartie explicite du `toMatchObject` ci-dessus : ce qui
     // s'ajoute, et rien d'autre. Sans ce test, la souplesse du matcher
     // couvrirait n'importe quel bloc parasite.
@@ -100,7 +100,7 @@ describe('conversion formulaire <-> modele', () => {
     expect(reconstruit.shear).toBeUndefined();
   });
 
-  it('le modele reconstruit passe la validation du noyau', () => {
+  it('le modèle reconstruit passe la validation du noyau', () => {
     // Controle croise : la couche de saisie ne doit pas pouvoir produire un
     // modele que le format lui-meme rejetterait.
     for (const modele of SEPT_FORMES) {
@@ -125,7 +125,7 @@ describe('conversion formulaire <-> modele', () => {
     }
   });
 
-  it('refuse une valeur non numerique en nommant le champ', () => {
+  it('refuse une valeur non numérique en nommant le champ', () => {
     const form = modelToForm(SEPT_FORMES[0]);
     form.fck = 'vingt-cinq';
     expect(() => formToModel(form)).toThrow(FormError);
@@ -180,7 +180,7 @@ describe('sollicitations de service dans le formulaire', () => {
     expect(reconstruit.serviceActions).toEqual({ quasiPermanent: { N: 300, M: 45 } });
   });
 
-  it('un modele sans service laisse les champs VIDES, jamais a zero', () => {
+  it('un modèle sans service laisse les champs VIDES, jamais a zero', () => {
     // Un fichier de format v1 ne porte pas de service. Y afficher « 0 »
     // ressemblerait a une saisie, et produirait un resultat de service
     // parfaitement calcule pour une sollicitation que personne n'a donnee.
@@ -196,11 +196,11 @@ describe('sollicitations de service dans le formulaire', () => {
     const form = modelToForm(AVEC_SERVICE);
     form.serviceCarM = '';
     expect(() => formToModel(form)).toThrow(FormError);
-    expect(() => formToModel(form)).toThrow(/caracteristique/i);
+    expect(() => formToModel(form)).toThrow(/caractéristique/i);
     expect(() => formToModel(form)).toThrow(/M/);
   });
 
-  it('une combinaison quasi-permanente a demi remplie est refusee de meme', () => {
+  it('une combinaison quasi-permanente a demi remplie est refusee de même', () => {
     const form = modelToForm(AVEC_SERVICE);
     form.serviceQpN = '';
     expect(() => formToModel(form)).toThrow(/quasi-permanent/i);
@@ -220,7 +220,7 @@ describe('sollicitations de service dans le formulaire', () => {
     expect(formToModel(form).serviceActions?.quasiPermanent).toEqual({ N: 300, M: 45 });
   });
 
-  it('le modele reconstruit avec service passe la validation du noyau', () => {
+  it('le modèle reconstruit avec service passe la validation du noyau', () => {
     const reconstruit = formToModel(modelToForm(AVEC_SERVICE));
     expect(() => parseModel(serializeModel(reconstruit))).not.toThrow();
   });
@@ -231,7 +231,7 @@ describe('sollicitations de service dans le formulaire', () => {
  * chacun porte deja un avertissement explicite dans son module — signe qu'il
  * s'agit d'un choix, pas d'une constante normative.
  */
-describe('parametres de service', () => {
+describe('paramètres de service', () => {
   it('reprend les valeurs par defaut du formulaire', () => {
     const form = modelToForm(SEPT_FORMES[0]);
     expect(parametresDeService(form)).toEqual({
@@ -245,7 +245,7 @@ describe('parametres de service', () => {
     });
   });
 
-  it('evalue les expressions saisies', () => {
+  it('évalué les expressions saisies', () => {
     const form = modelToForm(SEPT_FORMES[0]);
     form.serviceN = '30/2';
     form.crackWMax = '0.2';
@@ -260,7 +260,7 @@ describe('parametres de service', () => {
     });
   });
 
-  it('refuse une valeur non numerique en nommant le parametre', () => {
+  it('refuse une valeur non numérique en nommant le paramètre', () => {
     const form = modelToForm(SEPT_FORMES[0]);
     form.crackWMax = 'faible';
     expect(() => parametresDeService(form)).toThrow(FormError);
@@ -277,7 +277,7 @@ describe('parametres de service', () => {
  * sollicitations de service en session 10. La frontiere n a pas bouge, c est
  * la liste des champs saisis qui s est allongee.
  */
-describe('champs de verification vers le modele', () => {
+describe('champs de vérification vers le modèle', () => {
   /** Un formulaire ou chacun des quatre blocs porte une valeur distinctive. */
   function formulaireRempli() {
     const form = modelToForm(SEPT_FORMES[0]);
@@ -364,7 +364,7 @@ describe('champs de verification vers le modele', () => {
     });
   });
 
-  it('un parametre de Meyer vide laisse le bloc absent', () => {
+  it('un paramètre de Meyer vide laisse le bloc absent', () => {
     const form = formulaireRempli();
     form.meyerKzt = '';
     expect(formToModel(form).meyer).toBeUndefined();
@@ -394,7 +394,7 @@ describe('champs de verification vers le modele', () => {
  * exactement ce qui y etait, et un fichier anterieur doit rendre les valeurs
  * de depart — jamais des zeros, qui ressembleraient a une saisie.
  */
-describe('rechargement des champs de verification', () => {
+describe('rechargement des champs de vérification', () => {
   const COMPLET: SectionModel = {
     ...SEPT_FORMES[0],
     elementType: 'beam',
@@ -412,7 +412,7 @@ describe('rechargement des champs de verification', () => {
    * qu'on verifiait le tranchant — et il ressort en version 4 avec ce choix
    * ecrit. C'est l'unique ajout, et il doit etre exactement celui-la.
    */
-  it('un modele de version 3 complet ne perd rien et gagne ses verifications', () => {
+  it('un modèle de version 3 complet ne perd rien et gagne ses vérifications', () => {
     const reconstruit = formToModel(modelToForm(COMPLET));
 
     expect(reconstruit).toMatchObject(COMPLET);
@@ -428,7 +428,7 @@ describe('rechargement des champs de verification', () => {
     });
   });
 
-  it('chaque champ affiche ce que le modele portait', () => {
+  it('chaque champ affiche ce que le modèle portait', () => {
     const form = modelToForm(COMPLET);
 
     expect(form.elementType).toBe('beam');
@@ -456,7 +456,7 @@ describe('rechargement des champs de verification', () => {
     expect(form.meyerKmode).toBe('parabolique');
   });
 
-  it('un modele anterieur a la version 3 rend les valeurs de depart, jamais des zeros', () => {
+  it('un modèle anterieur à la version 3 rend les valeurs de depart, jamais des zeros', () => {
     const form = modelToForm(SEPT_FORMES[0]);
 
     expect(form.elementType).toBe(ELEMENT_TYPE_PAR_DEFAUT);
@@ -488,7 +488,7 @@ describe('rechargement des champs de verification', () => {
     expect(form.meyerKmode).toBe(MEYER_KMODE_PAR_DEFAUT);
   });
 
-  it('un modele partiel ne perd rien de ce qu il porte', () => {
+  it('un modèle partiel ne perd rien de ce qu\'il porte', () => {
     const partiel: SectionModel = {
       ...SEPT_FORMES[0],
       elementType: 'slab',
@@ -516,7 +516,7 @@ describe('rechargement des champs de verification', () => {
     });
   });
 
-  it('un modele sans bloc de tranchant rend le champ a sa valeur de depart', () => {
+  it('un modèle sans bloc de tranchant rend le champ a sa valeur de depart', () => {
     // Et surtout PAS a vide : le champ a « 0 » depuis la session 11, pour que
     // V_Rd,c s'affiche des le chargement sans qu'on ait rien a saisir.
     const form = modelToForm({ ...SEPT_FORMES[0], elementType: 'beam' });
@@ -524,14 +524,14 @@ describe('rechargement des champs de verification', () => {
     expect(form.cotTheta).toBe(COT_THETA_PAR_DEFAUT);
   });
 
-  it('le modele reconstruit avec les quatre blocs passe la validation du noyau', () => {
+  it('le modèle reconstruit avec les quatre blocs passe la validation du noyau', () => {
     const reconstruit = formToModel(modelToForm(COMPLET));
     expect(() => parseModel(serializeModel(reconstruit))).not.toThrow();
   });
 });
 
 describe('le tranchant non saisi ne devient pas une affirmation', () => {
-  it("n'ecrit PAS de bloc `shear` quand V_Ed vaut zero sans cadres declares", () => {
+  it("n'écrit PAS de bloc `shear` quand V_Ed vaut zero sans cadres declares", () => {
     // Le champ V_Ed est pre-rempli a zero pour que V_Rd,c s'affiche des le
     // chargement. Ecrire `shear` dans ce cas ferait dire au fichier que
     // l'ingenieur a verifie le tranchant sous effort nul — une affirmation la
@@ -544,7 +544,7 @@ describe('le tranchant non saisi ne devient pas une affirmation', () => {
     expect(formToModel(etat).shear).toBeUndefined();
   });
 
-  it('ecrit le bloc des que des cadres sont declares, meme sous effort nul', () => {
+  it('écrit le bloc des que des cadres sont declares, même sous effort nul', () => {
     // Des cadres sont un ferraillage, donc une decision : ils se sauvegardent.
     const etat = modelToForm(SEPT_FORMES[0]);
     etat.V_Ed = '0';
@@ -557,7 +557,7 @@ describe('le tranchant non saisi ne devient pas une affirmation', () => {
     expect(shear?.links).toEqual({ Asw: 101, s: 150, fywk: 500 });
   });
 
-  it('ecrit le bloc des que l effort est non nul', () => {
+  it('écrit le bloc des que l\'effort est non nul', () => {
     const etat = modelToForm(SEPT_FORMES[0]);
     etat.V_Ed = '260';
 
@@ -565,7 +565,7 @@ describe('le tranchant non saisi ne devient pas une affirmation', () => {
   });
 });
 
-describe('une sauvegarde locale illisible n est jamais perdue', () => {
+describe('une sauvegarde locale illisible n\'est jamais perdue', () => {
   it('met de cote le texte refuse par le format au lieu de le laisser ecraser', async () => {
     // Le scenario reel : une seule valeur refusee par le format — un `h` de
     // Meyer a zero suffit — rendait toute la sauvegarde illisible. La page

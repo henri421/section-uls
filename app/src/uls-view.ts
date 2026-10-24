@@ -29,9 +29,9 @@ export const TITRE_FLEXION_ELU = 'Flexion ELU';
 export const NOTE_BRAS_DE_LEVIER =
   'Deux bras de levier, deux definitions. La distance entre resultantes separe les ' +
   'resultantes de compression et de traction TOTALES, toutes armatures comprises : elle se ' +
-  'raccourcit des qu une seconde nappe se trouve du cote tendu, meme faiblement sollicitee. ' +
+  'raccourcit des qu\'une seconde nappe se trouve du cote tendu, même faiblement sollicitée. ' +
   'Le z = d − 0,4x est celui des abaques, fonde sur le bloc rectangulaire et sur la seule ' +
-  'nappe la plus eloignee. Les deux sont exacts et ne mesurent pas la meme chose.';
+  'nappe la plus eloignee. Les deux sont exacts et ne mesurent pas la même chose.';
 
 /** Masse volumique de l acier (kg/m³), pour le ratio d acier tendu. */
 const MASSE_VOLUMIQUE_ACIER = 7850;
@@ -69,10 +69,10 @@ export function blocsFlexionUls(
 
   const verdict: BlocService = {
     titre: TITRE_FLEXION_ELU,
-    lignes: [ligne('Taux d exploitation', formatUtilization(taux))],
+    lignes: [ligne('Taux d\'exploitation', formatUtilization(taux))],
     verdict: {
       ok: resultat.ok,
-      texte: `${resultat.ok ? 'Verifie' : 'Non verifie'} — taux ${formatUtilization(taux)}`,
+      texte: `${resultat.ok ? 'Vérifié' : 'Non vérifié'} — taux ${formatUtilization(taux)}`,
     },
     note: resultat.reason ?? null,
   };
@@ -88,7 +88,7 @@ export function blocsFlexionUls(
 
   const resistance = presentes([
     magnitudeResistante !== null
-      ? ligne('Moment resistant', `${formatNumber(magnitudeResistante, 1)} kN.m`)
+      ? ligne('Moment résistant', `${formatNumber(magnitudeResistante, 1)} kN.m`)
       : null,
     resultat.M_Rd
       ? ligne(
@@ -113,20 +113,20 @@ export function blocsFlexionUls(
 
   const equilibre = presentes([
     resultat.neutralAxis
-      ? ligne('Inclinaison de l axe neutre', `${formatAngleDegrees(resultat.neutralAxis.angle)} deg`)
+      ? ligne('Inclinaison de l\'axe neutre', `${formatAngleDegrees(resultat.neutralAxis.angle)} deg`)
       : null,
     resultat.neutralAxis
-      ? ligne('Position de l axe neutre', `${formatNumber(resultat.neutralAxis.offset, 1)} mm`)
+      ? ligne('Position de l\'axe neutre', `${formatNumber(resultat.neutralAxis.offset, 1)} mm`)
       : null,
     etatAxe?.compression
       ? ligne(
-          'Resultante de compression',
+          'Résultante de compression',
           `${formatNumber(etatAxe.compression.force, 0)} kN a z = ${formatNumber(etatAxe.compression.z, 1)} mm`
         )
       : null,
     etatAxe?.tension
       ? ligne(
-          'Resultante de traction',
+          'Résultante de traction',
           `${formatNumber(etatAxe.tension.force, 0)} kN a z = ${formatNumber(etatAxe.tension.z, 1)} mm`
         )
       : null,
@@ -145,7 +145,7 @@ export function blocsFlexionUls(
   const materiaux = [
     ligne('fcd', `${formatNumber(resolu.concrete.fcd, 2)} MPa`),
     ligne('fyd', `${formatNumber(resolu.steel.fyd, 1)} MPa`),
-    ligne('Aire de beton', `${formatNumber(aireBeton, 0)} mm²`),
+    ligne('Aire de béton', `${formatNumber(aireBeton, 0)} mm²`),
   ];
 
   // Separation inferieures / superieures par rapport au centroide, et non
@@ -174,35 +174,35 @@ export function blocsFlexionUls(
 
   const ferraillage = presentes([
     ligne(
-      'Armatures inferieures',
+      'Armatures inférieures',
       `${inferieures.length} barres, ${formatNumber(aire(inferieures), 0)} mm²`
     ),
     ligne(
-      'Armatures superieures',
+      'Armatures supérieures',
       `${superieures.length} barres, ${formatNumber(aire(superieures), 0)} mm²`
     ),
     ligne('Total', `${resolu.section.rebars.length} barres, ${formatNumber(aireAcier, 0)} mm²`),
     aireBeton > 0
-      ? ligne('Taux d armature total', `${formatNumber((100 * aireAcier) / aireBeton, 2)} %`)
+      ? ligne('Taux d\'armature total', `${formatNumber((100 * aireAcier) / aireBeton, 2)} %`)
       : null,
     axeNeutre !== null
       ? ligne('Armatures tendues', `${tendues.length} barres, ${formatNumber(aireTendue, 0)} mm²`)
       : null,
     axeNeutre !== null && aireBeton > 0
-      ? ligne('Ratio acier tendu', `${formatNumber(ratioTendu, 1)} kg/m³ de beton`)
+      ? ligne('Ratio acier tendu', `${formatNumber(ratioTendu, 1)} kg/m³ de béton`)
       : null,
   ]);
 
   const groupes: BlocService[] = [
     { titre: 'Sollicitation', lignes: sollicitation, verdict: null, note: null },
-    { titre: 'Resistance', lignes: resistance, verdict: null, note: null },
+    { titre: 'Résistance', lignes: resistance, verdict: null, note: null },
     {
-      titre: 'Equilibre de la section',
+      titre: 'Équilibre de la section',
       lignes: equilibre,
       verdict: null,
       note: resultat.leverArm !== null ? NOTE_BRAS_DE_LEVIER : null,
     },
-    { titre: 'Materiaux', lignes: materiaux, verdict: null, note: null },
+    { titre: 'Matériaux', lignes: materiaux, verdict: null, note: null },
     { titre: 'Ferraillage', lignes: ferraillage, verdict: null, note: null },
   ];
 

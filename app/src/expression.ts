@@ -89,7 +89,7 @@ function lireFacteur(a: Analyseur): number {
   if (a.position === debut) {
     const reste = a.texte.slice(debut).trim();
     throw new ExpressionError(
-      reste === '' ? 'expression incomplete' : `caractere inattendu "${reste[0]}"`
+      reste === '' ? 'expression incomplète' : `caractère inattendu "${reste[0]}"`
     );
   }
 
@@ -113,10 +113,10 @@ export function evaluateExpression(saisie: string): number {
   passerEspaces(analyseur);
 
   if (analyseur.position !== texte.length) {
-    throw new ExpressionError(`caractere inattendu "${texte[analyseur.position]}"`);
+    throw new ExpressionError(`caractère inattendu "${texte[analyseur.position]}"`);
   }
   if (!Number.isFinite(valeur)) {
-    throw new ExpressionError('resultat non fini');
+    throw new ExpressionError('résultat non fini');
   }
   return valeur;
 }

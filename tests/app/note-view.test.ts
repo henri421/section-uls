@@ -54,7 +54,7 @@ function entrees(m: SectionModel = modele()) {
 
 function bloc(titre: string, m?: SectionModel) {
   const trouve = entrees(m).find((b) => b.titre === titre);
-  if (trouve === undefined) throw new Error(`bloc "${titre}" absent des donnees d entree`);
+  if (trouve === undefined) throw new Error(`bloc "${titre}" absent des données d'entrée`);
   return trouve;
 }
 
@@ -65,19 +65,19 @@ function valeur(titre: string, libelle: string, m?: SectionModel): string {
 }
 
 describe('blocsDEntree', () => {
-  it('couvre l identification, la geometrie, les materiaux, les armatures et les sollicitations', () => {
+  it('couvre l identification, la géométrie, les matériaux, les armatures et les sollicitations', () => {
     const titres = entrees().map((b) => b.titre);
 
     expect(titres).toContain('Identification et profil normatif');
-    expect(titres).toContain('Geometrie');
-    expect(titres).toContain('Materiaux');
+    expect(titres).toContain('Géométrie');
+    expect(titres).toContain('Matériaux');
     expect(titres).toContain('Armatures');
     expect(titres).toContain('Sollicitation ELU');
     expect(titres).toContain('Sollicitations de service');
-    expect(titres).toContain('Parametres de service assumes');
+    expect(titres).toContain('Paramètres de service assumés');
   });
 
-  it('rend la geometrie SAISIE, et non la geometrie resolue', () => {
+  it('rend la géométrie SAISIE, et non la géométrie resolue', () => {
     // Un cercle est integre comme un polygone a 32 cotes : c est un detail de
     // calcul, ce n est pas la donnee d entree de l ouvrage.
     const cercle = modele();
@@ -89,37 +89,37 @@ describe('blocsDEntree', () => {
       count: 8,
     };
 
-    expect(valeur('Geometrie', 'Forme', cercle)).toMatch(/cercle/i);
-    expect(valeur('Geometrie', 'Forme', cercle)).toContain('600');
+    expect(valeur('Géométrie', 'Forme', cercle)).toMatch(/cercle/i);
+    expect(valeur('Géométrie', 'Forme', cercle)).toContain('600');
   });
 
   it('rend les dimensions du rectangle', () => {
-    expect(valeur('Geometrie', 'Forme')).toContain('400');
+    expect(valeur('Géométrie', 'Forme')).toContain('400');
   });
 
-  it('rend les resistances de calcul a cote des resistances caracteristiques', () => {
+  it('rend les résistances de calcul a cote des résistances caractéristiques', () => {
     // fcd et fyd sont ce sur quoi la verification porte reellement : les taire
     // obligerait le lecteur a refaire la division par gamma pour verifier.
-    expect(valeur('Materiaux', 'fck')).toContain('25');
-    expect(valeur('Materiaux', 'fcd')).toContain('16,67');
-    expect(valeur('Materiaux', 'fyd')).toContain('434,8');
+    expect(valeur('Matériaux', 'fck')).toContain('25');
+    expect(valeur('Matériaux', 'fcd')).toContain('16,67');
+    expect(valeur('Matériaux', 'fyd')).toContain('434,8');
   });
 
   it('rend le profil normatif et ses coefficients partiels', () => {
     expect(valeur('Identification et profil normatif', 'Profil normatif')).toContain(
       'EC2_recommended'
     );
-    expect(valeur('Identification et profil normatif', 'gamma_c')).toContain('1,50');
+    expect(valeur('Identification et profil normatif', 'gamma_c')).toContain('1,5');
     expect(valeur('Identification et profil normatif', 'gamma_s')).toContain('1,15');
   });
 
   it('rend les trois composantes de la sollicitation ELU', () => {
-    expect(valeur('Sollicitation ELU', 'N')).toContain('500,0');
-    expect(valeur('Sollicitation ELU', 'My')).toContain('80,0');
-    expect(valeur('Sollicitation ELU', 'Mz')).toContain('40,0');
+    expect(valeur('Sollicitation ELU', 'N')).toContain('500');
+    expect(valeur('Sollicitation ELU', 'My')).toContain('80');
+    expect(valeur('Sollicitation ELU', 'Mz')).toContain('40');
   });
 
-  it('DIT qu une combinaison de service n est pas saisie, au lieu de la taire', () => {
+  it('DIT qu\'une combinaison de service n\'est pas saisie, au lieu de la taire', () => {
     // Une combinaison absente qui disparait de la note ferait croire au
     // lecteur qu elle a ete prise en compte.
     // Service COCHE, combinaisons absentes : c'est le cas ou la note doit
@@ -128,7 +128,7 @@ describe('blocsDEntree', () => {
     delete sansService.serviceActions;
     sansService.checks = { service: true };
 
-    expect(valeur('Sollicitations de service', 'Combinaison caracteristique', sansService)).toMatch(
+    expect(valeur('Sollicitations de service', 'Combinaison caractéristique', sansService)).toMatch(
       /non saisie/i
     );
     expect(valeur('Sollicitations de service', 'Combinaison quasi-permanente', sansService)).toMatch(
@@ -136,16 +136,16 @@ describe('blocsDEntree', () => {
     );
   });
 
-  it('rend les parametres de service, en disant que ce sont des CHOIX', () => {
-    expect(valeur('Parametres de service assumes', 'n, coefficient d equivalence')).toContain('15');
-    expect(valeur('Parametres de service assumes', 'w_max')).toContain('0,300');
-    expect(valeur('Parametres de service assumes', 'beta')).toContain('0,50');
-    expect(bloc('Parametres de service assumes').note).toMatch(/choix/i);
+  it('rend les paramètres de service, en disant que ce sont des CHOIX', () => {
+    expect(valeur('Paramètres de service assumés', 'n, coefficient d\'équivalence')).toContain('15');
+    expect(valeur('Paramètres de service assumés', 'w_max')).toContain('0,3');
+    expect(valeur('Paramètres de service assumés', 'beta')).toContain('0,5');
+    expect(bloc('Paramètres de service assumés').note).toMatch(/choix/i);
   });
 
   it('n affiche AUCUN NaN, et ne rend AUCUN verdict', () => {
     for (const b of entrees()) {
-      expect(b.verdict, `${b.titre} conclut, alors qu il ne fait que rapporter la saisie`).toBeNull();
+      expect(b.verdict, `${b.titre} conclut, alors qu'il ne fait que rapporter la saisie`).toBeNull();
       for (const l of b.lignes) expect(l.valeur).not.toContain('NaN');
     }
   });
@@ -154,7 +154,7 @@ describe('blocsDEntree', () => {
 describe('hypothesesDeLaNote', () => {
   const hypotheses = () => hypothesesDeLaNote(resolveModel(modele())).join('\n');
 
-  it('nomme le profil normatif retenu et rappelle l annexe nationale', () => {
+  it('nomme le profil normatif retenu et rappelle l\'annexe nationale', () => {
     expect(hypotheses()).toContain('EC2_recommended');
     expect(hypotheses()).toMatch(/annexe nationale/i);
   });
@@ -167,7 +167,7 @@ describe('hypothesesDeLaNote', () => {
     expect(texte).toMatch(/rectangulaire/i); // tranchant et fissuration
     expect(texte).toMatch(/flexion droite/i); // service
     expect(texte).toMatch(/Meyer/); // methode allemande, pre-dimensionnement
-    expect(texte).toMatch(/n est pas une fleche/i); // courbure
+    expect(texte).toMatch(/n'est pas une flèche/i); // courbure
   });
 
   it('ne conclut rien', () => {
@@ -186,15 +186,15 @@ describe('hypothesesDeLaNote', () => {
   });
 });
 
-describe('donnees d entree selon les verifications cochees', () => {
-  it('ELU seul : aucune sollicitation ni parametre de service', () => {
+describe('données d\'entrée selon les vérifications cochees', () => {
+  it('ELU seul : aucune sollicitation ni paramètre de service', () => {
     const eluSeul = modele();
     eluSeul.checks = { service: false };
     const titres = entrees(eluSeul).map((b) => b.titre);
 
     expect(titres).toContain('Sollicitation ELU');
     expect(titres).not.toContain('Sollicitations de service');
-    expect(titres).not.toContain('Parametres de service assumes');
+    expect(titres).not.toContain('Paramètres de service assumés');
   });
 
   it('service coche : les deux blocs de service sont presents', () => {
@@ -203,6 +203,6 @@ describe('donnees d entree selon les verifications cochees', () => {
     const titres = entrees(avecService).map((b) => b.titre);
 
     expect(titres).toContain('Sollicitations de service');
-    expect(titres).toContain('Parametres de service assumes');
+    expect(titres).toContain('Paramètres de service assumés');
   });
 });
