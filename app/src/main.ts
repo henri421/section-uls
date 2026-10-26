@@ -12,7 +12,7 @@ import type { FormState, RowInput, FreeRowInput } from './form';
 import { outlineOf } from './draw';
 import { plotSvg } from './plot';
 import { formatNumber } from './format';
-import { notationHtml } from 'aedificium-ui';
+import { notationHtml, noteDeCalculHtml } from 'aedificium-ui';
 import { calculerSorties, modeleParDefaut, dessinerDiagrammeNM, ligne } from './sorties';
 import type { Sortie } from './sorties';
 import {
@@ -22,14 +22,8 @@ import {
   telechargerModele,
   lireFichier,
 } from './storage';
-import {
-  svgAutonome,
-  resultatsEnCsv,
-  noteDeCalculHtml,
-  STYLES_TRACE,
-  STYLES_NOTE,
-} from './export';
-import { blocsDEntree, hypothesesDeLaNote } from './note-view';
+import { svgAutonome, resultatsEnCsv, STYLES_TRACE } from './export';
+import { blocsDEntree, noteDuCalcul } from './note-view';
 import './style.css';
 
 /**
@@ -1140,6 +1134,8 @@ function htmlFormulaire(): string {
        telechargee. C'est un <strong>compte rendu</strong> de calcul, pas une justification
        réglementaire signee.`
     )}</legend>
+    <label><span>Projet</span><input type="text" data-role="projet" value="${echapper(lireCartouche().projet)}" /></label>
+    <label><span>Élément</span><input type="text" data-role="element" placeholder="vide = nom du modèle" value="${echapper(lireCartouche().element)}" /></label>
     <button type="button" data-action="exporter-section">Section (SVG)</button>
     <button type="button" data-action="exporter-diagramme">Diagramme N-M (SVG)</button>
     <button type="button" data-action="exporter-resultats">Résultats (CSV)</button>
@@ -1427,6 +1423,49 @@ function dateDuJour(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// --- Cartouche --------------------------------------------------------------
+
+const CLE_CARTOUCHE = 'section-uls:cartouche';
+
+interface Cartouche {
+  projet: string;
+  element: string;
+}
+
+/** Lit le cartouche garde dans localStorage ; vide s il manque ou est illisible. */
+function lireCartouche(): Cartouche {
+  try {
+    const brut = localStorage.getItem(CLE_CARTOUCHE);
+    if (brut === null) return { projet: '', element: '' };
+    const lu = JSON.parse(brut) as Partial<Cartouche>;
+    return {
+      projet: typeof lu.projet === 'string' ? lu.projet : '',
+      element: typeof lu.element === 'string' ? lu.element : '',
+    };
+  } catch {
+    return { projet: '', element: '' };
+  }
+}
+
+/**
+ * Garde la valeur des deux champs du cartouche.
+ *
+ * Ils ne portent pas de `data-champ` : ce ne sont pas des donnees du modele et
+ * ils ne doivent pas relancer le calcul. Seul le stockage change.
+ */
+function garderCartouche(): void {
+  const valeur = (role: string): string =>
+    document.querySelector<HTMLInputElement>(`input[data-role="${role}"]`)?.value ?? '';
+  try {
+    localStorage.setItem(
+      CLE_CARTOUCHE,
+      JSON.stringify({ projet: valeur('projet'), element: valeur('element') })
+    );
+  } catch {
+    // Stockage indisponible : la note partira sans cartouche, sans erreur.
+  }
+}
+
 /**
  * Un fichier, un dessin, un bouton.
  *
@@ -1455,16 +1494,8 @@ function exporterResultats(sortie: Sortie): void {
 
 function exporterNote(sortie: Sortie): void {
   const html = noteDeCalculHtml(
-    {
-      titre: sortie.modele.name ?? 'Section',
-      date: dateDuJour(),
-      entrees: blocsDEntree(sortie.modele, sortie.resolu, sortie.parametres),
-      // Les dessins DEJA produits, jamais redessines.
-      dessins: sortie.dessins.map((d) => d.svg),
-      verifications: sortie.blocs,
-      hypotheses: hypothesesDeLaNote(sortie.resolu),
-    },
-    STYLES_NOTE
+    noteDuCalcul(sortie, { ...lireCartouche(), date: dateDuJour() }),
+    STYLES_TRACE
   );
   const nom = `${baseDeNom(sortie.modele)}-note.html`;
 
@@ -1620,6 +1651,7 @@ document.addEventListener('input', (evenement) => {
     cible instanceof HTMLTextAreaElement
   ) {
     if (cible.dataset.champ) appliquerSaisie(cible);
+    else if (cible.dataset.role === 'projet' || cible.dataset.role === 'element') garderCartouche();
   }
 });
 
