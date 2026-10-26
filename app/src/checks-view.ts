@@ -6,7 +6,7 @@ import type {
   RestraintResult,
 } from '../../src/index';
 import type { BlocService, Issue, LigneAffichee } from './service-view';
-import { sansCalcul } from './service-view';
+import { sansCalcul, nonCalculee } from './service-view';
 import { formatNumber, formatUtilization } from './format';
 
 /**
@@ -104,7 +104,7 @@ export function obstacleDispositions(section: Section, elementType: ElementType)
  */
 export function blocTranchant(entree: Issue<ShearResult>, VEd: number): BlocService {
   const titre = 'Effort tranchant (§6.2)';
-  if (!('resultat' in entree)) return sansCalcul(titre, entree.motif);
+  if (!('resultat' in entree)) return nonCalculee(titre, entree.motif);
 
   const r = entree.resultat;
 
@@ -135,6 +135,7 @@ export function blocTranchant(entree: Issue<ShearResult>, VEd: number): BlocServ
   return {
     titre,
     lignes,
+    taux: r.utilization,
     verdict: r.ok
       ? { ok: true, texte: 'Effort tranchant vérifié' }
       : { ok: false, texte: 'Effort tranchant non vérifié' },
@@ -161,7 +162,7 @@ export function blocTranchant(entree: Issue<ShearResult>, VEd: number): BlocServ
  */
 export function blocDispositions(entree: Issue<DetailingResult>): BlocService {
   const titre = 'Dispositions constructives (§9)';
-  if (!('resultat' in entree)) return sansCalcul(titre, entree.motif);
+  if (!('resultat' in entree)) return nonCalculee(titre, entree.motif);
 
   const r = entree.resultat;
   const l = r.longitudinal;
@@ -202,6 +203,7 @@ export function blocDispositions(entree: Issue<DetailingResult>): BlocService {
   return {
     titre,
     lignes,
+    taux: null,
     verdict: r.ok
       ? { ok: true, texte: 'Dispositions constructives respectees' }
       : { ok: false, texte: 'Dispositions constructives non respectees' },

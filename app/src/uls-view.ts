@@ -70,6 +70,7 @@ export function blocsFlexionUls(
   const verdict: BlocService = {
     titre: TITRE_FLEXION_ELU,
     lignes: [ligne('Taux d\'exploitation', formatUtilization(taux))],
+    taux,
     verdict: {
       ok: resultat.ok,
       texte: `${resultat.ok ? 'Vérifié' : 'Non vérifié'} — taux ${formatUtilization(taux)}`,

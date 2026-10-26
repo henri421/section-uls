@@ -4,6 +4,9 @@ import type { BlocService, LigneAffichee } from './service-view';
 import type { ParametresService } from './form';
 import { outlineOf } from './draw';
 import { formatNumber } from './format';
+import type { ElementNote, NoteDeCalcul, VerificationNote } from 'aedificium-ui';
+import type { Sortie } from './sorties';
+import { TITRE_FLEXION_ELU } from './uls-view';
 
 /**
  * Les DONNEES D ENTREE de la note de calcul, et ses hypotheses.
@@ -209,4 +212,77 @@ export function hypothesesDeLaNote(resolu: ResolvedModel): string[] {
   ];
 
   return hypotheses.filter((h): h is string => h !== false);
+}
+
+// --- Note de calcul commune (aedificium-ui) ----------------------------------
+
+/** Rangement des blocs d entree ; un titre inconnu va aux hypotheses. */
+const RANGEMENT: Record<string, 'geometrie' | 'materiaux' | 'hypotheses' | 'charges'> = {
+  'Géométrie': 'geometrie',
+  'Armatures': 'geometrie',
+  'Matériaux': 'materiaux',
+  'Identification et profil normatif': 'hypotheses',
+  'Paramètres de service assumés': 'hypotheses',
+  'Sollicitation ELU': 'charges',
+  'Sollicitations de service': 'charges',
+};
+
+/** Un BlocService en bloc de la note ; le verdict devient la derniere ligne. */
+function enBloc(b: BlocService): ElementNote {
+  const lignes = b.lignes.map((l) => ({ symbole: '', libelle: l.libelle, valeur: l.valeur }));
+  if (b.verdict !== null) lignes.push({ symbole: '', libelle: 'Verdict', valeur: b.verdict.texte });
+  return { type: 'bloc', bloc: { titre: b.titre, lignes, note: b.note } };
+}
+
+/** Nom et clause d une verification, lus dans le titre « Nom (§x) ». */
+function nomEtClause(titre: string): { nom: string; clause: string | undefined } {
+  if (titre === TITRE_FLEXION_ELU) return { nom: titre, clause: '§6.1' };
+  const m = /^(.*?)\s*\((§.*)\)$/.exec(titre);
+  return m === null ? { nom: titre, clause: undefined } : { nom: m[1], clause: m[2] };
+}
+
+/** La note de calcul de la sortie, rangee dans les sections de la note commune. */
+export function noteDuCalcul(
+  sortie: Sortie,
+  cartouche: { projet: string; element: string; date: string }
+): NoteDeCalcul {
+  const geometrie: ElementNote[] = [];
+  const materiaux: ElementNote[] = [];
+  const hypotheses: ElementNote[] = [{ type: 'liste', items: hypothesesDeLaNote(sortie.resolu) }];
+  const charges: ElementNote[] = [];
+  const cibles = { geometrie, materiaux, hypotheses, charges };
+  for (const b of blocsDEntree(sortie.modele, sortie.resolu, sortie.parametres)) {
+    cibles[RANGEMENT[b.titre] ?? 'hypotheses'].push(enBloc(b));
+  }
+
+  const dessin = (suffixe: string) => sortie.dessins.find((d) => d.suffixe === suffixe)?.svg;
+  const section = dessin('section');
+  if (section !== undefined) {
+    geometrie.push({ type: 'figure', svg: section, legende: 'Section, armatures et axe neutre à l\'ELU' });
+  }
+  const calculs = sortie.blocs.map(enBloc);
+  const diagramme = dessin('diagramme-n-my');
+  if (diagramme !== undefined) {
+    calculs.push({ type: 'figure', svg: diagramme, legende: 'Diagramme d\'interaction N-My' });
+  }
+
+  const verifications: VerificationNote[] = [];
+  for (const b of sortie.blocs) {
+    if (b.taux === undefined) continue;
+    const { nom, clause } = nomEtClause(b.titre);
+    verifications.push({ nom, ...(clause === undefined ? {} : { clause }), taux: b.taux, ok: b.verdict?.ok ?? false });
+  }
+
+  const element = cartouche.element.trim();
+  return {
+    cartouche: {
+      projet: cartouche.projet,
+      element: element !== '' ? element : (sortie.modele.name ?? '').trim() || 'Section',
+      date: cartouche.date,
+      norme: 'EN 1992-1-1:2004',
+      outil: 'section-uls',
+    },
+    sections: { geometrie, materiaux, hypotheses, charges, calculs },
+    verifications,
+  };
 }

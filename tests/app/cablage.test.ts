@@ -1448,17 +1448,32 @@ describe('les sorties : dessins, resultats, note de calcul', () => {
     const contenu = await telechargements[0].text();
     expect(telechargements[0].type).toContain('html');
     expect(contenu).toContain('<!doctype html>');
-    expect(contenu).toContain('note de calcul');
-    // Donnees d entree, dessin, verifications, hypotheses, avertissement.
-    expect(contenu).toContain('Données d\'entrée');
+    expect(contenu).toMatch(/note de calcul/i);
+    // Note commune (lot 8.7) : sections numerotees, dessin, conclusions.
+    expect(contenu).toContain('1. Géométrie');
     expect(contenu).toContain('<svg');
     // La verification ELU affichee a l ecran figure dans la note. (Le
     // tranchant, decoche par defaut, n y figure plus, meme en hypothese :
     // voir « une verification cochee apparait dans la note ».)
     expect(contenu).toContain('Flexion ELU');
-    expect(contenu).toContain('Hypothèses et limites');
+    expect(contenu).toContain('Hypothèses');
+    expect(contenu).toContain('Conclusions');
     expect(contenu).not.toMatch(/aide au calcul/i);
     expect(contenu).not.toContain('NaN');
+  });
+
+  it('le projet saisi dans le volet Sorties passe dans le cartouche de la note', async () => {
+    const dom = await monterApplication();
+    const champ = dom.window.document.querySelector('[data-role="projet"]') as HTMLInputElement | null;
+    expect(champ).not.toBeNull();
+    champ!.value = 'Immeuble Les Tilleuls';
+    champ!.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    champ!.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    cliquer(dom, 'exporter-note');
+
+    const contenu = await telechargements[0].text();
+    expect(contenu).toContain('Immeuble Les Tilleuls');
+    expect(pageEnErreur(dom)).toBe(false);
   });
 
   it('les sorties suivent la saisie', async () => {

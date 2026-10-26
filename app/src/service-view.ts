@@ -85,6 +85,12 @@ export interface BlocService {
   verdict: Verdict | null;
   /** Motif d indisponibilite, ou precision a afficher sous le bloc. */
   note: string | null;
+  /**
+   * Taux de la verification que porte le bloc, pour les conclusions de la
+   * note. Absent : le bloc ne verifie rien. `null` : verification sans
+   * ratio. `NaN` : verification demandee mais pas calculee.
+   */
+  taux?: number | null;
 }
 
 /** `entree` porte soit le resultat, soit le motif qui a empeche de l obtenir. */
@@ -101,6 +107,16 @@ export type Issue<T> = { resultat: T } | { motif: string };
  */
 export function sansCalcul(titre: string, note: string): BlocService {
   return { titre, lignes: [], verdict: null, note };
+}
+
+/** Taux des contraintes de service : la plus sollicitee des deux limites. */
+export function tauxContraintes(r: { sigmaC: number; sigmaCLimit: number; sigmaS: number; sigmaSLimit: number }): number {
+  return Math.max(Math.abs(r.sigmaC) / r.sigmaCLimit, Math.abs(r.sigmaS) / r.sigmaSLimit);
+}
+
+/** Une verification demandee qui n a pas pu se faire. */
+export function nonCalculee(titre: string, note: string): BlocService {
+  return { ...sansCalcul(titre, note), taux: Number.NaN };
 }
 
 const MOTIF_PAR_DEFAUT = 'calcul non convergent, sans motif précisé par le module';
@@ -145,14 +161,14 @@ function formatScientifique(valeur: number, decimales: number): string {
  */
 export function blocContraintes(entree: Issue<ServiceResult>): BlocService {
   const titre = 'Contraintes en service (§7.2)';
-  if (!('resultat' in entree)) return sansCalcul(titre, entree.motif);
+  if (!('resultat' in entree)) return nonCalculee(titre, entree.motif);
 
   const r = entree.resultat;
 
   // Section entierement comprimee : l hypothese de section fissuree tombe.
   // C est un RESULTAT, et le motif du module est explicite — mais les
   // contraintes valent `NaN`, et on ne pretend pas les montrer.
-  if (!r.converged) return sansCalcul(titre, r.reason ?? MOTIF_PAR_DEFAUT);
+  if (!r.converged) return nonCalculee(titre, r.reason ?? MOTIF_PAR_DEFAUT);
 
   return {
     titre,
@@ -169,6 +185,7 @@ export function blocContraintes(entree: Issue<ServiceResult>): BlocService {
       // elle ne coincide pas avec celle de l ELU, et l ecart est instructif.
       { libelle: 'Axe neutre en service (≠ ELU)', valeur: `${formatNumber(r.neutralAxisZ, 1)} mm` },
     ],
+    taux: tauxContraintes(r),
     verdict: r.ok
       ? { ok: true, texte: 'Contraintes de service vérifiées' }
       : { ok: false, texte: 'Contraintes de service non vérifiées' },
@@ -179,10 +196,10 @@ export function blocContraintes(entree: Issue<ServiceResult>): BlocService {
 /** Ouverture de fissures (§7.3). */
 export function blocFissuration(entree: Issue<CrackResult>): BlocService {
   const titre = 'Ouverture de fissures (§7.3)';
-  if (!('resultat' in entree)) return sansCalcul(titre, entree.motif);
+  if (!('resultat' in entree)) return nonCalculee(titre, entree.motif);
 
   const r = entree.resultat;
-  if (!r.converged) return sansCalcul(titre, r.reason ?? MOTIF_PAR_DEFAUT);
+  if (!r.converged) return nonCalculee(titre, r.reason ?? MOTIF_PAR_DEFAUT);
 
   const lignes: LigneAffichee[] = [
     {
@@ -205,6 +222,7 @@ export function blocFissuration(entree: Issue<CrackResult>): BlocService {
   return {
     titre,
     lignes,
+    taux: r.wk / r.wMax,
     verdict: r.ok
       ? { ok: true, texte: 'Ouverture de fissure vérifiée' }
       : { ok: false, texte: 'Ouverture de fissure non vérifiée' },

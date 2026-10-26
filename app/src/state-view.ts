@@ -1,6 +1,6 @@
 import type { SectionStateResult, ServiceStateResult, Action } from '../../src/index';
 import type { BlocService, Issue, LigneAffichee } from './service-view';
-import { sansCalcul } from './service-view';
+import { sansCalcul, nonCalculee, tauxContraintes } from './service-view';
 import { formatNumber, formatUtilization } from './format';
 
 /**
@@ -152,7 +152,7 @@ export function blocEtatFissuration(
   quasiPermanente?: Issue<ServiceStateResult>
 ): BlocService {
   const titre = 'État de fissuration (§7.1(2))';
-  if (!('resultat' in entree)) return sansCalcul(titre, entree.motif);
+  if (!('resultat' in entree)) return nonCalculee(titre, entree.motif);
 
   const r = entree.resultat;
   const c = r.cracking;
@@ -210,6 +210,7 @@ export function blocEtatFissuration(
   return {
     titre,
     lignes,
+    taux: tauxContraintes(r),
     verdict: r.ok
       ? { ok: true, texte: 'Contraintes de service vérifiées sur l\'état retenu' }
       : { ok: false, texte: 'Contraintes de service non vérifiées' },

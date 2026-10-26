@@ -11,11 +11,11 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { NOMS_GRECS, constatsAffichage, contenuBalise, texteVisible } from 'aedificium-ui';
+import { NOMS_GRECS, constatsAffichage, contenuBalise, noteDeCalculHtml, texteVisible } from 'aedificium-ui';
 import type { SectionModel } from '../../src/index';
 import { modelToForm } from '../../app/src/form';
-import { STYLES_NOTE, noteDeCalculHtml, resultatsEnCsv } from '../../app/src/export';
-import { blocsDEntree, hypothesesDeLaNote } from '../../app/src/note-view';
+import { STYLES_TRACE, resultatsEnCsv } from '../../app/src/export';
+import { blocsDEntree, noteDuCalcul } from '../../app/src/note-view';
 import { calculerSorties, modeleParDefaut } from '../../app/src/sorties';
 
 const TITRE = 'Sections en béton armé';
@@ -63,17 +63,7 @@ function sorties() {
     ecran.push(s.resultatHtml, ...s.dessins.map((d) => d.svg));
     const entrees = blocsDEntree(s.modele, s.resolu, s.parametres);
     notes.push(
-      noteDeCalculHtml(
-        {
-          titre: s.modele.name ?? 'Section',
-          date: '2026-10-24',
-          entrees,
-          dessins: s.dessins.map((d) => d.svg),
-          verifications: s.blocs,
-          hypotheses: hypothesesDeLaNote(s.resolu),
-        },
-        STYLES_NOTE
-      )
+      noteDeCalculHtml(noteDuCalcul(s, { projet: 'Projet', element: '', date: '2026-10-24' }), STYLES_TRACE)
     );
     csv.push(resultatsEnCsv([...entrees, ...s.blocs]));
   }
