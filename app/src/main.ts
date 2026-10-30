@@ -12,7 +12,7 @@ import type { FormState, RowInput, FreeRowInput } from './form';
 import { outlineOf } from './draw';
 import { plotSvg } from './plot';
 import { formatNumber } from './format';
-import { notationHtml, noteDeCalculHtml } from 'aedificium-ui';
+import { definirLangue, langueDuDocument, noteDeCalculHtml } from 'aedificium-ui';
 import { calculerSorties, modeleParDefaut, dessinerDiagrammeNM, ligne } from './sorties';
 import type { Sortie } from './sorties';
 import {
@@ -24,7 +24,10 @@ import {
 } from './storage';
 import { svgAutonome, resultatsEnCsv, STYLES_TRACE } from './export';
 import { blocsDEntree, noteDuCalcul } from './note-view';
+import { notationHtml, tr, trBlocs, trHtml } from './textes';
 import './style.css';
+
+definirLangue(langueDuDocument(document));
 
 /**
  * Cablage de l'interface. Volontairement MINCE : il lit les champs, appelle
@@ -191,7 +194,7 @@ function rafraichirOptionsDeLits(): void {
         ? optionsDuLitRectangulaire(etat.rows[index])
         : null;
 
-    contenant.innerHTML = options === null ? '' : boutonsDeNombre(options, attribut, index);
+    contenant.innerHTML = options === null ? '' : trHtml(boutonsDeNombre(options, attribut, index));
   });
 
   // Le recapitulatif suit le meme chemin, et pour la meme raison : « 7 HA14
@@ -200,7 +203,7 @@ function rafraichirOptionsDeLits(): void {
   const recapitulatifs = recapitulatifDesLits();
   document.querySelectorAll<HTMLElement>('[data-recap]').forEach((element) => {
     const index = Number(element.dataset.recap);
-    element.textContent = recapitulatifs?.[index] ?? '';
+    element.textContent = tr(recapitulatifs?.[index] ?? '');
   });
 
   // Meme raison pour le total du tableau de barres : il doit suivre la frappe
@@ -211,7 +214,7 @@ function rafraichirOptionsDeLits(): void {
     total.textContent =
       aire === null
         ? ''
-        : `${etat.barList.length} barres — ${formatNumber(aire, 0)} mm² au total`;
+        : tr(`${etat.barList.length} barres — ${formatNumber(aire, 0)} mm² au total`);
   }
 }
 
@@ -804,7 +807,7 @@ function blocDisposition(): string {
 function rafraichirPanneauDisposition(MRd: number | null): void {
   const contenant = document.querySelector<HTMLElement>('[data-panneau-vivant]');
   if (contenant === null) return;
-  contenant.innerHTML = htmlComparaison(MRd) + htmlDefautsDePlacement();
+  contenant.innerHTML = trHtml(htmlComparaison(MRd) + htmlDefautsDePlacement());
 }
 
 /**
@@ -1318,15 +1321,15 @@ function recalculer(mode?: 'proportional'): void {
     const sortie = calculerSorties(etat, mode);
     const { resolu, resultat } = sortie;
 
-    dernierResultat = sortie.resultatHtml;
+    dernierResultat = trHtml(sortie.resultatHtml);
     zoneResultat.innerHTML = dernierResultat;
 
     const svgSection = sortie.dessins.find((d) => d.suffixe === 'section')?.svg ?? '';
-    zoneSection.innerHTML = svgSection + LEGENDE_SECTION;
+    zoneSection.innerHTML = trHtml(svgSection + LEGENDE_SECTION);
 
     // Le domaine My-Mz eventuellement trace n'est PAS reconduit : il vaut pour
     // un effort normal fixe, que la saisie vient peut-etre de changer.
-    dernierDiagramme = sortie.diagrammeHtml;
+    dernierDiagramme = trHtml(sortie.diagrammeHtml);
     dernierDomaine = null;
     if (zoneDiagramme) zoneDiagramme.innerHTML = dernierDiagramme;
 
@@ -1376,10 +1379,10 @@ function tracerDomaine(): void {
       mode: 'constant-N',
     });
 
-    dernierDiagramme = dessinerDiagrammeNM(resolu).html;
+    dernierDiagramme = trHtml(dessinerDiagrammeNM(resolu).html);
     const domaine = dessinerDomaineMyMz(resolu, resultat);
     dernierDomaine = domaine.svg === '' ? null : domaine.svg;
-    zoneDiagramme.innerHTML = dernierDiagramme + domaine.html;
+    zoneDiagramme.innerHTML = dernierDiagramme + trHtml(domaine.html);
   } catch (e) {
     afficherErreur(e instanceof FormError ? e.message : String(e));
     zoneDiagramme.innerHTML = dernierDiagramme;
@@ -1396,7 +1399,7 @@ function recalculerBientot(): void {
 
 function rendreFormulaire(): void {
   if (!zoneSaisie) return;
-  zoneSaisie.innerHTML = htmlFormulaire();
+  zoneSaisie.innerHTML = trHtml(htmlFormulaire());
   // Le formulaire sort avec ses contenants de propositions VIDES : on les
   // remplit tout de suite, sans attendre le prochain recalcul.
   rafraichirOptionsDeLits();
@@ -1477,7 +1480,7 @@ function garderCartouche(): void {
 function exporterDessin(modele: SectionModel, suffixe: string, svg: string): void {
   telecharger(
     `${baseDeNom(modele)}-${suffixe}.svg`,
-    svgAutonome(svg, STYLES_TRACE),
+    svgAutonome(trHtml(svg), STYLES_TRACE),
     'image/svg+xml;charset=utf-8'
   );
 }
@@ -1487,7 +1490,7 @@ function exporterResultats(sortie: Sortie): void {
   const entrees = blocsDEntree(sortie.modele, sortie.resolu, sortie.parametres);
   telecharger(
     `${baseDeNom(sortie.modele)}-resultats.csv`,
-    resultatsEnCsv([...entrees, ...sortie.blocs]),
+    resultatsEnCsv(trBlocs([...entrees, ...sortie.blocs])),
     'text/csv;charset=utf-8'
   );
 }
@@ -1788,14 +1791,14 @@ document.addEventListener('click', (evenement) => {
   } else if (action === 'calculer-proportionnel') {
     // Le mode proportionnel coute de 3,6 s a 7,7 s : il ne part JAMAIS tout
     // seul, et l'attente doit etre visible.
-    if (zoneResultat) zoneResultat.innerHTML = `<p class="attente">Calcul en cours…</p>${dernierResultat}`;
+    if (zoneResultat) zoneResultat.innerHTML = `<p class="attente">${tr('Calcul en cours…')}</p>${dernierResultat}`;
     window.setTimeout(() => recalculer('proportional'), 0);
   } else if (action === 'tracer-domaine') {
     // Meme patron que ci-dessus, pour la meme raison : le trace coute de 77 a
     // 380 ms, synchrones. Le differer d'un tour de boucle laisse le navigateur
     // peindre l'attente au lieu de figer sans rien dire.
     if (zoneDiagramme) {
-      zoneDiagramme.innerHTML = `<p class="attente">Trace du domaine en cours…</p>${dernierDiagramme}`;
+      zoneDiagramme.innerHTML = `<p class="attente">${tr('Trace du domaine en cours…')}</p>${dernierDiagramme}`;
     }
     window.setTimeout(tracerDomaine, 0);
   } else if (action.startsWith('exporter-')) {

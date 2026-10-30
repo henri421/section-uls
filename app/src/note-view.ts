@@ -7,6 +7,7 @@ import { formatNumber } from './format';
 import type { ElementNote, NoteDeCalcul, VerificationNote } from 'aedificium-ui';
 import type { Sortie } from './sorties';
 import { TITRE_FLEXION_ELU } from './uls-view';
+import { trNote } from './textes';
 
 /**
  * Les DONNEES D ENTREE de la note de calcul, et ses hypotheses.
@@ -274,7 +275,8 @@ export function noteDuCalcul(
   }
 
   const element = cartouche.element.trim();
-  return {
+  // En anglais (lot 8.8), la note est traduite ici, avant sa mise en HTML.
+  return trNote({
     cartouche: {
       projet: cartouche.projet,
       element: element !== '' ? element : (sortie.modele.name ?? '').trim() || 'Section',
@@ -284,5 +286,5 @@ export function noteDuCalcul(
     },
     sections: { geometrie, materiaux, hypotheses, charges, calculs },
     verifications,
-  };
+  });
 }

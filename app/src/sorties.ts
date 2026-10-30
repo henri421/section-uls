@@ -64,7 +64,8 @@ import { blocsFlexionUls } from './uls-view';
 import { outlineOf, boundingBox, neutralAxisSegment, barRadius, splitByLine, zetaOf } from './draw';
 import { plotSvg } from './plot';
 import { formatNumber } from './format';
-import { notationHtml, notationSvg } from 'aedificium-ui';
+import { notationSvg } from 'aedificium-ui';
+import { notationHtml } from './textes';
 
 // --- Modele de depart -------------------------------------------------------
 

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
@@ -12,6 +13,14 @@ export default defineConfig({
     // protocole du banc de comparaison, qui n'est pas un artefact de build.
     // Les anciens assets sont nettoyes par le script `build` de package.json.
     emptyOutDir: false,
+    // Deux pages, une seule compilation : la version anglaise vit dans `en/`
+    // et charge le meme script, qui lit la langue sur `<html lang>`.
+    rollupOptions: {
+      input: {
+        fr: fileURLToPath(new URL('./app/index.html', import.meta.url)),
+        en: fileURLToPath(new URL('./app/en/index.html', import.meta.url)),
+      },
+    },
   },
   plugins: [
     VitePWA({

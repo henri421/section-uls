@@ -7,12 +7,13 @@
  */
 
 import { registerSW } from 'virtual:pwa-register';
+import { tr } from './textes';
 
 export function enregistrerServiceWorker(): void {
   if (!('serviceWorker' in navigator)) return;
   const mettreAJour = registerSW({
     onNeedRefresh() {
-      if (window.confirm('Une nouvelle version est disponible. Recharger maintenant ?')) {
+      if (window.confirm(tr('Une nouvelle version est disponible. Recharger maintenant ?'))) {
         void mettreAJour(true);
       }
     },

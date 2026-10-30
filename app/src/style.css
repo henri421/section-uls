@@ -78,6 +78,28 @@ body {
   text-decoration: underline;
 }
 
+.barre-actions {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+/* Bouton FR / EN : lien vers l'autre version de la page (`en/` ou `../`). */
+.barre .barre-langue {
+  border: 1px solid var(--bordure);
+  border-radius: 4px;
+  padding: 0.05rem 0.45rem;
+  color: var(--texte);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+
+.barre .barre-langue:hover {
+  background: var(--surface-appui);
+  text-decoration: none;
+}
+
 header {
   padding: 1rem 1.25rem 0.75rem;
   border-bottom: 1px solid var(--bordure);
