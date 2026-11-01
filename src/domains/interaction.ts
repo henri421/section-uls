@@ -1,7 +1,7 @@
 import type { Section } from '../model/section';
 import type { NormProfile } from '../model/norm-profile';
 import { capacityAtAngle } from '../solvers/uls-biaxial';
-import { concretePivotStrainField } from '../solvers/uls-uniaxial';
+import { ultimateStrainField } from '../solvers/uls-uniaxial';
 import { integratePolygonBiaxial } from '../integration/fiber-polygon-biaxial';
 import { rotateSection } from '../geometry/rotate';
 
@@ -30,9 +30,9 @@ export interface MomentPoint {
  * TROU : le point est omis plutot qu'invente. Le nombre de points rendus
  * peut donc etre inferieur a `steps`.
  *
- * Limitation reconduite des sessions precedentes : seule la branche du pivot
- * beton est parcourue (la loi acier a branche horizontale n'impose aucune
- * limite de deformation, donc aucun pivot acier n'existe dans le modele).
+ * Limitation reconduite des sessions precedentes : pas de branche du pivot
+ * acier (la loi acier a branche horizontale n'impose aucune limite de
+ * deformation, donc aucun pivot acier n'existe dans le modele).
  */
 export function interactionCurveAtN(
   section: Section,
@@ -67,9 +67,10 @@ export interface AxialMomentPoint {
  * GEOMETRIQUE et non lineaire, entre les memes bornes que la bissection du
  * solveur droit, parce que la plage utile s'etend sur plusieurs ordres de
  * grandeur — une profondeur faible donne la traction dominante, une
- * profondeur grande la compression quasi uniforme.
+ * profondeur grande la compression quasi uniforme, et le dernier point, a
+ * profondeur infinie, la compression pure exacte (deformation uniforme epsC2).
  *
- * Limitation reconduite : seule la branche du pivot beton est parcourue.
+ * Limitation reconduite : pas de branche du pivot acier.
  */
 export function interactionCurveNM(
   section: Section,
@@ -77,7 +78,6 @@ export function interactionCurveNM(
   options?: { steps?: number }
 ): AxialMomentPoint[] {
   const steps = options?.steps ?? 72;
-  const { epsCu2 } = section.concrete;
 
   // On passe par le repere « tourne de zero » pour disposer d'une geometrie
   // polygonale quelle que soit la forme d'entree, sans dupliquer la
@@ -93,8 +93,8 @@ export function interactionCurveNM(
 
   for (let i = 0; i < steps; i++) {
     const t = steps === 1 ? 0 : i / (steps - 1);
-    const x = xMin * Math.pow(xMax / xMin, t); // progression geometrique
-    const champ = concretePivotStrainField(zTop, x, epsCu2);
+    const x = steps > 1 && i === steps - 1 ? Infinity : xMin * Math.pow(xMax / xMin, t); // progression geometrique
+    const champ = ultimateStrainField(zTop, hauteur, x, section.concrete);
     const r = integratePolygonBiaxial(polygonale, champ, norm.nBands);
     points.push({ neutralAxisDepth: x, N: r.N, M: r.My });
   }
@@ -134,11 +134,11 @@ export interface DiagramPointNM extends AxialMomentPoint {
  * redescendant vers la traction de l'autre sens.
  *
  * AUCUN POINT DE FERMETURE n'est ajoute entre les deux extremites, et ce
- * n'est pas un oubli : le noyau ne parcourt que la branche du pivot beton
- * (la loi acier bilineaire a branche horizontale n'impose aucune deformation
- * limite, donc aucun pivot acier n'existe dans le modele), il n'atteint donc
+ * n'est pas un oubli : le noyau n'a pas de pivot acier (la loi acier bilineaire
+ * a branche horizontale n'impose aucune deformation limite), il n'atteint donc
  * jamais la traction pure N = -A_s*f_yd. Refermer le contour dessinerait un
- * domaine qui n'a pas ete calcule — credible et faux.
+ * domaine qui n'a pas ete calcule — credible et faux. Du cote compression, les
+ * deux branches se rejoignent d'elles-memes a la compression pure.
  */
 export function interactionDiagramNM(
   section: Section,

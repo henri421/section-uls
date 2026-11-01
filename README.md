@@ -22,7 +22,7 @@ L'interface n'invente aucun état : elle édite un modèle, dont tout le reste e
 
 Deux diagrammes d'interaction y sont tracés, et leurs coûts n'ont rien de comparable :
 
-- le **diagramme N–My**, avec le point sollicitant, est recalculé en continu — il ne demande aucune résolution, seulement une intégration par point. Son contour reste **ouvert du côté traction** : seule la branche du pivot béton est parcourue, et refermer dessinerait un domaine qui n'a pas été calculé. En flexion déviée, le point sollicitant sort du plan de ce graphe, qui l'annonce alors explicitement ;
+- le **diagramme N–My**, avec le point sollicitant, est recalculé en continu — il ne demande aucune résolution, seulement une intégration par point. Son contour reste **ouvert du côté traction** : le modèle n'a pas de pivot acier, et refermer dessinerait un domaine qui n'a pas été calculé. En flexion déviée, le point sollicitant sort du plan de ce graphe, qui l'annonce alors explicitement ;
 - le **domaine My–Mz** à effort normal constant part **sur bouton seulement** : il enchaîne une résolution par point. On y lit le taux d'exploitation géométriquement, comme le rapport entre le point sollicitant et le rayon du domaine dans sa direction.
 
 ### Choisir ce qu'on vérifie
@@ -162,7 +162,7 @@ Flexion composée droite (N + M autour d'un axe), pour :
 - **sections polygonales quelconques** (contour simple, convexe ou non) — sections en T, en L ;
 - **sections circulaires** — pieux forés et poteaux circulaires, avec générateur de cage d'armatures répartie.
 
-Le solveur recherche par bissection la profondeur d'axe neutre équilibrant l'effort normal imposé, avec le champ de déformation calé sur le pivot béton (fibre comprimée à `εcu2`), puis en déduit le moment résistant `M_Rd`.
+Le solveur recherche par bissection la profondeur d'axe neutre équilibrant l'effort normal imposé, avec le champ de déformation de la figure 6.1 de l'EN 1992-1-1 (fibre comprimée à `εcu2` tant que l'axe neutre coupe la section, puis rotation autour du point C, à `εc2`, quand elle est entièrement comprimée), puis en déduit le moment résistant `M_Rd`.
 
 Flexion composée **déviée** (N + My + Mz, axe neutre d'inclinaison quelconque) sur les mêmes géométries, avec restitution de l'axe neutre comme droite oblique traçable dans le repère de la section, du bras de levier interne et des points d'application des résultantes.
 
@@ -223,7 +223,7 @@ Trois régimes, choisis et non mélangés : **bridage intérieur** (contraintes 
 
 Les points sont ordonnés pour un tracé d'un seul trait : la branche opposée dans l'ordre du balayage, puis la branche positive à l'envers — l'effort normal monte de la traction dominante jusqu'à la compression maximale, puis redescend. Chaque point porte `sense` (`1` fibre supérieure comprimée, `-1` l'autre sens) et sa profondeur d'axe neutre, mesurée depuis la fibre comprimée de **sa** branche.
 
-**Le contour reste ouvert du côté traction, et ce n'est pas un oubli** : le noyau ne parcourt que la branche du pivot béton, il n'atteint donc jamais la traction pure `N = −A_s·f_yd`. Aucun point de fermeture n'est ajouté entre les deux extrémités — refermer dessinerait un domaine qui n'a pas été calculé, crédible et faux.
+**Le contour reste ouvert du côté traction, et ce n'est pas un oubli** : le noyau n'a pas de pivot acier, il n'atteint donc jamais la traction pure `N = −A_s·f_yd`. Aucun point de fermeture n'est ajouté entre les deux extrémités — refermer dessinerait un domaine qui n'a pas été calculé, crédible et faux.
 
 **Vérification en service (méthode n)** : section fissurée homogénéisée, contraintes du béton et des armatures confrontées aux limites de l'EN 1992-1-1 §7.2. Solveur entièrement distinct de celui de l'ELU — hypothèses élastiques, béton tendu négligé — et à ne jamais confondre avec lui. Flexion droite, coefficient d'équivalence paramétrable (défaut 15, valeur conventionnelle intégrant le fluage, non prescrite par la norme sous cette forme).
 
@@ -410,7 +410,7 @@ npm run typecheck # tsc --noEmit
 
 Cet outil est une aide au calcul ; la vérification finale et la responsabilité des résultats incombent à l'ingénieur du projet. Limites connues de la version actuelle, documentées dans le code :
 
-- le domaine ne parcourt que la branche du pivot béton — la loi acier à branche horizontale n'impose aucune limite de déformation, donc aucun pivot acier n'existe dans le modèle. Le contour `N`–`M` est donc **ouvert du côté traction** : `interactionDiagramNM` ne le referme pas, plutôt que d'inventer un domaine non calculé ;
+- le domaine ne parcourt pas de branche du pivot acier — la loi acier à branche horizontale n'impose aucune limite de déformation, donc aucun pivot acier n'existe dans le modèle. Le contour `N`–`M` est donc **ouvert du côté traction** : `interactionDiagramNM` ne le referme pas, plutôt que d'inventer un domaine non calculé ;
 - contour simple sans trou (les réservations ne sont pas gérées) ;
 - une section circulaire est approximée par un polygone régulier (32 côtés par défaut, paramétrable) ;
 - pas de précontrainte, pas de contrôle de ductilité ;

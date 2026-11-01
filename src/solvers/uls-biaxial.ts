@@ -3,7 +3,7 @@ import type { NormProfile } from '../model/norm-profile';
 import { rotateSection, rotatePoint, rotateMomentBack } from '../geometry/rotate';
 import { integratePolygonBiaxial } from '../integration/fiber-polygon-biaxial';
 import type { Resultant } from '../integration/fiber-polygon-biaxial';
-import { verifyUniaxial, concretePivotStrainField } from './uls-uniaxial';
+import { verifyUniaxial, ultimateStrainField } from './uls-uniaxial';
 
 export interface BiaxialAction {
   /** Effort normal (kN), positif en compression. */
@@ -80,13 +80,13 @@ export function capacityAtAngle(
   N: number,
   norm: NormProfile
 ): NeutralAxisState | null {
-  const { epsCu2 } = section.concrete;
   const tournee = rotateSection(section, theta);
   const droit = verifyUniaxial(tournee, { N, M: 0 }, norm);
   if (!droit.converged) return null;
 
-  const zTop = Math.min(...tournee.geometry.vertices.map((v) => v.z));
-  const champ = concretePivotStrainField(zTop, droit.neutralAxisDepth, epsCu2);
+  const zValues = tournee.geometry.vertices.map((v) => v.z);
+  const zTop = Math.min(...zValues);
+  const champ = ultimateStrainField(zTop, Math.max(...zValues) - zTop, droit.neutralAxisDepth, section.concrete);
   const r = integratePolygonBiaxial(tournee, champ, norm.nBands);
 
   const M = rotateMomentBack({ y: r.My, z: r.Mz }, theta);
@@ -138,7 +138,7 @@ function wrapToPi(angle: number): number {
  * comparaison sollicitation/capacite releve du domaine d'interaction
  * (session 4).
  *
- * Limitation reconduite des sessions 1 et 2 : pivot beton uniquement.
+ * Limitation reconduite des sessions 1 et 2 : pas de pivot acier.
  */
 export function verifyBiaxial(
   section: Section,

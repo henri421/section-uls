@@ -218,7 +218,7 @@ function n(valeur: number): string {
  * Chemin `M … L …` d'une polyligne, OUVERT : jamais de `Z`.
  *
  * Le contour d'un diagramme d'interaction n'est pas ferme — le noyau ne
- * parcourt que la branche du pivot beton et n'atteint jamais la traction pure.
+ * connait pas de pivot acier et n'atteint jamais la traction pure.
  * Refermer le trace dessinerait un domaine qui n'a pas ete calcule.
  */
 export function polylinePath(points: PlotPoint[], scale: PlotScale): string {

@@ -84,7 +84,7 @@ export interface SectionStateResult {
   utilization: number;
   /** Deformation maximale du beton comprime, a comparer a `eps_cu2`. */
   epsCMax: number;
-  /** La fibre la plus comprimee est-elle a `eps_cu2` ? La section est alors a l'ultime. */
+  /** La fibre la plus comprimee est-elle a `eps_cu2`, ou le point C a `eps_c2` ? La section est alors a l'ultime. */
   atUltimate: boolean;
 }
 
@@ -161,7 +161,7 @@ export function sectionStateAt(
   const nBands = options?.nBands ?? norm.nBands;
   const tolerance = options?.tolerance ?? 1e-3;
 
-  const { epsCu2 } = section.concrete;
+  const { epsC2, epsCu2 } = section.concrete;
   const { zTop, zBottom } = zRange(section);
   const hauteur = zBottom - zTop;
 
@@ -172,15 +172,23 @@ export function sectionStateAt(
   /**
    * Effort normal a courbure fixee. MONOTONE CROISSANTE en `eps_0` tant
    * qu'aucune fibre ne depasse `eps_cu2` : c'est ce que la borne haute
-   * ci-dessous garantit, et c'est ce qui autorise la bissection. Passe
+   * ci-dessous garantit (elle est plus stricte encore, voir `eps0Max`), et
+   * c'est ce qui autorise la bissection. Passe
    * `eps_cu2`, la loi du beton retombe a zero et la monotonie tomberait avec
    * elle.
    */
   const effortNormal = (eps0: number, kappa: number): number =>
     integrate(section, champ(eps0, kappa), nBands).N;
 
+  // Point C de la figure 6.1 : a (1 - epsC2/epsCu2) h de la fibre la plus
+  // comprimee, sa deformation ne depasse jamais `eps_c2`. Le domaine est ainsi
+  // celui des solveurs ELU. Une droite du pivot beton respecte cette borne.
+  const profondeurC = (1 - epsC2 / epsCu2) * hauteur;
+  const coteC = (kappa: number): number => (kappa > 0 ? hauteur - profondeurC : profondeurC);
+
   /** Deformation maximale admise a la fibre de reference, pour cette courbure. */
-  const eps0Max = (kappa: number): number => epsCu2 - Math.max(0, kappa * hauteur);
+  const eps0Max = (kappa: number): number =>
+    Math.min(epsCu2 - Math.max(0, kappa * hauteur), epsC2 - kappa * coteC(kappa));
 
   /**
    * Cale `eps_0` sur l'effort normal impose. `null` quand la section ne peut
@@ -318,8 +326,14 @@ export function sectionStateAt(
     else lo = milieu;
   }
 
-  const kappa = (lo + hi) / 2;
-  const eps0 = caleEffortNormal(kappa);
+  // Sur la frontiere de faisabilite, le milieu peut tomber du mauvais cote a
+  // l'arrondi pres : `lo`, lui, a toujours ete faisable.
+  let kappa = (lo + hi) / 2;
+  let eps0 = caleEffortNormal(kappa);
+  if (eps0 === null) {
+    kappa = lo;
+    eps0 = caleEffortNormal(kappa);
+  }
   if (eps0 === null) return echec('l equilibre n a pas pu etre cale a la courbure retenue');
 
   const strainAt = champ(eps0, kappa);
@@ -385,8 +399,11 @@ export function sectionStateAt(
     utilization: bars.reduce((max, b) => Math.max(max, b.utilization), 0),
     epsCMax,
     // `concreteStress` retombe a zero au-dela de `eps_cu2` : y etre, c'est
-    // etre a l'ultime, et la marge de moment est alors epuisee.
-    atUltimate: epsCMax >= epsCu2 * (1 - 1e-6),
+    // etre a l'ultime, et la marge de moment est alors epuisee. Section
+    // entierement comprimee : l'ultime est au point C, sous `eps_cu2`.
+    atUltimate:
+      epsCMax >= epsCu2 * (1 - 1e-6) ||
+      eps0 + kappa * (kappa > 0 ? hauteur - profondeurC : profondeurC) >= epsC2 * (1 - 1e-6),
   };
 }
 

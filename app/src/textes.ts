@@ -261,7 +261,7 @@ const MORCEAUX: Record<string, string> = {
   "traction de l acier # MPa au-dela de la limite # MPa": "steel tension # MPa beyond the limit # MPa",
   "traction de l'acier # MPa au-delà de la limite # MPa": "steel tension # MPa beyond the limit # MPa",
   "ouverture de fissure # mm au-dela de la limite # mm": "crack width # mm beyond the limit # mm",
-  "contour OUVERT du cote traction: seule la branche du pivot béton est parcourue": "contour OPEN on the tension side: only the concrete pivot branch is traced",
+  "contour OUVERT du cote traction: aucun pivot acier dans le modèle": "contour OPEN on the tension side: the model has no steel pivot",
   "dalle": "slab",
   "poteau": "column",
   "poutre": "beam",

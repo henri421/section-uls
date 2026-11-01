@@ -647,11 +647,11 @@ export function dessinerDiagrammeNM(resolu: ResolvedModel): { svg: string; html:
   });
 
   // Le contour n'est pas ferme du cote traction, et ce n'est pas un oubli :
-  // le noyau ne parcourt que la branche du pivot beton, il n'atteint jamais la
+  // le noyau n'a pas de pivot acier, il n'atteint jamais la
   // traction pure. Le dire, plutot que de dessiner un domaine non calcule.
   const limites =
     '<p class="legende">' +
-    '<span>contour OUVERT du cote traction : seule la branche du pivot béton est parcourue</span>' +
+    '<span>contour OUVERT du cote traction : aucun pivot acier dans le modèle</span>' +
     '<span>graphe de la flexion droite autour de y</span>' +
     '</p>';
 
