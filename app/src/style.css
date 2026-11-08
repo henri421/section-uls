@@ -1129,3 +1129,11 @@ label.large > input {
     overflow: visible;
   }
 }
+
+/* Barre des feuilles de calcul (projets de la suite). */
+.feuilles {
+  padding: 0.5rem 1.25rem 0;
+}
+.feuilles:empty {
+  display: none;
+}

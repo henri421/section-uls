@@ -1,3 +1,5 @@
+import { parseModel, serializeModel } from '../../src/index';
+import { brancherFeuilles, type BarreFeuilles, type Json } from 'aedificium-ui';
 import { resolveModel, verifySection, interactionCurveAtN } from '../../src/index';
 import type { SectionModel, VerificationResult, ResolvedModel } from '../../src/index';
 import { formToModel, modelToForm, FormError } from './form';
@@ -43,6 +45,12 @@ definirLangue(langueDuDocument(document));
  */
 
 let etat: FormState = modelToForm(chargerLocalement() ?? modeleParDefaut());
+
+/** Feuilles de calcul d'un projet de la suite. */
+let barre: BarreFeuilles | null = null;
+
+/** Dernier modele valide : la feuille ne recoit jamais une saisie en cours fautive. */
+let modeleValide: SectionModel | null = null;
 
 /** Dernier resultat valide, conserve pour ne pas l'effacer sur une saisie fautive. */
 let dernierResultat: string = '';
@@ -1356,7 +1364,9 @@ function recalculer(mode?: 'proportional'): void {
       resultat.M_Rd === null ? null : Math.hypot(resultat.M_Rd.y, resultat.M_Rd.z)
     );
 
-    sauvegarderLocalement(sortie.modele);
+    modeleValide = sortie.modele;
+    if (barre?.dansUnProjet()) barre.signaler();
+    else sauvegarderLocalement(sortie.modele);
   } catch (e) {
     afficherErreur(e instanceof FormError ? e.message : String(e));
   }
@@ -1808,6 +1818,18 @@ document.addEventListener('click', (evenement) => {
 
 rendreFormulaire();
 recalculer();
+
+barre = brancherFeuilles({
+  app: 'section-uls',
+  nomApp: document.querySelector('header h1')?.textContent ?? 'section-uls',
+  conteneur: document.querySelector('[data-role="feuilles"]') as HTMLElement,
+  lire: () => (modeleValide === null ? null : (JSON.parse(serializeModel(modeleValide)) as Json)),
+  charger: (d) => {
+    etat = modelToForm(d === null ? modeleParDefaut() : parseModel(JSON.stringify(d)));
+    rendreFormulaire();
+    recalculer();
+  },
+});
 
 // Hors navigateur (tests), pas de service worker.
 if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
