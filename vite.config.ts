@@ -1,8 +1,14 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  // Version et commit affiches dans la note de calcul (audit R3).
+  define: {
+    __VERSION__: JSON.stringify(JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version),
+    __COMMIT__: JSON.stringify(process.env.GITHUB_SHA ?? 'local'),
+  },
   root: 'app',
   // Chemins relatifs : la page est servie depuis un sous-chemin sur GitHub
   // Pages (/section-uls/), pas depuis la racine d'un domaine.

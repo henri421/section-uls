@@ -8,6 +8,7 @@ import type { ElementNote, NoteDeCalcul, VerificationNote } from 'aedificium-ui'
 import type { Sortie } from './sorties';
 import { TITRE_FLEXION_ELU } from './uls-view';
 import { trNote } from './textes';
+import { VERSION_OUTIL } from './version';
 
 /**
  * Les DONNEES D ENTREE de la note de calcul, et ses hypotheses.
@@ -278,6 +279,7 @@ export function noteDuCalcul(
   // En anglais (lot 8.8), la note est traduite ici, avant sa mise en HTML.
   return trNote({
     cartouche: {
+      version: VERSION_OUTIL,
       projet: cartouche.projet,
       element: element !== '' ? element : (sortie.modele.name ?? '').trim() || 'Section',
       date: cartouche.date,
