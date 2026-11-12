@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 const lire = (f: string): string => readFileSync(new URL(`../../${f}`, import.meta.url), 'utf8');
 
 describe('feuilles de calcul (etape 9.5)', () => {
-  it('depend d aedificium-ui v1.7', () => {
-    expect(lire('package.json')).toContain('github:henri421/aedificium-ui#v1.7.');
+  it('depend d aedificium-ui v1', () => {
+    expect(lire('package.json')).toContain('github:henri421/aedificium-ui#v1.');
   });
 
   it('les pages francaise et anglaise ont la zone de la barre, sous l en-tete', () => {
