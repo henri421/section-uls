@@ -47,6 +47,18 @@ const REGLES: ReadonlyArray<readonly [RegExp, string | ((...a: string[]) => stri
  * reprennent, dans l'ordre, la place des « # » de la traduction.
  */
 const MORCEAUX: Record<string, string> = {
+  "Pas de pivot A: la loi de l'acier a un palier horizontal sans limite ε_ud, l'allongement de l'acier n'est pas borné.": "No pivot A: the steel law has a horizontal plateau with no ε_ud limit, so the steel elongation is not bounded.",
+  "ε_s est lu à la profondeur d, perpendiculairement à l'axe neutre.": "ε_s is read at depth d, perpendicular to the neutral axis.",
+  "Déformations et pivot": "Strains and pivot",
+  "Profondeur d'axe neutre x": "Neutral axis depth x",
+  "fibre la plus comprimée": "most compressed fibre",
+  "armature la plus tendue": "most tensioned bar",
+  "B — béton à ε_cu2": "B — concrete at ε_cu2",
+  "C — section entièrement comprimée": "C — section fully in compression",
+  "hauteur utile": "effective depth",
+  "plancher": "floor",
+  "cadres": "links",
+  "bielles": "struts",
   "Une nouvelle version est disponible. Recharger maintenant ?": "A new version is available. Reload now?",
   "Calcul en cours…": "Calculating…",
   "Trace du domaine en cours…": "Plotting the domain…",

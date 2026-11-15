@@ -42,6 +42,8 @@ export interface ShearWithLinksResult {
   alphaCw: number;
   /** Limite elastique de calcul des cadres (MPa) : `f_ywk / gamma_s`. */
   fywd: number;
+  /** Section d'armature d'ame par unite de longueur (mm²/mm) : `A_sw / s`. */
+  AswOverS: number;
   geometry: ShearGeometry;
 }
 
@@ -116,6 +118,7 @@ export function shearWithLinks(
     nu1,
     alphaCw,
     fywd,
+    AswOverS: links.Asw / links.s,
     geometry,
   };
 }

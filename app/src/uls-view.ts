@@ -2,7 +2,7 @@ import type { ResolvedModel, VerificationResult, NeutralAxisState } from '../../
 import { polygonArea } from '../../src/index';
 import type { BlocService, LigneAffichee } from './service-view';
 import { outlineOf, zetaOf } from './draw';
-import { effectiveDepth, simplifiedLeverArm } from './lever-arm';
+import { effectiveDepth, simplifiedLeverArm, etatUltime } from './lever-arm';
 import { formatNumber, formatAngleDegrees, formatUtilization } from './format';
 
 /**
@@ -32,6 +32,15 @@ export const NOTE_BRAS_DE_LEVIER =
   'raccourcit des qu\'une seconde nappe se trouve du cote tendu, même faiblement sollicitée. ' +
   'Le z = d − 0,4x est celui des abaques, fonde sur le bloc rectangulaire et sur la seule ' +
   'nappe la plus eloignee. Les deux sont exacts et ne mesurent pas la même chose.';
+
+/** Titre du bloc des deformations ultimes et du pivot. */
+export const TITRE_DEFORMATIONS = 'Déformations et pivot';
+
+/** Ce que le modele ne represente pas, dit dans la note. */
+export const NOTE_PIVOT =
+  'Pas de pivot A : la loi de l\'acier a un palier horizontal sans limite ε_ud, ' +
+  'l\'allongement de l\'acier n\'est pas borné. ' +
+  'ε_s est lu à la profondeur d, perpendiculairement à l\'axe neutre.';
 
 /** Masse volumique de l acier (kg/m³), pour le ratio d acier tendu. */
 const MASSE_VOLUMIQUE_ACIER = 7850;
@@ -143,6 +152,22 @@ export function blocsFlexionUls(
       : null,
   ]);
 
+  // Etat de deformation ultime (audit du 10/11/2026, U4) : x, x/d, eps_c,
+  // eps_s et pivot, mesures perpendiculairement a l'axe neutre.
+  const deformations: LigneAffichee[] = [];
+  if (etatAxe !== null && hauteurUtile !== null && resultat.neutralAxis !== null) {
+    const zetas = outlineOf(resolu.section).map((p) => zetaOf(p, resultat.neutralAxis!.angle));
+    const h = Math.max(...zetas) - Math.min(...zetas);
+    const e = etatUltime(etatAxe.x, hauteurUtile, h, resolu.section.concrete);
+    deformations.push(
+      ligne('Profondeur d\'axe neutre x', `${formatNumber(etatAxe.x, 1)} mm`),
+      ligne('x / d', formatNumber(etatAxe.x / hauteurUtile, 3)),
+      ligne('ε_c (fibre la plus comprimée)', `${formatNumber(e.epsC * 1000, 2)} ‰`),
+      ligne('ε_s (armature la plus tendue)', `${formatNumber(e.epsS * 1000, 2)} ‰`),
+      ligne('Pivot', e.pivot === 'B' ? 'B — béton à ε_cu2' : 'C — section entièrement comprimée')
+    );
+  }
+
   const materiaux = [
     ligne('fcd', `${formatNumber(resolu.concrete.fcd, 2)} MPa`),
     ligne('fyd', `${formatNumber(resolu.steel.fyd, 1)} MPa`),
@@ -202,6 +227,12 @@ export function blocsFlexionUls(
       lignes: equilibre,
       verdict: null,
       note: resultat.leverArm !== null ? NOTE_BRAS_DE_LEVIER : null,
+    },
+    {
+      titre: TITRE_DEFORMATIONS,
+      lignes: deformations,
+      verdict: null,
+      note: deformations.length > 0 ? NOTE_PIVOT : null,
     },
     { titre: 'Matériaux', lignes: materiaux, verdict: null, note: null },
     { titre: 'Ferraillage', lignes: ferraillage, verdict: null, note: null },

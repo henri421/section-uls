@@ -85,6 +85,7 @@ describe('blocsFlexionUls', () => {
       'Sollicitation',
       'Résistance',
       'Équilibre de la section',
+      'Déformations et pivot',
       'Matériaux',
       'Ferraillage',
     ]);

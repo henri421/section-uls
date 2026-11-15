@@ -46,6 +46,36 @@ export function effectiveDepth(section: Section, angle: number, offset: number):
   return Math.max(...zetasTendus) - zetaFibreExtreme;
 }
 
+/** Etat de deformation ultime : pivot atteint et deformations aux fibres utiles. */
+export interface EtatUltime {
+  /** B : beton a eps_cu2 en fibre extreme ; C : section entierement comprimee. */
+  pivot: 'B' | 'C';
+  /** Raccourcissement de la fibre la plus comprimee (positif). */
+  epsC: number;
+  /** Deformation a la profondeur d : allongement positif, raccourcissement negatif. */
+  epsS: number;
+}
+
+/**
+ * Pivot et deformations, sur le champ de `ultimateStrainField` du noyau
+ * (EN 1992-1-1 6.1(5), figure 6.1) : x <= h, pivot B (eps_cu2 en fibre
+ * extreme) ; x > h, pivot C (eps_c2 a (1 − eps_c2/eps_cu2)·h de la fibre la
+ * plus comprimee). Pas de pivot A : la loi de l'acier a un palier horizontal,
+ * sans limite eps_ud.
+ */
+export function etatUltime(
+  x: number,
+  d: number,
+  h: number,
+  beton: { epsC2: number; epsCu2: number }
+): EtatUltime {
+  const { epsC2, epsCu2 } = beton;
+  if (x <= h) return { pivot: 'B', epsC: epsCu2, epsS: (epsCu2 * (d - x)) / x };
+  const profondeurC = (1 - epsC2 / epsCu2) * h;
+  const champ = (z: number) => (epsC2 * (x - z)) / (x - profondeurC);
+  return { pivot: 'C', epsC: champ(0), epsS: -champ(d) };
+}
+
 /** `z = d − 0,4·x`, la formule des abaques. */
 export function simplifiedLeverArm(d: number, x: number): number {
   return d - 0.4 * x;

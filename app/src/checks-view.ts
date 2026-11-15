@@ -122,11 +122,41 @@ export function blocTranchant(entree: Issue<ShearResult>, VEd: number): BlocServ
     },
   ];
 
+  // Intermediaires de l'equation 6.2.a (audit du 10/11/2026, U4) : ceux que
+  // le noyau a rendus, sans rien recalculer.
+  const sans = r.withoutLinks;
+  lignes.push(
+    { libelle: 'd (hauteur utile)', valeur: `${formatNumber(sans.geometry.d, 0)} mm` },
+    { libelle: 'k (6.2.a)', valeur: formatNumber(sans.k, 2) },
+    { libelle: 'ρ_l (6.2.a)', valeur: `${formatNumber(sans.rhoL * 100, 3)} %` },
+    { libelle: 'C_Rd,c', valeur: formatNumber(sans.CRdc, 3) },
+    { libelle: 'v_min (6.3N)', valeur: `${formatNumber(sans.vMin, 3)} MPa` },
+    { libelle: 'σ_cp', valeur: `${formatNumber(sans.sigmaCp, 2)} MPa` },
+    {
+      libelle: 'V_Rd,c (6.2.a / 6.2.b)',
+      valeur: sans.minimumGoverns
+        ? `plancher 6.2.b : (v_min + k_1·σ_cp)·b_w·d = ${formatNumber(sans.VRdcMinimum, 1)} kN`
+        : `[C_Rd,c·k·∛(100·ρ_l·f_ck) + k_1·σ_cp]·b_w·d = ${formatNumber(sans.VRdcEquation, 1)} kN`,
+    }
+  );
+
+  const avec = r.withLinks;
+  if (avec !== null) {
+    lignes.push(
+      { libelle: 'z = 0,9 d', valeur: `${formatNumber(avec.z, 0)} mm` },
+      { libelle: 'cot θ', valeur: formatNumber(avec.cotTheta, 2) },
+      { libelle: 'ν_1 (6.6N)', valeur: formatNumber(avec.nu1, 3) },
+      { libelle: 'α_cw', valeur: formatNumber(avec.alphaCw, 2) },
+      { libelle: 'f_ywd', valeur: `${formatNumber(avec.fywd, 1)} MPa` },
+      { libelle: 'A_sw / s', valeur: `${formatNumber(avec.AswOverS, 3)} mm²/mm` }
+    );
+  }
+
   if (r.VRds !== null) {
-    lignes.push({ libelle: 'V_Rd,s (cadres)', valeur: `${formatNumber(r.VRds, 1)} kN` });
+    lignes.push({ libelle: 'V_Rd,s (cadres, 6.8)', valeur: `(A_sw/s)·z·f_ywd·cot θ = ${formatNumber(r.VRds, 1)} kN` });
   }
   if (r.VRdmax !== null) {
-    lignes.push({ libelle: 'V_Rd,max (bielles)', valeur: `${formatNumber(r.VRdmax, 1)} kN` });
+    lignes.push({ libelle: 'V_Rd,max (bielles, 6.9)', valeur: `α_cw·b_w·z·ν_1·f_cd / (cot θ + tan θ) = ${formatNumber(r.VRdmax, 1)} kN` });
   }
 
   lignes.push({ libelle: 'Résistance retenue V_Rd', valeur: `${formatNumber(r.VRd, 1)} kN` });
