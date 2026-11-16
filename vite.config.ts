@@ -3,7 +3,19 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig({
+// Tests lents (plusieurs minutes chacun sur un poste ordinaire) : hors de
+// `npm test`, lances par `npm run test:complet` et toujours en CI (audit R11, E5).
+const LENTS = [
+  'tests/app/anglais.test.ts',
+  'tests/app/cablage.test.ts',
+  'tests/app/note.test.ts',
+  'tests/domains/interaction.test.ts',
+  'tests/domains/utilization.test.ts',
+  'tests/domains/verify-section.test.ts',
+  'tests/solvers/uls-biaxial.test.ts',
+];
+
+export default defineConfig(({ mode }) => ({
   // Version et commit affiches dans la note de calcul (audit R3).
   define: {
     __VERSION__: JSON.stringify(JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version),
@@ -77,6 +89,6 @@ export default defineConfig({
     // une seconde suite de tests identique : sans cette exclusion, chaque
     // session en cours double le decompte et fait passer deux fois les
     // memes tests.
-    exclude: ['**/node_modules/**', '**/dist/**', '.worktrees/**'],
+    exclude: ['**/node_modules/**', '**/dist/**', '.worktrees/**', ...(mode === 'complet' ? [] : LENTS)],
   },
-});
+}));

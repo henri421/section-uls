@@ -12,6 +12,7 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "test:complet": "vitest run --mode complet",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "dev": "vite",
@@ -24,8 +25,8 @@
     "aedificium-ui": "github:henri421/aedificium-ui#v1.10.0",
     "jsdom": "^30.0.1",
     "typescript": "^5.6.0",
-    "vite": "^5.4.21",
+    "vite": "^8.3.8",
     "vite-plugin-pwa": "^1.3.0",
-    "vitest": "^2.1.0"
+    "vitest": "^5.1.0"
   }
 }

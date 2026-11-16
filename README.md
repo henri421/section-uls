@@ -402,7 +402,8 @@ La crédibilité de l'outil repose sur des vérifications indépendantes du chem
 
 ```bash
 npm install
-npm test          # suite complète (Vitest)
+npm test              # suite courante (Vitest), sans les tests lents
+npm run test:complet  # suite complète, celle de la CI (plusieurs minutes de plus)
 npm run typecheck # tsc --noEmit
 ```
 
