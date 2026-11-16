@@ -84,8 +84,9 @@ export default defineConfig(({ mode }) => ({
   // ci-dessus (necessaire au build) s'appliquerait aussi aux tests, qui
   // vivent hors de `app/`, et `npm test` ne trouverait plus rien.
   test: {
-    // Suite complete : les tests lents depassent les 5 s par defaut, en CI comme en local.
-    testTimeout: mode === 'complet' ? 300_000 : 5_000,
+    // Suite complete : les tests lents depassent largement 5 s. Suite courante : 60 s,
+    // l import de jsdom prend a lui seul jusqu a 50 s sur un poste Windows charge.
+    testTimeout: mode === 'complet' ? 300_000 : 60_000,
     root: '.',
     // `.worktrees/` contient des copies de travail completes du depot, donc
     // une seconde suite de tests identique : sans cette exclusion, chaque
