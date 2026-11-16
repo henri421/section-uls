@@ -1447,6 +1447,9 @@ interface Cartouche {
 
 /** Lit le cartouche garde dans localStorage ; vide s il manque ou est illisible. */
 function lireCartouche(): Cartouche {
+  // Feuille de projet ouverte : le cartouche est celui du projet (audit I15).
+  const projet = barre?.cartouche() ?? null;
+  if (projet !== null) return projet;
   try {
     const brut = localStorage.getItem(CLE_CARTOUCHE);
     if (brut === null) return { projet: '', element: '' };
