@@ -508,6 +508,7 @@ const MORCEAUX: Record<string, string> = {
   "k<sub>c</sub> (distribution)": "k<sub>c</sub> (distribution)",
   "k&lt;sub&gt;c&lt;/sub&gt; (distribution)": "k&lt;sub&gt;c&lt;/sub&gt; (distribution)",
   "Coefficients normatifs": "Code coefficients",
+  "Annexe nationale": "National Annex",
   "Bandes d'integration": "Integration strips",
   "Diagramme N-M (SVG)": "N-M diagram (SVG)",
   "Diagramme d'interaction N-My": "N-My interaction diagram",

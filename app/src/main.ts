@@ -2,7 +2,7 @@ import { parseModel, serializeModel } from '../../src/index';
 import { brancherFeuilles, type BarreFeuilles, type Json } from 'aedificium-ui';
 import { resolveModel, verifySection, interactionCurveAtN } from '../../src/index';
 import type { SectionModel, VerificationResult, ResolvedModel } from '../../src/index';
-import { formToModel, modelToForm, FormError } from './form';
+import { appliquerAnnexe, formToModel, modelToForm, FormError } from './form';
 import {
   rectangularRebarLayout, rebarRow, formatRow, spacingOptions, faceSegment,
   barArea, barDiameterOf, checkBarPlacement, skinBars,
@@ -14,7 +14,7 @@ import type { FormState, RowInput, FreeRowInput } from './form';
 import { outlineOf } from './draw';
 import { plotSvg } from './plot';
 import { formatNumber } from './format';
-import { definirLangue, langueDuDocument, noteDeCalculHtml } from 'aedificium-ui';
+import { avertissementAnnexeLu, definirLangue, langueDuDocument, libelleAnnexe, lireAnnexe, noteDeCalculHtml } from 'aedificium-ui';
 import { calculerSorties, modeleParDefaut, dessinerDiagrammeNM, ligne } from './sorties';
 import type { Sortie } from './sorties';
 import {
@@ -1126,6 +1126,11 @@ function htmlFormulaire(): string {
 
   <fieldset>
     <legend>Coefficients normatifs</legend>
+    ${champChoix('annexe', 'Annexe nationale', etat.annexe, [
+      ['recommande', libelleAnnexe('recommande')],
+      ['lu', libelleAnnexe('lu')],
+    ])}
+    ${etat.annexe === 'lu' && avertissementAnnexeLu() !== '' ? `<p class="avertissement" data-role="bandeau-annexe">${avertissementAnnexeLu()}</p>` : ''}
     ${champTexte('gammaC', 'γ<sub>c</sub>', etat.gammaC)}
     ${champTexte('gammaS', 'γ<sub>s</sub>', etat.gammaS)}
     ${champTexte('alphaCc', 'α<sub>cc</sub>', etat.alphaCc)}
@@ -1646,6 +1651,9 @@ function appliquerSaisie(cible: HTMLInputElement | HTMLSelectElement | HTMLTextA
   // Un changement de structure (forme, mode de saisie, case a cocher qui
   // change les champs affiches) impose de reconstruire le formulaire ; une
   // simple frappe ne doit pas le faire, sous peine de perdre le focus.
+  // Changer d'annexe repremplit gamma_c, gamma_s et alpha_cc ; chacun reste modifiable.
+  if (champ === 'annexe') etat = appliquerAnnexe(etat, lireAnnexe(valeur));
+
   if (champ === 'geometryKind') {
     completerGeometrie();
     accorderFerraillageAGeometrie();

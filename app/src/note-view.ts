@@ -8,6 +8,14 @@ import type { ElementNote, NoteDeCalcul, VerificationNote } from 'aedificium-ui'
 import type { Sortie } from './sorties';
 import { TITRE_FLEXION_ELU } from './uls-view';
 import { trNote } from './textes';
+import { avertissementAnnexeLu, libelleAnnexe, traduireSource } from 'aedificium-ui';
+import { annexeDuNom, coefsDeLAnnexe, type Coef } from './annexe';
+
+/** Source d'un coefficient : celle de l'annexe choisie, ou « imposee » si l'utilisateur l'a changee. */
+function sourceDuCoef(resolu: ResolvedModel, k: Coef): string {
+  const deLAnnexe = coefsDeLAnnexe(annexeDuNom(resolu.norm.name))[k];
+  return traduireSource(resolu.norm[k] === deLAnnexe.valeur ? deLAnnexe.source : 'valeur imposée par l’utilisateur');
+}
 import { VERSION_OUTIL } from './version';
 
 /**
@@ -81,9 +89,10 @@ export function blocsDEntree(
     blocSimple('Identification et profil normatif', [
       { libelle: 'Nom', valeur: modele.name ?? 'sans nom' },
       { libelle: 'Profil normatif', valeur: resolu.norm.name },
-      { libelle: 'gamma_c', valeur: formatNumber(resolu.norm.gammaC, 2) },
-      { libelle: 'gamma_s', valeur: formatNumber(resolu.norm.gammaS, 2) },
-      { libelle: 'alpha_cc', valeur: formatNumber(resolu.norm.alphaCc, 2) },
+      { libelle: 'Annexe nationale', valeur: libelleAnnexe(annexeDuNom(resolu.norm.name)) },
+      { libelle: 'gamma_c', valeur: `${formatNumber(resolu.norm.gammaC, 2)} (${sourceDuCoef(resolu, 'gammaC')})` },
+      { libelle: 'gamma_s', valeur: `${formatNumber(resolu.norm.gammaS, 2)} (${sourceDuCoef(resolu, 'gammaS')})` },
+      { libelle: 'alpha_cc', valeur: `${formatNumber(resolu.norm.alphaCc, 2)} (${sourceDuCoef(resolu, 'alphaCc')})` },
       { libelle: 'Bandes d\'integration', valeur: formatNumber(resolu.norm.nBands, 0) },
       { libelle: 'Version du format', valeur: String(modele.formatVersion) },
       { libelle: 'Version du moteur', valeur: modele.engineVersion },
@@ -283,10 +292,13 @@ export function noteDuCalcul(
       projet: cartouche.projet,
       element: element !== '' ? element : (sortie.modele.name ?? '').trim() || 'Section',
       date: cartouche.date,
-      norme: 'EN 1992-1-1:2004',
+      norme: annexeDuNom(sortie.resolu.norm.name) === 'lu' ? 'EN 1992-1-1:2004, ILNAS-EN 1992-1-1/AN-LU:2020' : 'EN 1992-1-1:2004',
       outil: 'section-uls',
     },
     sections: { geometrie, materiaux, hypotheses, charges, calculs },
     verifications,
+    ...(annexeDuNom(sortie.resolu.norm.name) === 'lu' && avertissementAnnexeLu() !== ''
+      ? { avertissements: [avertissementAnnexeLu()] }
+      : {}),
   });
 }

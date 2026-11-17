@@ -13,6 +13,8 @@ import {
   FORMAT_VERSION, ENGINE_VERSION,
 } from '../../src/index';
 import { evaluateExpression, ExpressionError } from './expression';
+import { lireAnnexe, type AnnexeNationale } from 'aedificium-ui';
+import { annexeDuNom, COEFS, coefsDeLAnnexe, nomDuProfil } from './annexe';
 import { formatNumber } from './format';
 
 /** Un lit tel qu'il est saisi : nombre de barres OU espacement maximal. */
@@ -47,6 +49,8 @@ export interface FormState {
   name: string;
   fck: string; fyk: string; Es: string;
   gammaC: string; gammaS: string; alphaCc: string; nBands: string;
+  /** Annexe nationale qui a prerempli gamma_c, gamma_s et alpha_cc (lot E). */
+  annexe: AnnexeNationale;
 
   geometryKind: 'rectangle' | 'polygon' | 'circle';
   width: string; height: string;
@@ -290,6 +294,13 @@ function nombreOptionnel(valeur: string, champ: string): number | undefined {
 }
 
 /** Rendu texte d'un nombre, ou chaine vide pour un optionnel absent. */
+/** Changement d'annexe : gamma_c, gamma_s et alpha_cc reprennent les valeurs de l'annexe. */
+export function appliquerAnnexe(form: FormState, annexe: AnnexeNationale): FormState {
+  const v = coefsDeLAnnexe(annexe);
+  const coefs = Object.fromEntries(COEFS.map((k) => [k, texteDe(v[k].valeur)]));
+  return { ...form, ...coefs, annexe };
+}
+
 function texteDe(valeur: number | undefined): string {
   return valeur === undefined ? '' : String(valeur);
 }
@@ -789,10 +800,13 @@ export function formToModel(form: FormState): SectionModel {
   const gammaS = nombreRequis(form.gammaS, 'gammaS');
   const alphaCc = nombreRequis(form.alphaCc, 'alphaCc');
   const nBands = nombreRequis(form.nBands, 'nBands');
+  // Une valeur differente de celle de l'annexe choisie rend le profil « personnalise ».
+  const annexe = lireAnnexe(form.annexe);
+  const deLAnnexe = coefsDeLAnnexe(annexe);
   const normPersonnalise =
-    gammaC !== RECOMMANDE.gammaC ||
-    gammaS !== RECOMMANDE.gammaS ||
-    alphaCc !== RECOMMANDE.alphaCc ||
+    gammaC !== deLAnnexe.gammaC.valeur ||
+    gammaS !== deLAnnexe.gammaS.valeur ||
+    alphaCc !== deLAnnexe.alphaCc.valeur ||
     nBands !== RECOMMANDE.nBands;
 
   let geometry: GeometryModel;
@@ -916,7 +930,7 @@ export function formToModel(form: FormState): SectionModel {
     engineVersion: ENGINE_VERSION,
     ...(nom !== '' ? { name: nom } : {}),
     norm: {
-      name: normPersonnalise ? 'EC2_personnalise' : 'EC2_recommended',
+      name: nomDuProfil(annexe, normPersonnalise),
       gammaC, gammaS, alphaCc, nBands,
     },
     concrete: { fck: nombreRequis(form.fck, 'fck') },
@@ -980,6 +994,7 @@ export function modelToForm(model: SectionModel): FormState {
     gammaS: texteDe(model.norm.gammaS),
     alphaCc: texteDe(model.norm.alphaCc),
     nBands: texteDe(model.norm.nBands),
+    annexe: annexeDuNom(model.norm.name),
 
     geometryKind: model.geometry.kind,
     width: '', height: '', vertices: '', diameter: '', segments: '',
