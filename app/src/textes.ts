@@ -431,6 +431,8 @@ const MORCEAUX: Record<string, string> = {
   "Méthode": "Method",
   "Nature de la gene": "Nature of the restraint",
   "Note de calcul (HTML imprimable)": "Calculation note (printable HTML)",
+  "Note de calcul (PDF)": "Calculation note (PDF)",
+  "La note PDF n’a pas pu être produite : utiliser la note HTML.": "The PDF note could not be produced: use the HTML note.",
   "Optimisation de la disposition": "Layout optimisation",
   "Origine du bridage": "Origin of the restraint",
   "Parabolique (proposition de Meyer)": "Parabolic (Meyer's proposal)",

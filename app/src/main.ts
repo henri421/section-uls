@@ -14,7 +14,7 @@ import type { FormState, RowInput, FreeRowInput } from './form';
 import { outlineOf } from './draw';
 import { plotSvg } from './plot';
 import { formatNumber } from './format';
-import { avertissementAnnexeLu, definirLangue, langueDuDocument, libelleAnnexe, lireAnnexe, noteDeCalculHtml } from 'aedificium-ui';
+import { avertissementAnnexeLu, definirLangue, langueDuDocument, libelleAnnexe, lireAnnexe, noteDeCalculHtml, telechargerNotePdf } from 'aedificium-ui';
 import { calculerSorties, modeleParDefaut, dessinerDiagrammeNM, ligne } from './sorties';
 import type { Sortie } from './sorties';
 import {
@@ -1155,6 +1155,7 @@ function htmlFormulaire(): string {
     <button type="button" data-action="exporter-section">Section (SVG)</button>
     <button type="button" data-action="exporter-diagramme">Diagramme N-M (SVG)</button>
     <button type="button" data-action="exporter-resultats">Résultats (CSV)</button>
+    <button type="button" data-action="exporter-note-pdf">Note de calcul (PDF)</button>
     <button type="button" data-action="exporter-note">Note de calcul (HTML imprimable)</button>
   </fieldset>`;
 }
@@ -1543,6 +1544,13 @@ function exporterNote(sortie: Sortie): void {
   }
 }
 
+/** Note de calcul en vrai PDF, composee par la bibliotheque (pdfmake charge au clic). */
+function exporterNotePdf(sortie: Sortie): void {
+  const note = noteDuCalcul(sortie, { ...lireCartouche(), date: dateDuJour() });
+  void telechargerNotePdf(`${baseDeNom(sortie.modele)}-note.pdf`, note, STYLES_TRACE).catch(() =>
+    afficherErreur('La note PDF n’a pas pu être produite : utiliser la note HTML.'));
+}
+
 const SANS_CALCUL_A_EXPORTER =
   'Aucun calcul valide a exporter. Les sorties decrivent le dernier calcul réussi : corriger ' +
   'la saisie, puis reessayer.';
@@ -1569,6 +1577,7 @@ function exporter(action: string): void {
     if (dernierDomaine !== null) exporterDessin(derniereSortie.modele, 'domaine-my-mz', dernierDomaine);
   } else if (action === 'exporter-resultats') exporterResultats(derniereSortie);
   else if (action === 'exporter-note') exporterNote(derniereSortie);
+  else if (action === 'exporter-note-pdf') exporterNotePdf(derniereSortie);
 }
 
 // --- Cablage des evenements -------------------------------------------------
